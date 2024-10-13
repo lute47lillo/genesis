@@ -1,11 +1,9 @@
 import benchmark_fn_factory as fns
 import matplotlib.pyplot as plt
 import numpy as np
-from genetic_algorithm import GeneticAlgorithm
+from genetic_algorithms import GeneticAlgorithm, LandscapeGA
 import plotting as plot
-import os
-import argparse
-import torch
+import util as util
 
 def get_bounds(benchmark):
     if benchmark == 'ackley':
@@ -42,6 +40,7 @@ def run_inbreeding_pop_sizes(optim_fn, pop_sizes, dimensions, bounds, generation
     print("Running GA with Inbreeding mating...")
     for pop_size in pop_sizes:
         ga = GeneticAlgorithm(
+            landscape=optim_fn,
             pop_size=pop_size,
             dimensions=dimensions,
             bounds=bounds,
@@ -49,7 +48,7 @@ def run_inbreeding_pop_sizes(optim_fn, pop_sizes, dimensions, bounds, generation
             mutation_rate=mutation_rate,
             allowed_distance=None  # No inbreeding prevention
         )
-        best_fitness_list, diversity_list = ga.run(optim_fn)
+        best_fitness_list, diversity_list = ga.run()
         results_inbreeding[pop_size] = {
             'best_fitness': best_fitness_list,
             'diversity': diversity_list
@@ -65,6 +64,7 @@ def run_no_inbreeding_pop_sizes(optim_fn, pop_sizes, dimensions, bounds, generat
     print("\nRunning GA with NO Inbreeding Mating...")
     for pop_size in pop_sizes:
         ga = GeneticAlgorithm(
+            landscape=optim_fn,
             pop_size=pop_size,
             dimensions=dimensions,
             bounds=bounds,
@@ -72,7 +72,7 @@ def run_no_inbreeding_pop_sizes(optim_fn, pop_sizes, dimensions, bounds, generat
             mutation_rate=mutation_rate,
             allowed_distance=allowed_distance  # Inbreeding prevention active
         )
-        best_fitness_list, diversity_list = ga.run(optim_fn)
+        best_fitness_list, diversity_list = ga.run()
         results_no_inbreeding[pop_size] = {
             'best_fitness': best_fitness_list,
             'diversity': diversity_list
@@ -88,6 +88,7 @@ def run_inbreeding_mutation_rates(optim_fn, pop_size, dimensions, bounds, genera
     print("Running GA with Inbreeding Mating...")
     for rate in mutation_rates:
         ga = GeneticAlgorithm(
+            landscape=optim_fn,
             pop_size=pop_size,
             dimensions=dimensions,
             bounds=bounds,
@@ -95,7 +96,7 @@ def run_inbreeding_mutation_rates(optim_fn, pop_size, dimensions, bounds, genera
             mutation_rate=rate,
             allowed_distance=None  # No inbreeding prevention
         )
-        best_fitness_list, diversity_list = ga.run(optim_fn)
+        best_fitness_list, diversity_list = ga.run()
         results_inbreeding[rate] = {
             'best_fitness': best_fitness_list,
             'diversity': diversity_list
@@ -111,6 +112,7 @@ def run_no_inbreeding_mutation_rates(optim_fn, pop_size, dimensions, bounds, gen
     print("\nRunning GA with NO Inbreeding mating...")
     for rate in mutation_rates:
         ga = GeneticAlgorithm(
+            landscape=optim_fn,
             pop_size=pop_size,
             dimensions=dimensions,
             bounds=bounds,
@@ -118,7 +120,7 @@ def run_no_inbreeding_mutation_rates(optim_fn, pop_size, dimensions, bounds, gen
             mutation_rate=rate,
             allowed_distance=allowed_distance  # Inbreeding prevention active
         )
-        best_fitness_list, diversity_list = ga.run(optim_fn)
+        best_fitness_list, diversity_list = ga.run()
         results_no_inbreeding[rate] = {
             'best_fitness': best_fitness_list,
             'diversity': diversity_list
@@ -127,31 +129,38 @@ def run_no_inbreeding_mutation_rates(optim_fn, pop_size, dimensions, bounds, gen
         
     return results_no_inbreeding
     
-def set_seed(seed):
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    np.random.seed(seed)
+def multiple_runs_experiment(args, landscape, inbred_threshold):
+    """
+        Definition
+        -----------
+            Run basic GA with hyperparameters of your choice for multiple runs. Landscape based algorithm.
+    """
+        
+    results = {}
+    for run in range(args.exp_num_runs):
+        ga = LandscapeGA(
+            args=args,
+            landscape=landscape,
+            bounds=None,
+            inbred_threshold=inbred_threshold
+        )
+        best_fitness_list, diversity_list = ga.run()
+        results[run] = {
+            'best_fitness': best_fitness_list,
+            'diversity': diversity_list, 
+        }
+        print(f"Population Size {args.pop_size} & Mutation Rate: {args.mutation_rate}: Best Fitness {best_fitness_list[-1]:.4f} ~ Best Diversity {diversity_list[-1]:.4f}")
+        
+    return results
     
 if __name__ == "__main__":
     
-    
-    # Define arguments
-    argparser = argparse.ArgumentParser()
-    
-    # Global Experimental variables
-    argparser.add_argument('--seed', type=int, help='Seed for random', default=99)
-    argparser.add_argument('--device', type=str, help='CPU/GPU usage', default="cpu")
-    argparser.add_argument('--benchmark', type=str, help='Optimization function to check', default="rastrigin")
-    argparser.add_argument('--config_plot', type=str, help='plot info details', default="none")
-    args = argparser.parse_args()
-    
-    # Set the seed for reproducibility
-    set_seed(args.seed)
+    # Get args
+    args = util.set_args()
     
     benchmarks = {"ackley": fns.ackley_function, "rosenbrock":fns.rosenbrock_function,
                   "rastrigin": fns.rastrigin, "schwefel": fns.schwefel_function,
                   "griewank" :fns.griewank_function, "sphere": fns.sphere_function}
-    
     
     pop_sizes, dimensions, bounds, generations, mutation_rate, allowed_distance = set_config_parameters(args.benchmark)
     # results_inbreeding = run_inbreeding_pop_sizes(benchmarks.get(args.benchmark), pop_sizes, dimensions, bounds, generations, mutation_rate, allowed_distance)
@@ -163,6 +172,7 @@ if __name__ == "__main__":
     # plot.plot_diversity_comparison_populations(args, pop_sizes, "PopSize", results_inbreeding, results_no_inbreeding)
     
     # ------------------------- Mutation Rate Experiments --------------------------- #
+    
     mutation_rates = [0.01, 0.1, 0.2, 0.3, 0.4]
     pop_size = 300
     results_inbreeding = run_inbreeding_mutation_rates(benchmarks.get(args.benchmark), pop_size, dimensions, bounds, generations, mutation_rates, allowed_distance)
