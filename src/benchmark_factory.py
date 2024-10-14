@@ -11,7 +11,7 @@ class NKLandscape:
         self.n = n  # The number of genes (loci) in the genome. Genome length
         self.k = k  # Number of other loci interacting with each gene. For each gene 2^(k+1) possible combinations of gene states that affect its fitness contribution
         self.gene_contribution_weight_matrix = np.random.rand(n, 2**(k+1)) 
-        args.bench_name = 'NKLandscape'
+        args.bench_name = 'nk_landscape'
         
     def get_contributing_gene_values(self, genome, gene_num):
         contributing_gene_values = ""
@@ -37,9 +37,13 @@ class NKLandscape:
 # -------------- Optimization Functions --------------- #
 
 # Rastrigin Function
-def rastrigin(x):
-    A = 10
-    return A * len(x) + sum(xi**2 - A * np.cos(2 * np.pi * xi) for xi in x)
+class Rastrigin:
+    def __init__(self, args,  A = 10):
+        self.A = A
+        args.bench_name = 'Rastrigin'
+        
+    def get_fitness(self, x):
+        return self.A * len(x) + sum(xi**2 - self.A * np.cos(2 * np.pi * xi) for xi in x)
 
 def sphere_function(x):
     """
@@ -183,3 +187,46 @@ class DeceptiveLeadingBlocks:
             block = genes[i * self.block_size : (i + 1) * self.block_size]
             fitness += self.deceptive_block(block)
         return fitness
+    
+# --------------- More advanced Novelty-Search / Open-end benchmarks ---------- #
+
+class MovingPeaksLandscape:
+    """
+        TODO: Requires:
+        if gen % landscape.shift_interval == 0 and gen != 0:
+            landscape.shift_peaks()
+        
+        withing GA loop
+    
+    """
+    def __init__(self, args, m=5, shift_interval=10):
+        self.n = args.N_NKlandscape  # Genome length
+        self.m = m  # Number of peaks
+        self.shift_interval = shift_interval  # Generations between shifts
+        self.peaks = self.initialize_peaks()
+        args.bench_name = 'MovingPeaksLandscape'
+
+    def initialize_peaks(self):
+        # Initialize peak positions, heights, widths
+        peaks = []
+        for _ in range(self.m):
+            position = np.random.randint(0, self.n)
+            height = np.random.rand()
+            width = np.random.randint(1, 5)
+            peaks.append({'position': position, 'height': height, 'width': width})
+        return peaks
+
+    def shift_peaks(self):
+        # Randomly shift peak positions, heights, and widths
+        for peak in self.peaks:
+            peak['position'] = (peak['position'] + np.random.randint(-5, 6)) % self.n
+            peak['height'] = np.clip(peak['height'] + np.random.randn() * 0.1, 0, 1)
+            peak['width'] = np.clip(peak['width'] + np.random.randint(-1, 2), 1, 10)
+
+    def get_fitness(self, genome):
+        fitness = 0.0
+        for peak in self.peaks:
+            distance = min(abs(peak['position'] - np.sum(genome)), self.n - abs(peak['position'] - np.sum(genome)))
+            fitness += peak['height'] * np.exp(- (distance ** 2) / (2 * peak['width'] ** 2))
+        return fitness / self.m
+

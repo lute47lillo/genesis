@@ -140,6 +140,7 @@ class GeneticAlgorithm:
 
 class LandscapeGA:
     def __init__(self, args, landscape, bounds, inbred_threshold=None):
+        self.args = args
         self.pop_size = args.pop_size
         self.dimensions = args.dimensions
         self.bounds = bounds
@@ -242,6 +243,11 @@ class LandscapeGA:
         self.lineage_data = []
 
         for gen in range(self.generations):
+            
+            # Add-on needed only for MovingPeaksLandscape
+            if self.args.bench_name == 'MovingPeaksLandscape':
+                if gen % self.landscape.shift_interval == 0 and gen != 0:
+                    self.landscape.shift_peaks()
             
             # Get the fitness of the current population
             self.calculate_fitness()

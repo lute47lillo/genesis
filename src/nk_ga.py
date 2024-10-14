@@ -29,11 +29,13 @@ if __name__ == "__main__":
 
     # Create an instance of the Landscape
     # landscape = bf.NKLandscape(n=args.N_NKlandscape, k=args.K_NKlandscape)
-    # landscape = bf.Jump()
-    landscape = bf.DeceptiveLeadingBlocks(args)
+    # landscape = bf.Jump(args)
+    # landscape = bf.DeceptiveLeadingBlocks(args)
+    # landscape = bf.Rastrigin(args)
+    landscape = bf.MovingPeaksLandscape(args)
     
     # Set file plotting name
-    args.config_plot = f"{args.bench_name}_PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_N:{args.N_NKlandscape}_K:{args.K_NKlandscape}" 
+    args.config_plot = f"{args.bench_name}/PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_N:{args.N_NKlandscape}_K:{args.K_NKlandscape}" 
 
     # Run experiments
     print("Running GA with NO Inbreeding Mating...")

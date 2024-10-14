@@ -168,5 +168,5 @@ def plot_all(args, ks_list, fit_list, label_list, x_label="Generations", y_label
     plt.title(f"{title}: {y_label} vs. {x_label}")
     plt.grid(True)
     plt.legend()
-    plt.savefig(f"{os.getcwd()}/figures/nk_landscape/{args.config_plot}_{y_label}.png")
+    plt.savefig(f"{os.getcwd()}/figures/{args.config_plot}_{y_label}.png")
     plt.close()
