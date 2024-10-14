@@ -13,8 +13,7 @@
 
 import util as util
 import plotting as plot
-from landscapes import NKLandscape
-import benchmark_fn_factory as fns
+import benchmark_factory as bf
 from experiments import multiple_runs_experiment
 
 
@@ -29,11 +28,12 @@ if __name__ == "__main__":
     args.dimensions = args.N_NKlandscape  # Genome length
 
     # Create an instance of the Landscape
-    # landscape = NKLandscape(n=args.N_NKlandscape, k=args.K_NKlandscape)
-    landscape = fns.Jump()
+    # landscape = bf.NKLandscape(n=args.N_NKlandscape, k=args.K_NKlandscape)
+    # landscape = bf.Jump()
+    landscape = bf.DeceptiveLeadingBlocks(args)
     
     # Set file plotting name
-    args.config_plot = f"JUMP_PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_N:{args.N_NKlandscape}_K:{args.K_NKlandscape}" 
+    args.config_plot = f"{args.bench_name}_PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_N:{args.N_NKlandscape}_K:{args.K_NKlandscape}" 
 
     # Run experiments
     print("Running GA with NO Inbreeding Mating...")

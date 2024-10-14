@@ -1,4 +1,4 @@
-import benchmark_fn_factory as fns
+import benchmark_factory as bf
 import matplotlib.pyplot as plt
 import numpy as np
 from genetic_algorithms import GeneticAlgorithm, LandscapeGA
@@ -158,9 +158,9 @@ if __name__ == "__main__":
     # Get args
     args = util.set_args()
     
-    benchmarks = {"ackley": fns.ackley_function, "rosenbrock":fns.rosenbrock_function,
-                  "rastrigin": fns.rastrigin, "schwefel": fns.schwefel_function,
-                  "griewank" :fns.griewank_function, "sphere": fns.sphere_function}
+    benchmarks = {"ackley": bf.ackley_function, "rosenbrock":bf.rosenbrock_function,
+                  "rastrigin": bf.rastrigin, "schwefel": bf.schwefel_function,
+                  "griewank" :bf.griewank_function, "sphere": bf.sphere_function}
     
     pop_sizes, dimensions, bounds, generations, mutation_rate, allowed_distance = set_config_parameters(args.benchmark)
     # results_inbreeding = run_inbreeding_pop_sizes(benchmarks.get(args.benchmark), pop_sizes, dimensions, bounds, generations, mutation_rate, allowed_distance)
