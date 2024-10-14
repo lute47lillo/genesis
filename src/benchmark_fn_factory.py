@@ -5,6 +5,7 @@ import os
 import math
 
 
+# -------------- Optimization Functions --------------- #
 
 # Rastrigin Function
 def rastrigin(x):
@@ -49,3 +50,46 @@ def griewank_function(x):
     sum_sq = sum(xi ** 2 for xi in x) / 4000
     prod_cos = np.prod([math.cos(xi / math.sqrt(i+1)) for i, xi in enumerate(x)])
     return sum_sq - prod_cos + 1
+
+# ------------- Classic benchmarks ----------------- #
+
+class Jump:
+    
+    def __init__(self, k=10):
+        self.k = k
+        
+    def get_fitness(self, genes):
+        """
+            Global optimum is the string with all ones. 
+            Introduces a 'gap' or 'jump' needed to be crossed to get to the global minimum.
+            
+            k is the 'jump' size.
+        """
+        n = len(genes)
+        u = np.sum(genes)
+        if u == n:
+            return n
+        elif u <= n - self.k:
+            return u - self.k
+        else:
+            return n - u
+        
+class LeadingOnes:  
+    def __init__(self):
+        pass 
+    
+    def get_fitness(self, genes):
+        fitness = 0
+        for gene in genes:
+            if gene == 1:
+                fitness += 1
+            else:
+                break
+        return fitness
+
+class OneMax:  
+    def __init__(self):
+        pass 
+    
+    def get_fitness(self, genes):
+        return np.sum(genes)

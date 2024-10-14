@@ -161,7 +161,8 @@ class LandscapeGA:
 
     def calculate_fitness(self):
         for individual in self.population:
-            individual.fitness = self.landscape.get_fitness(individual.genes)
+            # individual.fitness = self.landscape(individual.genes) # Classic Benchmarks
+            individual.fitness = self.landscape.get_fitness(individual.genes) # NK-Landscape
 
     def tournament_selection(self, k=3):
         selected = []
