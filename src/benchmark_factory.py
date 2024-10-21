@@ -189,44 +189,107 @@ class DeceptiveLeadingBlocks:
         return fitness
     
 # --------------- More advanced Novelty-Search / Open-end benchmarks ---------- #
-
+class Peak:
+    def __init__(self, position, height, width):
+        self.position = np.array(position)
+        self.height = height
+        self.width = width
+        
 class MovingPeaksLandscape:
     """
-        TODO: Requires:
-        if gen % landscape.shift_interval == 0 and gen != 0:
-            landscape.shift_peaks()
-        
-        withing GA loop
+        Due to its constant shift of landscape it evaluates the resilience of an algorihtm to changes and disruptions
     
     """
-    def __init__(self, args, m=5, shift_interval=10):
-        self.n = args.N_NKlandscape  # Genome length
-        self.m = m  # Number of peaks
+    def __init__(self, args, m=14, h_min=1.0, h_max=5.0, w_min=1, w_max=5, shift_interval=30):
+        
+        # Landscape attributes
+        self.n = args.N_NKlandscape           # Genome length
+        self.m = m                            # Number of peaks or optima present at any given time.
         self.shift_interval = shift_interval  # Generations between shifts
-        self.peaks = self.initialize_peaks()
+        self.global_optimum = None            # To store current global optimum
+        
+        # Peak Height min/max
+        self.h_min = h_min
+        self.h_max = h_max
+        
+        # Peak Width min/max
+        self.w_min = w_min
+        self.w_max = w_max
+        
+        self.peaks = []
+        self.initialize_peaks()
         args.bench_name = 'MovingPeaksLandscape'
 
     def initialize_peaks(self):
+        """
+            Definition
+            -----------
+                Initialize peaks with random positions, heights, and widths.
+                    - position: The central point in the search space where the peak is located.
+                    - height: The maximum fitness value of the peak.
+                    - width: Determines how quickly the fitness value decreases as one moves away from the peak center
+        """
         # Initialize peak positions, heights, widths
-        peaks = []
+        self.peaks = []
         for _ in range(self.m):
             position = np.random.randint(0, self.n)
-            height = np.random.rand()
-            width = np.random.randint(1, 5)
-            peaks.append({'position': position, 'height': height, 'width': width})
-        return peaks
+            height = np.random.uniform(self.h_min, self.h_max)
+            width = np.random.randint(self.w_min, self.w_max + 1)
+            # self.peaks.append({'position': position, 'height': height, 'width': width})
+            self.peaks.append(Peak(position, height, width))
+            
+        self.update_global_optimum()
 
     def shift_peaks(self):
+        """
+            At every shift_interval generations, the landscape undergoes a shift where:
+
+                Peak Positions: Move to new locations within the search space.
+                Peak Heights: Adjusted randomly within the defined range.
+                Peak Widths: Changed to alter the landscape's ruggedness.
+        """
+        
         # Randomly shift peak positions, heights, and widths
         for peak in self.peaks:
-            peak['position'] = (peak['position'] + np.random.randint(-5, 6)) % self.n
-            peak['height'] = np.clip(peak['height'] + np.random.randn() * 0.1, 0, 1)
-            peak['width'] = np.clip(peak['width'] + np.random.randint(-1, 2), 1, 10)
+            
+            # Shift position
+            shift = np.random.randint(-5, 6)
+            peak.position = (peak.position + shift) % self.n 
+            
+            # Adjust height
+            peak.height += np.random.normal(0, 0.5)  # Add Gaussian noise
+            peak.height = np.clip(peak.height, self.h_min, self.h_max)
+            
+            # Adjust width
+            peak.width += np.random.randint(-1, 2)  # Change width by -1, 0, or +1
+            peak.width = np.clip(peak.width, self.w_min, self.w_max)  # Maintain within bounds
+    
+        self.update_global_optimum()
+            
+    def update_global_optimum(self):
+        """
+            Update the current global optimum based on the highest peak.
+        """
+        if not self.peaks:
+            self.global_optimum = None
+            return
+        self.global_optimum = max(self.peaks, key=lambda peak: peak.height)
+        
+    def get_current_global_optimum_fitness(self):
+        """
+            Return the fitness of the current global optimum.
+        """
+        if self.global_optimum is None:
+            return None
+        return self.global_optimum.height
 
     def get_fitness(self, genome):
+        """
+            To identify the current lobal optimum we need to determine which peak has the highest fitness.
+        """
         fitness = 0.0
         for peak in self.peaks:
-            distance = min(abs(peak['position'] - np.sum(genome)), self.n - abs(peak['position'] - np.sum(genome)))
-            fitness += peak['height'] * np.exp(- (distance ** 2) / (2 * peak['width'] ** 2))
+            distance = min(abs(peak.position - np.sum(genome)), self.n - abs(peak.position - np.sum(genome)))
+            fitness += peak.height * np.exp(- (distance ** 2) / (2 * peak.width ** 2))
         return fitness / self.m
 

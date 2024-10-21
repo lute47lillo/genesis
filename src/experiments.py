@@ -1,7 +1,7 @@
 import benchmark_factory as bf
 import matplotlib.pyplot as plt
 import numpy as np
-from genetic_algorithms import GeneticAlgorithm, LandscapeGA
+from genetic_algorithms import GeneticAlgorithm, LandscapeGA, NoveltyArchive
 import plotting as plot
 import util as util
 
@@ -135,7 +135,8 @@ def multiple_runs_experiment(args, landscape, inbred_threshold):
         -----------
             Run basic GA with hyperparameters of your choice for multiple runs. Landscape based algorithm.
     """
-        
+    
+    # Initialize Novelty Archive
     results = {}
     for run in range(args.exp_num_runs):
         ga = LandscapeGA(
@@ -144,14 +145,33 @@ def multiple_runs_experiment(args, landscape, inbred_threshold):
             bounds=None,
             inbred_threshold=inbred_threshold
         )
-        best_fitness_list, diversity_list = ga.run()
+        best_fitness_list, diversity_list, global_optimum_fitness_list, collapse_events = ga.run(collapse_threshold=0.2, collapse_fraction=0.1)
         results[run] = {
             'best_fitness': best_fitness_list,
             'diversity': diversity_list, 
+            'global_optimum': global_optimum_fitness_list, 
+            'collapse_events': collapse_events
         }
         print(f"Population Size {args.pop_size} & Mutation Rate: {args.mutation_rate}: Best Fitness {best_fitness_list[-1]:.4f} ~ Best Diversity {diversity_list[-1]:.4f}")
         
     return results
+
+def individual_ga_run(args, landscape, inbred_threshold):
+
+    if inbred_threshold == None:
+        print("Running GA with Inbreeding Mating...")
+    else:
+        print("Running GA with NO Inbreeding Mating...")
+    
+    # Run
+    ga = LandscapeGA(
+        args=args,
+        landscape=landscape,
+        bounds=None,
+        inbred_threshold=inbred_threshold
+    )
+    best_fitness_list, diversity_list, global_optimum_fitness_list, collapse_events = ga.run(collapse_threshold=0.2, collapse_fraction=0.5)
+    plot.plot_individual_MPL_global_optima(args, best_fitness_list, diversity_list, global_optimum_fitness_list, collapse_events, collapse_threshold=0.2)
     
 if __name__ == "__main__":
     

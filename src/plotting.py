@@ -58,10 +58,79 @@ def plot_diversity_comparison_populations(args, elem_list, parameter, results_in
     plt.grid(True)
     plt.savefig(f"{os.getcwd()}/figures/{parameter}/{args.benchmark}/Div_{args.config_plot}.png")
     plt.close()
+    
+def plot_individual_MPL_global_optima(args, best_fitness_list, diversity_list, global_optimum_fitness_list, collapse_events, collapse_threshold):
+    
+    # Plotting Results
+    plt.figure(figsize=(14, 6))
+
+    # Best Fitness Over Generations
+    plt.subplot(1, 2, 1)
+    plt.plot(best_fitness_list, label='Best Fitness')
+    plt.plot(global_optimum_fitness_list, label='Global Optimum Fitness', linestyle='--')
+    plt.title('Best Fitness vs. Global Optimum Over Generations (MPB)')
+    plt.xlabel('Generation')
+    plt.ylabel('Fitness')
+    plt.legend()
+
+    # Genetic Diversity Over Generations
+    plt.subplot(1, 2, 2)
+    plt.plot(diversity_list, label='Allelic Diversity', color='orange')
+    plt.axhline(y=collapse_threshold, color='red', linestyle='--', label='Collapse Threshold')
+    
+    # Mark collapse events
+    for event in collapse_events:
+        plt.axvline(x=event, color='red', linestyle='--', label='Collapse Event' if event == collapse_events[0] else '')
+    plt.title('Allelic Diversity Over Generations (MPB)')
+    plt.xlabel('Generation')
+    plt.ylabel('Diversity')
+    plt.legend()
+    
+
+    plt.tight_layout()
+    plt.savefig(f"{os.getcwd()}/figures/{args.config_plot}.png")
+    plt.close()
+    
+def plot_multiple_runs_MPL_global_optima(args, ks_list, best_fitness_list, diversity_list, label_list, collapse_threshold=0.2):
+    
+    # Plotting Results
+    plt.figure(figsize=(14, 6))
+    linestyles = ['-', ':', '-', ':'] # One for each methods
+
+    # Best Fitness Over Generations 
+    plt.subplot(1, 2, 1)
+    for idx, ks in enumerate(ks_list):
+        plt.plot(ks, best_fitness_list[idx][0], label=label_list[idx], linestyle=linestyles[idx])
+        plt.fill_between(ks, best_fitness_list[idx][1], best_fitness_list[idx][2], alpha=0.5)
+    
+    # Plot the global_optimum_fitness_list per generation
+    plt.title('Best Fitness vs. Global Optimum Over Generations (MPB)')
+    plt.xlabel('Generation')
+    plt.ylabel('Fitness')
+    plt.legend()
+
+    # Genetic Diversity Over Generations and the collapses
+    label_list = label_list[:2] # Trim the Global Optimums
+    ks_list = ks_list[:2]
+    plt.subplot(1, 2, 2)
+    for idx, ks in enumerate(ks_list):
+        plt.plot(ks, diversity_list[idx][0], label=label_list[idx])
+        plt.fill_between(ks, diversity_list[idx][1], diversity_list[idx][2], alpha=0.5)
+    
+    plt.axhline(y=collapse_threshold, color='red', linestyle='--', label='Collapse Threshold')
+    plt.title('Allelic Diversity Over Generations (MPB)')
+    plt.xlabel('Generation')
+    plt.ylabel('Diversity')
+    plt.legend()
+
+    plt.tight_layout()
+    plt.savefig(f"{os.getcwd()}/figures/{args.config_plot}.png")
+    plt.close()
+
 
 # ---------------------- Bootstrapping methods ---------------------------------- #
 
-def collect_bootstrapping_data(results_no_inbreeding, results_inbreeding):
+def collect_bootstrapping_data(args, results_no_inbreeding, results_inbreeding):
     """
         Definition
         -----------
@@ -91,6 +160,31 @@ def collect_bootstrapping_data(results_no_inbreeding, results_inbreeding):
     fit_list.append(fit_I)
     div_list.append(div_I)
     label_list.append("Inbreeding")
+    
+    # Collect for Global Optimum Fitness
+    if args.bench_name == 'MovingPeaksLandscape':
+        
+        # Global Optimums of fitness
+        gen_noI, gopt_noI = plot_mean_and_bootstrapped_ci(results_no_inbreeding, key='global_optimum')
+        gs_list.append(gen_noI)
+        fit_list.append(gopt_noI)
+        label_list.append("Global Optimum Fitness NO Inbreeding")
+        
+        gen_I, gopt_I = plot_mean_and_bootstrapped_ci(results_inbreeding, key='global_optimum')
+        gs_list.append(gen_I)
+        fit_list.append(gopt_I)
+        label_list.append("Global Optimum Fitness Inbreeding")
+        
+        # # Genetic Collapse
+        # gen_col_no, col_no = plot_mean_and_bootstrapped_ci(results_no_inbreeding, key='collapse_events')
+        # gs_list.append(gen_col_no)
+        # div_list.append(col_no)
+        # label_list.append("Genetic Collapse NO Inbreeding")
+        
+        # gen_col_yes, col_yes = plot_mean_and_bootstrapped_ci(results_inbreeding, key='collapse_events')
+        # gs_list.append(gen_col_yes)
+        # div_list.append(col_yes)
+        # label_list.append("Genetic Collapse Inbreeding")
     
     return gs_list, fit_list, div_list, label_list
 
