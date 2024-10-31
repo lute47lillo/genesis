@@ -2,31 +2,17 @@ import benchmark_factory as bf
 import matplotlib.pyplot as plt
 import numpy as np
 from genetic_algorithms import GeneticAlgorithm, LandscapeGA, NoveltyArchive
+from genetic_programming import GeneticAlgorithmGP
 import plotting as plot
 import util as util
 
-def get_bounds(benchmark):
-    if benchmark == 'ackley':
-        bounds = (-32.768, 32.768)
-    elif benchmark == 'rastrigin':
-        bounds = (-5.12, 5.12)
-    elif benchmark == 'rosenbrock':
-        bounds = (-2.048, 2.048)
-    elif benchmark == 'schwefel':
-        bounds = (-500, 500)
-    elif benchmark == 'griewank':
-        bounds = (-600, 600)   
-    elif benchmark == 'sphere':
-        bounds = (-5.12, 5.12)
-    
-    return bounds
     
 def set_config_parameters(benchmark):
     
     # Experiment Parameters
     pop_sizes = [25, 50, 100, 200]
     dimensions = 10
-    bounds = get_bounds(benchmark)
+    bounds = util.get_function_bounds(benchmark)
     generations = 200
     mutation_rate = 0.2
     allowed_distance = 1.0
@@ -154,6 +140,30 @@ def multiple_runs_experiment(args, landscape, inbred_threshold):
         }
         print(f"Population Size {args.pop_size} & Mutation Rate: {args.mutation_rate}: Best Fitness {best_fitness_list[-1]:.4f} ~ Best Diversity {diversity_list[-1]:.4f}")
         
+    return results
+
+def multiple_runs_function_gp(args, landscape, inbred_threshold):
+    """
+        TODO: Generalize to be for all function experiments and choose within. As of now only work with ackley
+    """
+    
+    # Initialize GP-based GA for Any given function
+    results = {}
+    for run in range(args.exp_num_runs):
+        ga_gp = GeneticAlgorithmGP(
+            args=args,
+            inbred_threshold=inbred_threshold,  # Adjust based on inbreeding prevention
+            max_depth=10 # TODO: Create hyperparameters
+        )
+        # Run GP-based GA for Given Function
+        best_fitness_list, diversity_list = ga_gp.run(landscape.fitness_function)
+        
+        results[run] = {
+                'best_fitness': best_fitness_list,
+                'diversity': diversity_list, 
+            }
+        print(f"Population Size {args.pop_size} & Mutation Rate: {args.mutation_rate}: Best Fitness {best_fitness_list[-1]:.4f} ~ Best Diversity {diversity_list[-1]:.4f}")
+
     return results
 
 def individual_ga_run(args, landscape, inbred_threshold):

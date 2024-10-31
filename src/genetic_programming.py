@@ -1,7 +1,12 @@
 import numpy as np
 import copy
+import os
 import zss
 import matplotlib.pyplot as plt
+import benchmark_factory as bf
+import util
+import experiments as exp
+import plotting as plot
 
 
 class Node:
@@ -43,11 +48,11 @@ class Individual:
         return str(self.tree)
 
 class GeneticAlgorithmGP:
-    def __init__(self, pop_size, generations, mutation_rate, allowed_distance=None, max_depth=5):
-        self.pop_size = pop_size
-        self.generations = generations
-        self.mutation_rate = mutation_rate
-        self.allowed_distance = allowed_distance
+    def __init__(self, args, inbred_threshold=None, max_depth=5):
+        self.pop_size = args.pop_size
+        self.generations = args.generations
+        self.mutation_rate = args.mutation_rate
+        self.inbred_threshold = inbred_threshold
         self.max_depth = max_depth
         self.population = []
         self.best_fitness_list = []
@@ -85,9 +90,9 @@ class GeneticAlgorithmGP:
             nodes.extend(self.get_all_nodes(child))
         return nodes
     
-    def can_mate(self, ind1, ind2, allowed_distance):
+    def can_mate(self, ind1, ind2, inbred_threshold):
         distance = self.tree_edit_distance(ind1.tree, ind2.tree)
-        return distance >= allowed_distance
+        return distance >= inbred_threshold
     
     def tree_depth(self, node):
         if node is None or node.is_terminal():
@@ -121,8 +126,8 @@ class GeneticAlgorithmGP:
     # ------------- Croosover --------------------- #
     
     def crossover(self, parent1, parent2, max_depth=10):
-        if self.allowed_distance is not None:
-            if not self.can_mate(parent1, parent2, self.allowed_distance):
+        if self.inbred_threshold is not None:
+            if not self.can_mate(parent1, parent2, self.inbred_threshold):
                 return None, None
         
         # Clone parents to avoid modifying originals
@@ -241,187 +246,151 @@ class GeneticAlgorithmGP:
     
         return self.best_fitness_list, self.diversity_list
     
+class GPLandscape:
+    
+    def __init__(self, args, bounds):
+        self.args = args
+        self.bounds = bounds
+    
+    def count_nodes(self, node):
+        """
+            Count the number of nodes (functions and terminals) in a program tree.
+        """
+        if node is None:
+            return 0
+        count = 1  # Count the current node
+        for child in node.children:
+            count += self.count_nodes(child)
+        return count
 
-def ackley_function(x, a=20, b=0.2, c=2*np.pi):
-    d = len(x)
-    sum_sq = np.sum(x**2)
-    sum_cos = np.sum(np.cos(c * x))
-    term1 = -a * np.exp(-b * np.sqrt(sum_sq / d))
-    term2 = -np.exp(sum_cos / d)
-    return term1 + term2 + a + np.exp(1)
+    def evaluate_tree(self, node, x):
+        """
+        Evaluate the program tree with input vector x.
 
-def rastrigin_function(x, A=10):
-    d = len(x)
-    return A * d + np.sum(x**2 - A * np.cos(2 * np.pi * x))
+        Parameters:
+        - node (Node): Current node in the program tree.
+        - x (numpy.ndarray): Input vector.
 
-# Define target functions
-def ackley_target(x):
-    return ackley_function(x)
-
-def rastrigin_target(x):
-    return rastrigin_function(x)
-
-# Define input vectors (sampled within the search space)
-def generate_input_vectors(d=2, num_samples=100):
-    # For Ackley, typically x_i ∈ [-5, 5]
-    # For Rastrigin, typically x_i ∈ [-5.12, 5.12]
-    return [np.random.uniform(-5, 5, d) for _ in range(num_samples)]
-
-# Initialize input vectors for Ackley
-input_vectors_ackley = generate_input_vectors(d=2, num_samples=100)
-
-# Initialize input vectors for Rastrigin
-input_vectors_rastrigin = generate_input_vectors(d=2, num_samples=100)
-
-# Define fitness functions
-def fitness_ackley(genome):
-    return complex_fitness_function(genome, ackley_target, input_vectors_ackley)
-
-def fitness_rastrigin(genome):
-    return complex_fitness_function(genome, rastrigin_target, input_vectors_rastrigin)
-
-def count_nodes(node):
-    """
-        Count the number of nodes (functions and terminals) in a program tree.
-    """
-    if node is None:
-        return 0
-    count = 1  # Count the current node
-    for child in node.children:
-        count += count_nodes(child)
-    return count
-
-def evaluate_tree(node, x):
-    """
-    Evaluate the program tree with input vector x.
-
-    Parameters:
-    - node (Node): Current node in the program tree.
-    - x (numpy.ndarray): Input vector.
-
-    Returns:
-    - result (float): Result of the program's evaluation.
-    """
-    if node.is_terminal():
-        if node.value == 'x':
-            # Assume 'x' corresponds to a specific dimension, e.g., x1
-            return x[0]  # Modify as needed for multi-dimensional x
-        else:
-            return float(node.value)
-    else:
-        # Define function implementations
-        func = node.value
-        args = [evaluate_tree(child, x) for child in node.children]
-        try:
-            if func == '+':
-                return args[0] + args[1]
-            elif func == '-':
-                return args[0] - args[1]
-            elif func == '*':
-                return args[0] * args[1]
-            elif func == '/':
-                return args[0] / args[1] if args[1] != 0 else 1.0  # Protected division
-            elif func == 'cos':
-                return np.cos(args[0])
-            elif func == 'sin':
-                return np.sin(args[0])
-            elif func == 'exp':
-                return np.exp(args[0])
-            elif func == 'sqrt':
-                return np.sqrt(args[0]) if args[0] >= 0 else 0.0  # Protected sqrt
+        Returns:
+        - result (float): Result of the program's evaluation.
+        """
+        if node.is_terminal():
+            if node.value == 'x':
+                # Assume 'x' corresponds to a specific dimension, e.g., x1
+                return x[0]  # Modify as needed for multi-dimensional x
             else:
-                # Undefined function
-                raise ValueError(f"Undefined function: {func}")
-        except:
-            # Handle any unexpected errors
-            return 0.0
+                return float(node.value)
+        else:
+            # Define function implementations
+            func = node.value
+            args = [self.evaluate_tree(child, x) for child in node.children]
+            try:
+                if func == '+':
+                    return args[0] + args[1]
+                elif func == '-':
+                    return args[0] - args[1]
+                elif func == '*':
+                    return args[0] * args[1]
+                elif func == '/':
+                    return args[0] / args[1] if args[1] != 0 else 1.0  # Protected division
+                elif func == 'cos':
+                    return np.cos(args[0])
+                elif func == 'sin':
+                    return np.sin(args[0])
+                elif func == 'exp':
+                    return np.exp(args[0])
+                elif func == 'sqrt':
+                    return np.sqrt(args[0]) if args[0] >= 0 else 0.0  # Protected sqrt
+                else:
+                    # Undefined function
+                    raise ValueError(f"Undefined function: {func}")
+            except:
+                # Handle any unexpected errors
+                return 0.0
+            
+    def target_function(self, x):
+        
+        # Define target functions
+        if self.args.benchmark == 'ackley':
+            return bf.ackley_function(x)
+        
+    # Define input vectors (sampled within the search space)
+    def generate_input_vectors(self, d=2, num_samples=100):
+        return [np.random.uniform(self.bounds[0], self.bounds[1], d) for _ in range(num_samples)]
 
-def complex_fitness_function(genome, target_function, input_vectors, lambda_complexity=0.1):
-    mse_total = 0.0
-    complexity = count_nodes(genome)
+    def complex_fitness_function(self, genome, input_vectors, lambda_complexity=0.1):
+        mse_total = 0.0
+        complexity = self.count_nodes(genome)
+        
+        for x in input_vectors:
+            try:
+                output = self.evaluate_tree(genome, x)
+                target = self.target_function(x)
+                mse = (output - target) ** 2
+                mse_total += mse
+            except Exception as e:
+                mse_total += 1e6  # Large penalty for errors
+        
+        mse_average = mse_total / len(input_vectors)
+        fitness = (1 / (mse_average + 1e-6)) * np.exp(-lambda_complexity * complexity)
+        return fitness
     
-    for x in input_vectors:
-        try:
-            output = evaluate_tree(genome, x)
-            target = target_function(x)
-            mse = (output - target) ** 2
-            mse_total += mse
-        except Exception as e:
-            mse_total += 1e6  # Large penalty for errors
+    def fitness_function(self, genome):
+        input_vectors = self.generate_input_vectors(d=2, num_samples=100)
+        return self.complex_fitness_function(genome, input_vectors)
     
-    mse_average = mse_total / len(input_vectors)
-    fitness = (1 / (mse_average + 1e-6)) * np.exp(-lambda_complexity * complexity)
-    return fitness
+    
+if __name__ == "__main__":
+    
+    # Get args
+    args = util.set_args()
+    
+    # Set file plotting name
+    args.config_plot = f"genetic_programming/{args.benchmark}/PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}" 
+    
+    # Create Landscape
+    gp_landscape = GPLandscape(args, util.get_function_bounds(args.benchmark))
 
-# Initialize GP-based GA for Ackley
-ga_gp_ackley = GeneticAlgorithmGP(
-    pop_size=200,
-    generations=100,
-    mutation_rate=0.005,
-    allowed_distance=10,  # Adjust based on inbreeding prevention
-    max_depth=10
-)
-import os
-# Run GP-based GA for Ackley
-best_fitness_ackley, diversity_ackley = ga_gp_ackley.run(fitness_ackley)
+    # Run experiments
+    print("Running GA with NO Inbreeding Mating...")
+    results_no_inbreeding = exp.multiple_runs_function_gp(args, gp_landscape, args.inbred_threshold)
+    
+    print("Running GA with Inbreeding Mating...")
+    results_inbreeding = exp.multiple_runs_function_gp(args, gp_landscape, None)
+    
+    print(results_no_inbreeding)
+    print()
+    print(results_inbreeding)
+    
+    gs_list, fit_list, div_list, label_list = plot.collect_bootstrapping_data(args, results_no_inbreeding, results_inbreeding)
+    plot.plot_multiple_runs_GP_functions(args, gs_list, fit_list, div_list, label_list)
 
-# Plotting Results for Ackley
-plt.figure(figsize=(14, 6))
+    
+# def plot_ackley_gp(args, best_fitness_ackley, diversity_ackley):
 
-# Best Fitness Over Generations
-plt.subplot(1, 2, 1)
-plt.plot(best_fitness_ackley, label='Best Fitness')
-plt.title('Best Fitness Over Generations (Ackley GP)')
-plt.xlabel('Generation')
-plt.ylabel('Fitness')
-plt.legend()
+#     # Plotting Results for Ackley
+#     plt.figure(figsize=(14, 6))
 
-# Genetic Diversity Over Generations
-plt.subplot(1, 2, 2)
-plt.plot(diversity_ackley, label='Genetic Diversity', color='orange')
-plt.title('Genetic Diversity Over Generations (Ackley GP)')
-plt.xlabel('Generation')
-plt.ylabel('Diversity')
-plt.legend()
+#     # Best Fitness Over Generations
+#     plt.subplot(1, 2, 1)
+#     plt.plot(best_fitness_ackley, label='Best Fitness')
+#     plt.title('Best Fitness Over Generations (Ackley GP)')
+#     plt.xlabel('Generation')
+#     plt.ylabel('Fitness')
+#     plt.legend()
 
-plt.tight_layout()
-plt.savefig(f'{os.getcwd()}/NO_Inbreeding_test_ackley.png')
-plt.close()
+#     # Genetic Diversity Over Generations
+#     plt.subplot(1, 2, 2)
+#     plt.plot(diversity_ackley, label='Genetic Diversity', color='orange')
+#     plt.title('Genetic Diversity Over Generations (Ackley GP)')
+#     plt.xlabel('Generation')
+#     plt.ylabel('Diversity')
+#     plt.legend()
 
-# Similarly, you can run and plot for Rastrigin
-ga_gp_rastrigin = GeneticAlgorithmGP(
-    pop_size=200,
-    generations=100,
-    mutation_rate=0.005,
-    allowed_distance=10,
-    max_depth=10
-)
+#     plt.tight_layout()
+#     plt.savefig(f'{os.getcwd()}/figures/{args.config_plot}.png')
+#     plt.close()
 
-# Run GP-based GA for Rastrigin
-best_fitness_rastrigin, diversity_rastrigin = ga_gp_rastrigin.run(fitness_rastrigin)
-
-# Plotting Results for Rastrigin
-plt.figure(figsize=(14, 6))
-
-# Best Fitness Over Generations
-plt.subplot(1, 2, 1)
-plt.plot(best_fitness_rastrigin, label='Best Fitness')
-plt.title('Best Fitness Over Generations (Rastrigin GP)')
-plt.xlabel('Generation')
-plt.ylabel('Fitness')
-plt.legend()
-
-# Genetic Diversity Over Generations
-plt.subplot(1, 2, 2)
-plt.plot(diversity_rastrigin, label='Genetic Diversity', color='orange')
-plt.title('Genetic Diversity Over Generations (Rastrigin GP)')
-plt.xlabel('Generation')
-plt.ylabel('Diversity')
-plt.legend()
-
-plt.tight_layout()
-plt.savefig(f'{os.getcwd()}/NO_Inbreeding_ratrigin.png')
-plt.close()
 
 # ------------- Symbolic
 

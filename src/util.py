@@ -62,3 +62,22 @@ def get_lineage_frequency(lineage_data):
     # Group by generation and ancestor ID
     frequency = df.groupby(['generation', 'ancestors']).size().reset_index(name='count')
     return frequency
+
+# ---------------- Genetic Programming helper functions --------------------- #
+
+def get_function_bounds(benchmark):
+    
+    if benchmark == 'ackley':
+        bounds = (-32.768, 32.768)
+    elif benchmark == 'rastrigin':
+        bounds = (-5.12, 5.12)
+    elif benchmark == 'rosenbrock':
+        bounds = (-2.048, 2.048)
+    elif benchmark == 'schwefel':
+        bounds = (-500, 500)
+    elif benchmark == 'griewank':
+        bounds = (-600, 600)   
+    elif benchmark == 'sphere':
+        bounds = (-5.12, 5.12)
+    
+    return bounds

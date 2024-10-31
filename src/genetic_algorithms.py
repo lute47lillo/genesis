@@ -7,15 +7,16 @@
 import numpy as np
 import copy
 from scipy.spatial import distance
+import random
 
 class Individual:
-    def __init__(self, genes, id=None, ancestors=None, generation=0):
+    def __init__(self, genes, id=None, parents=None, generation=0):
         """
             Definition
             -----------
                 - genes: The gene vector representing the solution.
                 - id: A unique identifier for each individual.
-                - ancestors: A set containing the IDs of all ancestors.
+                - parents=None: A set containing the IDs of all ancestors.
         """
         # self.genes = genes
         self.genes = genes if genes is not None else []
@@ -24,8 +25,23 @@ class Individual:
         self.total_fitness = None
         self.behavior = None
         self.id = id if id is not None else np.random.randint(1e9)
-        self.ancestors = ancestors if ancestors is not None else set()
-        self.generation = generation # Track the generation of the individual  
+        self.parents = parents if parents is not None else []
+        self.ancestors = set() # IDs of all ancestors
+        self.generation = generation
+
+        # TODO: Calculating ancestry for all ancestors is really computatioinally expensive so limit it to 6 generations?
+        # Update ancestors with depth limitation
+        max_depth = 10  # Set the desired ancestry depth
+        self.ancestors = set()
+        for parent in self.parents:
+            if parent.generation >= self.generation - max_depth:
+                self.ancestors.update(parent.ancestors)
+                self.ancestors.add(parent.id)
+                
+        # Update ancestors based on parents
+        # for parent in self.parents:
+        #     self.ancestors.update(parent.ancestors)
+        #     self.ancestors.add(parent.id) 
 
 class GeneticAlgorithm:
     def __init__(self, landscape, pop_size, dimensions, bounds, generations, mutation_rate, allowed_distance=None):
@@ -149,6 +165,7 @@ class GeneticAlgorithm:
         return self.best_fitness_list, self.diversity_list
 
 # -------------------------------------------------------------------------------------------------------- #
+
 class NoveltyArchive:
     def __init__(self, threshold=0.1, k=5, max_size=500):
         """
@@ -230,11 +247,23 @@ class LandscapeGA:
         self.best_fitness_list = []
         self.diversity_list = []
         self.collapse_events = []
+        self.initial_pop_size = self.pop_size
         self.landscape = landscape
+        
+        # Existing initialization code...
+        self.max_kinship = 0.5 # max_kinship  # Threshold for kinship coefficient. 0.125 is first cousings. 0.0625 is second cousins
         
         # Initialize the Novelty Archive
         # TODO: Create hyperparameters for the novelty
-        self.novelty_archive = NoveltyArchive(threshold=0.1, k=5, max_size=self.pop_size)
+        self.novelty_archive = NoveltyArchive(threshold=0.1, k=10, max_size=self.pop_size)
+        
+    def log_ancestry(self, generation_number):
+        if self.current_generation == generation_number:
+            print(f"Ancestry Information at Generation {generation_number}:")
+            for ind in self.population:
+                print(f"Individual ID: {ind.id}, Parents: {[parent.id for parent in ind.parents]}")
+                print(f"Ancestors: {ind.ancestors}")
+                print("---")
 
     def initialize_population(self):
         self.population = []
@@ -266,19 +295,40 @@ class LandscapeGA:
         # Compute novelty scores and update fitness
         for individual in self.population:
             novelty = self.novelty_archive.compute_novelty(individual.behavior, population_behaviors)
+            
             # You can adjust the weighting between fitness and novelty as needed
             individual.novelty = novelty
-            # For example, combine fitness and novelty
-            individual.total_fitness = individual.fitness + novelty
-            # Optionally, add to the archive
+            
+            # Combine fitness and novelty 
+            # TODO: after normalizing over maximum global fitness in MBP
+            novelty_fitness = novelty / self.landscape.m
+            individual.total_fitness = individual.fitness + novelty_fitness
+            
+            # Add to the archive
             self.novelty_archive.add(individual.behavior)
+            
+    def kinship_coefficient(self, ind1, ind2):
+        """
+            # TODO: Simple version
+            The kinship coefficient (f) between two individuals is the probability that a randomly selected allele from both individuals is identical by descent (IBD).
+            
+            - initial population is unrelated.
+        """
+        
+        shared_ancestors = ind1.ancestors.intersection(ind2.ancestors)
+        total_ancestors = ind1.ancestors.union(ind2.ancestors)
+
+        if not total_ancestors:
+            return 0.0  # No ancestors, unrelated
+
+        # Simple approximation: ratio of shared ancestors to total ancestors
+        f = len(shared_ancestors) / len(total_ancestors)
+        return f
 
     def tournament_selection(self, k=3):
         selected = []
         for i in range(self.pop_size):
             participants = np.random.choice(self.population, k)
-            # for idx, part in enumerate(participants):
-                # print(f"Round ({i}). Participant ({idx}) total fitness: {part.total_fitness}")
             winner = max(participants, key=lambda ind: ind.total_fitness) # ind.total_fitness for novelty + fitness / fitness for just fitness
             selected.append(winner)
         return selected
@@ -323,22 +373,44 @@ class LandscapeGA:
 
     def crossover(self, parent1, parent2):
         if self.inbred_threshold is not None:
-            distance = self.genetic_distance(parent1, parent2)
-            if distance < self.inbred_threshold: # the bigger the allowed distance, the farther apart the parents need to be
+            # Calculate kinship coefficient
+            f = self.kinship_coefficient(parent1, parent2)
+            if f > self.max_kinship:
+                # Prevent mating
                 return None, None
+            
+            # distance = self.genetic_distance(parent1, parent2)
+            # if distance < self.inbred_threshold: # the bigger the allowed distance, the farther apart the parents need to be
+            #     return None, None
 
         # One-point crossover
         crossover_point = np.random.randint(1, self.dimensions)
         child_genes1 = np.concatenate([parent1.genes[:crossover_point], parent2.genes[crossover_point:]])
         child_genes2 = np.concatenate([parent2.genes[:crossover_point], parent1.genes[crossover_point:]])
 
-        ancestors1 = parent1.ancestors.union(parent2.ancestors, {parent1.id, parent2.id})
-        ancestors2 = copy.deepcopy(ancestors1)
 
-        child1 = Individual(child_genes1, ancestors=ancestors1, generation=parent1.generation + 1)
-        child2 = Individual(child_genes2, ancestors=ancestors2, generation=parent1.generation + 1)
+        # Create offspring with updated ancestry
+        child1 = Individual(
+            genes=child_genes1,
+            parents=[parent1, parent2],
+            generation=max(parent1.generation, parent2.generation) + 1
+        )
+        child2 = Individual(
+            genes=child_genes2,
+            parents=[parent1, parent2],
+            generation=max(parent1.generation, parent2.generation) + 1
+        )
 
         return child1, child2
+    
+        # No Pedigree implementation
+        # ancestors1 = parent1.ancestors.union(parent2.ancestors, {parent1.id, parent2.id})
+        # ancestors2 = copy.deepcopy(ancestors1)
+
+        # child1 = Individual(child_genes1, ancestors=ancestors1, generation=parent1.generation + 1)
+        # child2 = Individual(child_genes2, ancestors=ancestors2, generation=parent1.generation + 1)
+
+        # return child1, child2
 
     def mutate(self, individual):
         for i in range(self.dimensions):
@@ -397,6 +469,12 @@ class LandscapeGA:
         global_optimum_fitness_list = []
 
         for gen in range(self.generations):
+            self.current_generation = gen + 1
+            
+            #  # Log ancestry at generation 5
+            # if self.current_generation == 3:
+            #     self.log_ancestry(3)
+            #     exit()
             
             # Add-on needed only for MovingPeaksLandscape
             if self.args.bench_name == 'MovingPeaksLandscape':
@@ -437,56 +515,118 @@ class LandscapeGA:
                     'fitness': ind.total_fitness
                 })
                 
-            # Check for population collapse
-            if self.args.bench_name == 'MovingPeaksLandscape':
-                # Check for population collapse condition
-                if diversity < collapse_threshold:
-                    num_to_replace = int(self.pop_size * collapse_fraction)
-                    # Replace the least fit individuals
-                    self.population.sort(key=lambda ind: ind.total_fitness)
-                    for _ in range(num_to_replace):
-                        genes = np.random.randint(2, size=self.dimensions)
-                        new_individual = Individual(genes=genes, generation=gen+1)
-                        self.population.pop(0)  # Remove the least fit
-                        self.population.append(new_individual)
+            # # Check for population collapse
+            # if self.args.bench_name == 'MovingPeaksLandscape':
+            #     # Check for population collapse condition
+            #     if diversity < collapse_threshold:
+            #         num_to_replace = int(self.pop_size * collapse_fraction)
+            #         # Replace the least fit individuals
+            #         self.population.sort(key=lambda ind: ind.total_fitness)
+            #         for _ in range(num_to_replace):
+            #             genes = np.random.randint(2, size=self.dimensions)
+            #             new_individual = Individual(genes=genes, generation=gen+1)
+            #             self.population.pop(0)  # Remove the least fit
+            #             self.population.append(new_individual)
                     
-                    # Re-calculate fitness as new individuals have been added
-                    self.calculate_fitness_and_novelty()
-                    # record the generations where a population collapse (or diversity restoration) event occurs.
-                    # TODO: "Population collapse" refers to genetic diversity loss rather than population size reduction
-                    # So, this is technically a diversity restoration mechanism. 
-                    # Genetic Collapse: Occurs when diversity is significantly reduced, making the population vulnerable to being trapped in local optima
-                    self.collapse_events.append(gen + 1)
-                    print(f"Generation {gen + 1}: Diversity {diversity:.4f} below threshold. Replaced {num_to_replace} individuals.")
+            #         # Re-calculate fitness as new individuals have been added
+            #         self.calculate_fitness_and_novelty()
+            #         # record the generations where a population collapse (or diversity restoration) event occurs.
+            #         # TODO: "Population collapse" refers to genetic diversity loss rather than population size reduction
+            #         # So, this is technically a diversity restoration mechanism. 
+            #         # Genetic Collapse: Occurs when diversity is significantly reduced, making the population vulnerable to being trapped in local optima
+            #         self.collapse_events.append(gen + 1)
+            #         print(f"Generation {gen + 1}: Diversity {diversity:.4f} below threshold. Replaced {num_to_replace} individuals.")
 
-            # Tournament selection. TODO: move down 
+            # Tournament selection.
             selected = self.tournament_selection(self.tournament_size)
+        
+            # # Selection            
+            # next_population = []
+            # failed_parents = set()  # Use a set to avoid duplicates
+            # i = 0
+            # while i < len(selected):
+            #     parent1 = selected[i]
+            #     parent2 = selected[(i + 1) % len(selected)]
+            #     offspring = self.crossover(parent1, parent2)
 
+            #     if offspring[0] is not None and offspring[1] is not None:
+            #         # Successful mating
+            #         self.mutate(offspring[0])
+            #         self.mutate(offspring[1])
+            #         next_population.extend(offspring)
+            #     else:
+            #         # Mating failed due to inbreeding prevention
+            #         # Collect parents for potential inclusion in next generation
+            #         failed_parents.add(parent1)
+            #         failed_parents.add(parent2)
+            #     i += 2
+            
+            # Selection
+            individuals_needing_mates = selected.copy()
             next_population = []
-            i = 0
-            while len(next_population) < self.pop_size:
-                
-                # crossover
-                parent1 = selected[i % len(selected)]
-                parent2 = selected[(i+1) % len(selected)]
-                offspring = self.crossover(parent1, parent2)
+            failed_parents = set()
 
-                # Mutate
-                if offspring[0] is not None and offspring[1] is not None:
-                    self.mutate(offspring[0])
-                    self.mutate(offspring[1])
-                    next_population.extend(offspring)
-                else:
-                    # Introduce new random individuals to maintain population size
+            # Shuffle the list to ensure randomness
+            random.shuffle(individuals_needing_mates)
+
+            while individuals_needing_mates:
+                parent1 = individuals_needing_mates.pop(0)  # Take the first individual needing a mate
+                mate_found = False  # Flag to track if a suitable mate is found
+
+                # Create a copy to iterate over potential mates
+                potential_mates = individuals_needing_mates.copy()
+                random.shuffle(potential_mates)  # Shuffle potential mates for randomness
+
+                # Try to find a mate for parent1
+                for potential_mate in potential_mates:
+                    if parent1 == potential_mate:
+                        continue  # Skip if same individual
+
+                    offspring = self.crossover(parent1, potential_mate)
+                    if offspring[0] is not None and offspring[1] is not None:
+                        # Successful mating
+                        self.mutate(offspring[0])
+                        self.mutate(offspring[1])
+                        next_population.extend(offspring)
+
+                        # Remove the mate from the list, as they have mated
+                        individuals_needing_mates.remove(potential_mate)
+                        mate_found = True
+                        break  # Exit the loop as we have found a mate
+                    
+                if not mate_found:
+                    # Parent1 could not find a suitable mate
+                    failed_parents.add(parent1)
+
+            # Convert the set to a list for sorting
+            failed_parents = list(failed_parents)
+
+            # Determine the number of elites to retain from failed parents
+            elite_size = int(0.20 * self.pop_size)  # Adjust the percentage as needed
+
+            # Sort failed parents by total_fitness in descending order
+            failed_parents.sort(key=lambda ind: ind.total_fitness, reverse=True)
+
+            # Select the top individuals
+            elites_from_failed_parents = failed_parents[:elite_size]
+
+            # Add elites to the next generation
+            next_population.extend(elites_from_failed_parents)
+            
+            # Update the population
+            self.population = next_population
+            
+            # After updating the population
+            min_population_size = 20
+            if len(self.population) < min_population_size:
+                print(f"Generation {gen + 1}: Population size {len(self.population)} below minimum threshold {min_population_size}. Introducing new individuals.")
+                num_to_add = min_population_size - len(self.population)
+                while len(self.population) < self.initial_pop_size:
                     genes = np.random.randint(2, size=self.dimensions)
-                    individual = Individual(genes, generation=gen+1)
-                    next_population.append(individual)
-                    if len(next_population) < self.pop_size:
-                        genes = np.random.randint(2, size=self.dimensions)
-                        individual = Individual(genes, generation=gen+1)
-                        next_population.append(individual)
-                i += 2
-
-            self.population = next_population[:self.pop_size]
+                    new_individual = Individual(genes=genes, generation=gen+1)
+                    self.population.append(new_individual)
+            
+            self.pop_size = len(self.population)
+            print(f"New pop size: {self.pop_size}")
 
         return self.best_fitness_list, self.diversity_list, global_optimum_fitness_list, self.collapse_events

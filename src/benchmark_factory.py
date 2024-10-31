@@ -57,17 +57,21 @@ def rosenbrock_function(x):
     """
     return sum(100 * (x[i+1] - x[i] ** 2) ** 2 + (x[i] - 1) ** 2 for i in range(len(x) - 1))
 
-def ackley_function(x):
+def ackley_function(x, a=20, b=0.2, c=2*np.pi):
     """
         # Parameters specific to Ackley Function
         bounds_ackley = (-32.768, 32.768)
     """
-    n = len(x)
-    sum_sq = sum(xi ** 2 for xi in x)
-    sum_cos = sum(math.cos(2 * math.pi * xi) for xi in x)
-    term1 = -20 * math.exp(-0.2 * math.sqrt(sum_sq / n))
-    term2 = -math.exp(sum_cos / n)
-    return term1 + term2 + 20 + math.e
+    d = len(x)
+    sum_sq = np.sum(x**2)
+    sum_cos = np.sum(np.cos(c * x))
+    term1 = -a * np.exp(-b * np.sqrt(sum_sq / d))
+    term2 = -np.exp(sum_cos / d)
+    return term1 + term2 + a + np.exp(1)
+
+def rastrigin_function(x, A=10):
+    d = len(x)
+    return A * d + np.sum(x**2 - A * np.cos(2 * np.pi * x))
 
 def schwefel_function(x):
     """
@@ -200,7 +204,7 @@ class MovingPeaksLandscape:
         Due to its constant shift of landscape it evaluates the resilience of an algorihtm to changes and disruptions
     
     """
-    def __init__(self, args, m=14, h_min=1.0, h_max=5.0, w_min=1, w_max=5, shift_interval=30):
+    def __init__(self, args, m=5, h_min=1.0, h_max=5.0, w_min=1, w_max=5, shift_interval=30):
         
         # Landscape attributes
         self.n = args.N_NKlandscape           # Genome length

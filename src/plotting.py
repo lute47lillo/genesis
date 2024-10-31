@@ -126,6 +126,38 @@ def plot_multiple_runs_MPL_global_optima(args, ks_list, best_fitness_list, diver
     plt.tight_layout()
     plt.savefig(f"{os.getcwd()}/figures/{args.config_plot}.png")
     plt.close()
+    
+def plot_multiple_runs_GP_functions(args,  ks_list, best_fitness_list, diversity_list, label_list,):
+    # Plotting Results
+    plt.figure(figsize=(14, 6))
+    linestyles = ['-', ':', '-', ':'] # One for each methods
+
+    # Best Fitness Over Generations 
+    plt.subplot(1, 2, 1)
+    for idx, ks in enumerate(ks_list):
+        plt.plot(ks, best_fitness_list[idx][0], label=label_list[idx], linestyle=linestyles[idx])
+        plt.fill_between(ks, best_fitness_list[idx][1], best_fitness_list[idx][2], alpha=0.5)
+    
+    # Plot the global_optimum_fitness_list per generation
+    plt.title('Best Fitness vs. Global Optimum Over Generations (MPB)')
+    plt.xlabel('Generation')
+    plt.ylabel('Fitness')
+    plt.legend()
+
+    # Genetic Diversity Over Generations and the collapses
+    plt.subplot(1, 2, 2)
+    for idx, ks in enumerate(ks_list):
+        plt.plot(ks, diversity_list[idx][0], label=label_list[idx])
+        plt.fill_between(ks, diversity_list[idx][1], diversity_list[idx][2], alpha=0.5)
+    
+    plt.title('Allelic Diversity Over Generations (MPB)')
+    plt.xlabel('Generation')
+    plt.ylabel('Diversity')
+    plt.legend()
+
+    plt.tight_layout()
+    plt.savefig(f"{os.getcwd()}/figures/{args.config_plot}.png")
+    plt.close()
 
 
 # ---------------------- Bootstrapping methods ---------------------------------- #
