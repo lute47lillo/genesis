@@ -8,6 +8,34 @@ import util
 import experiments as exp
 import plotting as plot
 
+"""
+    TODO LIST
+    
+        - Fix issues such as:
+            /gpfs1/home/e/l/elillopo/diversity/src/genetic_programming.py:337: RuntimeWarning: overflow encountered in exp
+            return np.exp(args[0])
+            /gpfs1/home/e/l/elillopo/diversity/src/genetic_programming.py:327: RuntimeWarning: overflow encountered in divide
+            result = np.true_divide(args[0], denominator)
+            /gpfs1/home/e/l/elillopo/diversity/src/genetic_programming.py:335: RuntimeWarning: invalid value encountered in sin
+            return np.sin(args[0])
+            /gpfs1/home/e/l/elillopo/diversity/src/genetic_programming.py:333: RuntimeWarning: invalid value encountered in cos
+            return np.cos(args[0])
+            /gpfs1/home/e/l/elillopo/diversity/src/genetic_programming.py:321: RuntimeWarning: overflow encountered in multiply
+            return args[0] * args[1]
+            /gpfs1/home/e/l/elillopo/diversity/src/genetic_programming.py:321: RuntimeWarning: invalid value encountered in multiply
+            return args[0] * args[1]
+            /users/e/l/elillopo/.conda/envs/neurobotics/lib/python3.11/site-packages/numpy/core/fromnumeric.py:88: RuntimeWarning: invalid value encountered in reduce
+            return ufunc.reduce(obj, axis, dtype, out, **passkwargs)
+            /gpfs1/home/e/l/elillopo/diversity/src/genetic_programming.py:321: RuntimeWarning: invalid value encountered in scalar multiply
+            return args[0] * args[1]
+            
+            that are in evaluate TREE function
+            
+        - Add the NGUYEN benchmark functions from "Effective Adaptive Mutation Rates for Program Synthesis" Paper
+        and from "Better GP benchmarks: community survey results and proposals" paper.
+
+"""
+
 
 class Node:
     def __init__(self, value, children=None):
@@ -416,88 +444,11 @@ if __name__ == "__main__":
     print("Running GA with Inbreeding Mating...")
     results_inbreeding = exp.multiple_runs_function_gp(args, gp_landscape, None)
     
-    print(results_no_inbreeding)
-    print()
-    print(results_inbreeding)
-    
     gs_list, fit_list, div_list, label_list = plot.collect_bootstrapping_data(args, results_no_inbreeding, results_inbreeding)
     plot.plot_multiple_runs_GP_functions(args, gs_list, fit_list, div_list, label_list)
 
-    
-# def plot_ackley_gp(args, best_fitness_ackley, diversity_ackley):
+# ------------- An example of how to change that --------- #
 
-#     # Plotting Results for Ackley
-#     plt.figure(figsize=(14, 6))
-
-#     # Best Fitness Over Generations
-#     plt.subplot(1, 2, 1)
-#     plt.plot(best_fitness_ackley, label='Best Fitness')
-#     plt.title('Best Fitness Over Generations (Ackley GP)')
-#     plt.xlabel('Generation')
-#     plt.ylabel('Fitness')
-#     plt.legend()
-
-#     # Genetic Diversity Over Generations
-#     plt.subplot(1, 2, 2)
-#     plt.plot(diversity_ackley, label='Genetic Diversity', color='orange')
-#     plt.title('Genetic Diversity Over Generations (Ackley GP)')
-#     plt.xlabel('Generation')
-#     plt.ylabel('Diversity')
-#     plt.legend()
-
-#     plt.tight_layout()
-#     plt.savefig(f'{os.getcwd()}/figures/{args.config_plot}.png')
-#     plt.close()
-
-
-# ------------- Symbolic
-
-# def symbolic_regression_fitness(genome, target_function, input_values):
-#     """
-#     Evaluate the fitness of a genome (function tree) based on how well it approximates the target function.
-
-#     Parameters:
-#     - genome (Node): The root node of the function tree.
-#     - target_function (callable): The target function to approximate.
-#     - input_values (list or numpy.ndarray): Input values for evaluation.
-
-#     Returns:
-#     - fitness (float): The inverse of the mean squared error.
-#     """
-#     def evaluate_tree(node, x):
-#         if node.is_terminal():
-#             if node.value == 'x':
-#                 return x
-#             else:
-#                 return float(node.value)
-#         else:
-#             func = node.value
-#             left = evaluate_tree(node.children[0], x)
-#             right = evaluate_tree(node.children[1], x)
-#             if func == '+':
-#                 return left + right
-#             elif func == '-':
-#                 return left - right
-#             elif func == '*':
-#                 return left * right
-#             elif func == '/':
-#                 return left / right if right != 0 else 1.0  # Handle division by zero
-#             else:
-#                 raise ValueError(f"Unknown function: {func}")
-
-#     errors = []
-#     for x in input_values:
-#         try:
-#             output = evaluate_tree(genome, x)
-#             target = target_function(x)
-#             error = (output - target) ** 2
-#             errors.append(error)
-#         except Exception as e:
-#             errors.append(float('inf'))  # Penalize invalid programs
-
-#     mse = np.mean(errors)
-#     fitness = 1 / (mse + 1e-6)  # Avoid division by zero
-#     return fitness
 
 # def target_function(x):
 #     return x ** 2 + 2 * x + 1  # Example: quadratic function
@@ -505,57 +456,3 @@ if __name__ == "__main__":
 # def symbolic_regression_fitness_function(genome):
 #     input_values = np.linspace(-10, 10, 50)
 #     return symbolic_regression_fitness(genome, target_function, input_values)
-
-# import matplotlib.pyplot as plt
-
-# # GA Parameters
-# pop_size = 200
-# generations = 100
-# mutation_rate = 0.05
-# allowed_distance = 10  # Adjust based on your inbreeding prevention strategy
-
-# # Initialize GP GA
-# ga_gp = GeneticAlgorithmGP(
-#     pop_size=pop_size,
-#     generations=generations,
-#     mutation_rate=mutation_rate,
-#     allowed_distance=allowed_distance,
-#     max_depth=5
-# )
-
-# import os
-# # Run GP GA
-# best_fitness_list, diversity_list = ga_gp.run(symbolic_regression_fitness_function)
-
-# # Plotting Results
-# plt.figure(figsize=(14, 6))
-
-# # Best Fitness Over Generations
-# plt.subplot(1, 2, 1)
-# plt.plot(best_fitness_list, label='Best Fitness')
-# plt.title('Best Fitness Over Generations (Symbolic Regression GP)')
-# plt.xlabel('Generation')
-# plt.ylabel('Fitness')
-# plt.legend()
-
-# # Genetic Diversity Over Generations
-# plt.subplot(1, 2, 2)
-# plt.plot(diversity_list, label='Genetic Diversity', color='orange')
-# plt.title('Genetic Diversity Over Generations (Symbolic Regression GP)')
-# plt.xlabel('Generation')
-# plt.ylabel('Diversity')
-# plt.legend()
-
-# plt.tight_layout()
-# plt.savefig(f"{os.getcwd()}/test_div_fitGP_noInbreeding.png")
-# plt.close()
-
-
-# """Nuanced version of tree edit distance"""
-# # import zss
-
-# # def tree_edit_distance_zss(node1, node2):
-# #     def get_children(node):
-# #         return node.children
-    
-# #     return zss.simple_distance(node1, node2, get_children)
