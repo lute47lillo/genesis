@@ -17,7 +17,8 @@ def set_args():
     # Global Experimental variables
     argparser.add_argument('--seed', type=int, help='Seed for random', default=99)
     argparser.add_argument('--device', type=str, help='CPU/GPU usage', default="cpu")
-    argparser.add_argument('--benchmark', type=str, help='Optimization function to check', default="rastrigin")
+    argparser.add_argument('--benchmark', type=str, help='Optimization function to run', default="rastrigin")
+    argparser.add_argument('--bench_name', type=str, help='Problem landscape name (ie: MovingPeaksLandscape)', default="none")
     argparser.add_argument('--config_plot', type=str, help='plot info details', default="none")
     argparser.add_argument('--dimensions', type=int, help='GA dimensions', default=10)
     

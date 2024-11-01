@@ -25,23 +25,50 @@ class Node:
 
 
 class Individual:
-    def __init__(self, tree=None, id=None, ancestors=None, generation=0):
+    def __init__(self, args, tree=None, id=None, ancestors=None, generation=0):
+        self.args = args
+        self.bounds = self.args.bounds
+        self.max_depth = 10 # TODO
         self.tree = tree if tree is not None else self.random_tree(depth=3)
         self.fitness = None
         self.id = id if id is not None else np.random.randint(1e9)
         self.ancestors = ancestors if ancestors is not None else set()
         self.generation = generation  # Track the generation of the individual
+        
+    def get_function_arity(self, function):
+        # Define arity for each function
+        arity_dict = {
+            '+': 2,
+            '-': 2,
+            '*': 2,
+            '/': 2,
+            'cos': 1,
+            'sin': 1,
+            'exp': 1,
+            'sqrt': 1,
+            'sum': 1,
+            'norm': 1
+        }
+        return arity_dict.get(function, 0)  # Default to 0 if function not found
+
 
     def random_tree(self, depth):
-        if depth == 0:
+        if depth == self.max_depth:
+            # At the root, use a reduction function
+            function = np.random.choice(['sum', 'norm'])
+        elif depth == 0:
             # Return a terminal node
-            terminal = np.random.choice(['x', '1', '2', '3'])  # Example terminals
-            return Node(terminal)
+            terminal = np.random.choice(['x', 'ERC'])  # Terminals are 'x' or random constants
+            if terminal == 'ERC':
+                value = np.random.uniform(self.bounds[0], self.bounds[1])  # Bounds for specific functions. TODO: only working with functions like ackley, rastrigin, etc
+                return Node(value)
+            else:
+                return Node('x')
         else:
             # Return a function node with children
-            # function = np.random.choice(['+', '-', '*', '/'])  # Example functions
-            function = np.random.choice(['+', '-', '*', '/', 'cos', 'sin', 'exp', 'sqrt']) # Ackley and rastrigin
-            children = [self.random_tree(depth - 1) for _ in range(2)]  # Binary functions
+            function = np.random.choice(['+', '-', '*', '/', 'cos', 'sin', 'exp', 'sqrt', 'sum', 'norm'])  # Include vector functions
+            arity = self.get_function_arity(function)
+            children = [self.random_tree(depth - 1) for _ in range(arity)]
             return Node(function, children)
     
     def __str__(self):
@@ -49,6 +76,7 @@ class Individual:
 
 class GeneticAlgorithmGP:
     def __init__(self, args, inbred_threshold=None, max_depth=5):
+        self.args = args
         self.pop_size = args.pop_size
         self.generations = args.generations
         self.mutation_rate = args.mutation_rate
@@ -62,7 +90,7 @@ class GeneticAlgorithmGP:
     def initialize_population(self):
         self.population = []
         for _ in range(self.pop_size):
-            individual = Individual()
+            individual = Individual(self.args)
             self.population.append(individual)
     
     def calculate_fitness(self, fitness_function):
@@ -147,8 +175,8 @@ class GeneticAlgorithmGP:
             return None, None  # Discard offspring exceeding max depth
 
         # Create new individuals
-        offspring1 = Individual(tree=child1, ancestors=parent1.ancestors.union(parent2.ancestors, {parent1.id, parent2.id}), generation=parent1.generation + 1)
-        offspring2 = Individual(tree=child2, ancestors=parent1.ancestors.union(parent2.ancestors, {parent1.id, parent2.id}), generation=parent1.generation + 1)
+        offspring1 = Individual(self.args, tree=child1, ancestors=parent1.ancestors.union(parent2.ancestors, {parent1.id, parent2.id}), generation=parent1.generation + 1)
+        offspring2 = Individual(self.args, tree=child2, ancestors=parent1.ancestors.union(parent2.ancestors, {parent1.id, parent2.id}), generation=parent1.generation + 1)
 
         return offspring1, offspring2
 
@@ -198,6 +226,8 @@ class GeneticAlgorithmGP:
             self.calculate_fitness(fitness_function)
     
             # Record best fitness
+            for ind in self.population:
+                print(ind.fitness)
             best_individual = max(self.population, key=lambda ind: ind.fitness)
             self.best_fitness_list.append(best_individual.fitness)
     
@@ -231,10 +261,10 @@ class GeneticAlgorithmGP:
                     next_population.extend(offspring)
                 else:
                     # Introduce new random individuals to maintain population size
-                    new_individual = Individual()
+                    new_individual = Individual(self.args)
                     next_population.append(new_individual)
                     if len(next_population) < self.pop_size:
-                        new_individual = Individual()
+                        new_individual = Individual(self.args)
                         next_population.append(new_individual)
                 i += 2
     
@@ -262,26 +292,24 @@ class GPLandscape:
         for child in node.children:
             count += self.count_nodes(child)
         return count
-
+            
     def evaluate_tree(self, node, x):
         """
-        Evaluate the program tree with input vector x.
+            Evaluate the program tree with input vector x.
 
-        Parameters:
-        - node (Node): Current node in the program tree.
-        - x (numpy.ndarray): Input vector.
+            Parameters:
+            - node (Node): Current node in the program tree.
+            - x (numpy.ndarray): Input vector.
 
-        Returns:
-        - result (float): Result of the program's evaluation.
+            Returns:
+            - result: Result of the program's evaluation. Can be a scalar or vector.
         """
         if node.is_terminal():
             if node.value == 'x':
-                # Assume 'x' corresponds to a specific dimension, e.g., x1
-                return x[0]  # Modify as needed for multi-dimensional x
+                return x  # Return the entire input vector
             else:
                 return float(node.value)
         else:
-            # Define function implementations
             func = node.value
             args = [self.evaluate_tree(child, x) for child in node.children]
             try:
@@ -292,7 +320,15 @@ class GPLandscape:
                 elif func == '*':
                     return args[0] * args[1]
                 elif func == '/':
-                    return args[0] / args[1] if args[1] != 0 else 1.0  # Protected division
+                    # Protected division
+                    denominator = args[1]
+                    if isinstance(denominator, (int, float, np.ndarray)):
+                        with np.errstate(divide='ignore', invalid='ignore'):
+                            result = np.true_divide(args[0], denominator)
+                            result[~np.isfinite(result)] = 1.0  # Replace inf, -inf, NaN with 1.0
+                            return result
+                    else:
+                        return 1.0
                 elif func == 'cos':
                     return np.cos(args[0])
                 elif func == 'sin':
@@ -300,13 +336,25 @@ class GPLandscape:
                 elif func == 'exp':
                     return np.exp(args[0])
                 elif func == 'sqrt':
-                    return np.sqrt(args[0]) if args[0] >= 0 else 0.0  # Protected sqrt
+                    return np.sqrt(np.abs(args[0]))  # Protected sqrt
+                elif func == 'sum':
+                    return np.sum(args[0])
+                elif func == 'norm':
+                    return np.linalg.norm(args[0])
                 else:
                     # Undefined function
                     raise ValueError(f"Undefined function: {func}")
-            except:
+                
+                # After computing result, check if it's an array
+                if isinstance(result, np.ndarray):
+                    # Reduce array to scalar
+                    result = np.mean(result)
+                return result
+            
+            except Exception as e:
                 # Handle any unexpected errors
                 return 0.0
+
             
     def target_function(self, x):
         
@@ -319,6 +367,11 @@ class GPLandscape:
         return [np.random.uniform(self.bounds[0], self.bounds[1], d) for _ in range(num_samples)]
 
     def complex_fitness_function(self, genome, input_vectors, lambda_complexity=0.1):
+        """
+            Definition
+            -----------
+                Calculation of fitness value based off Symbolic  Regression
+        """
         mse_total = 0.0
         complexity = self.count_nodes(genome)
         
@@ -326,6 +379,9 @@ class GPLandscape:
             try:
                 output = self.evaluate_tree(genome, x)
                 target = self.target_function(x)
+                # Ensure output and target are scalars
+                output = float(output)
+                target = float(target)
                 mse = (output - target) ** 2
                 mse_total += mse
             except Exception as e:
@@ -348,8 +404,10 @@ if __name__ == "__main__":
     # Set file plotting name
     args.config_plot = f"genetic_programming/{args.benchmark}/PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}" 
     
+    args.bounds = util.get_function_bounds(args.benchmark)
+    
     # Create Landscape
-    gp_landscape = GPLandscape(args, util.get_function_bounds(args.benchmark))
+    gp_landscape = GPLandscape(args, args.bounds)
 
     # Run experiments
     print("Running GA with NO Inbreeding Mating...")
