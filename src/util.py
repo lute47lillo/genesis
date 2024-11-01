@@ -20,7 +20,11 @@ def set_args():
     argparser.add_argument('--benchmark', type=str, help='Optimization function to run', default="rastrigin")
     argparser.add_argument('--bench_name', type=str, help='Problem landscape name (ie: MovingPeaksLandscape)', default="none")
     argparser.add_argument('--config_plot', type=str, help='plot info details', default="none")
-    argparser.add_argument('--dimensions', type=int, help='GA dimensions', default=10)
+    argparser.add_argument('--dimensions', type=int, help='GA dimensions', default=10) 
+    
+    # Genetic Programming variables
+    argparser.add_argument('--max_depth', type=int, help='GP Tree maximum depth', default=15)
+    argparser.add_argument('--initial_depth', type=int, help='GP Tree maximum depth', default=6)
     
     # NK-Landscape arguments
     argparser.add_argument('--generations', type=int, help='Nº of generations to run the GA. (Used interchangeably with args.dimensions in this case)', default=100)
@@ -80,5 +84,19 @@ def get_function_bounds(benchmark):
         bounds = (-600, 600)   
     elif benchmark == 'sphere':
         bounds = (-5.12, 5.12)
+    elif benchmark == 'nguyen1':
+        bounds = (-4.0, 4.0)
     
     return bounds
+
+def get_function_arity(function):
+    arity_dict = {
+        '+': 2,
+        '-': 2,
+        '*': 2,
+        '/': 2,
+        'sin': 1,
+        'cos': 1,
+        'log': 1
+    }
+    return arity_dict.get(function, 0)

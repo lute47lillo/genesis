@@ -34,6 +34,15 @@ class NKLandscape:
             gene_values[gene_num] = self.gene_contribution_weight_matrix[gene_num, index]
         return np.mean(gene_values)
     
+# -------------- Symbolic Regression Functions --------------- #
+
+def nguyen1(x):
+    """
+        Input E[-4.0, 4.0] with step size of 0.1
+    """
+    y = x ** 3 + x ** 2 + x
+    return y
+
 # -------------- Optimization Functions --------------- #
 
 # Rastrigin Function

@@ -150,13 +150,13 @@ def multiple_runs_function_gp(args, landscape, inbred_threshold):
     # Initialize GP-based GA for Any given function
     results = {}
     for run in range(args.exp_num_runs):
+        print(f"Running experiment nº: {run}")
         ga_gp = GeneticAlgorithmGP(
             args=args,
-            inbred_threshold=inbred_threshold,  # Adjust based on inbreeding prevention
-            max_depth=10 # TODO: Create hyperparameters
+            inbred_threshold=inbred_threshold  # Adjust based on inbreeding prevention
         )
         # Run GP-based GA for Given Function
-        best_fitness_list, diversity_list = ga_gp.run(landscape.fitness_function)
+        best_fitness_list, diversity_list = ga_gp.run(landscape.symbolic_fitness_function)
         
         results[run] = {
                 'best_fitness': best_fitness_list,
