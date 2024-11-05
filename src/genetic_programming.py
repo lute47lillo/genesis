@@ -18,7 +18,6 @@ import unittest
         and from "Better GP benchmarks: community survey results and proposals" paper.
 """
 
-
 class Node:
     def __init__(self, value, children=None):
         self.value = value  # Function or terminal
@@ -32,7 +31,6 @@ class Node:
             return str(self.value)
         else:
             return f"({self.value} {' '.join(str(child) for child in self.children)})"
-
 
 class Individual:
     def __init__(self, args, tree=None, id=None, ancestors=None, generation=0):
@@ -78,6 +76,7 @@ class Individual:
         return str(self.tree)
 
 class GeneticAlgorithmGP:
+    
     def __init__(self, args, inbred_threshold=None):
         self.args = args
         self.pop_size = args.pop_size
@@ -91,33 +90,29 @@ class GeneticAlgorithmGP:
         self.best_fitness_list = []
         self.diversity_list = []
     
-    def initialize_population(self):
-        self.population = []
-        for _ in range(self.pop_size):
-            individual = Individual(self.args)
-            self.population.append(individual)
-    
-    def calculate_fitness(self, fitness_function, curr_gen):
-        for individual in self.population:
-            individual.fitness, success = fitness_function(individual.tree)
-            if success:
-                print(f"Successful individual found in generation {curr_gen}")
-                print(f"Function: {individual.tree}")
-                self.poulation_success = True
-            
-    def tournament_selection(self, k=3):
-        selected = []
-        for _ in range(self.pop_size):
-            participants = np.random.choice(self.population, k)
-            winner = max(participants, key=lambda ind: ind.fitness)
-            selected.append(winner)
-        return selected
+    # ----------------------- Tree ~ Node functions ------------------ #
     
     def select_random_node(self, tree):
+        """
+            Definition
+            -----------
+                Returns a single random node of a given tree (not Individual object).
+                Example:
+                    - tree1 = Node('+', [Node('x'), Node('1')])
+                      could return Node(+) or Node(x) or Node(1)
+        """
         nodes = self.get_all_nodes(tree)
         return np.random.choice(nodes)
 
     def get_all_nodes(self, tree):
+        """
+            Definition
+            -----------
+                Returns all nodes of a given tree (not Individual object).
+                Example:
+                    - tree1 = Node('+', [Node('x'), Node('1')])
+                      returns [Node(+), Node(x), Node(1)]
+        """
         nodes = [tree]
         for child in tree.children:
             nodes.extend(self.get_all_nodes(child))
@@ -164,10 +159,28 @@ class GeneticAlgorithmGP:
         return nodes
     
     def can_mate(self, ind1, ind2, inbred_threshold):
-        distance = self.tree_edit_distance(ind1.tree, ind2.tree)
+        """
+            Definition
+            -----------
+                Inbreeding prevention mechanism based of average pairwise distance between trees.
+                
+                Example:  # Tree 1: (x + 1) -> tree1 = Node('-', [Node('x'), Node('1')])
+                          # Tree 2: (x + 2) -> tree2 = Node('+', [Node('x'), Node('2')])
+                          have distance of 2. 
+                          If inbred_threshold = None, 1 or 2 they could generate offspring.
+                          If inbred_threshold = 3 or larger they could NOT generate offspring.
+        """
+        distance = self.compute_trees_distance(ind1.tree, ind2.tree)
         return distance >= inbred_threshold
     
     def tree_depth(self, node):
+        """
+            Definition
+            -----------
+                Returns the depth of a given individual node.
+                Example:
+                    - tree1 = Node('+', [Node('x'), Node('1')]) for Node(+) will return 2 -> 1 depth of children + 1 for itself.
+        """
         if node is None:
             return 0
         if node.is_terminal():
@@ -175,7 +188,17 @@ class GeneticAlgorithmGP:
         else:
             return 1 + max(self.tree_depth(child) for child in node.children)
     
-    def tree_edit_distance(self, node1, node2):
+    def compute_trees_distance(self, node1, node2):
+        """
+            Definition
+            -----------
+                Computes the distance between 2 different trees through recursion.
+                Example:
+                          # Tree 1: (x + 1) -> tree1 = Node('-', [Node('x'), Node('1')])
+                          # Tree 2: (x + 2) -> tree2 = Node('+', [Node('x'), Node('2')])
+                          have distance of 2. 
+        """
+        # Base cases
         if node1 is None and node2 is None:
             return 0
         if node1 is None or node2 is None:
@@ -188,23 +211,41 @@ class GeneticAlgorithmGP:
         # Calculate distance for children
         child_distances = 0
         for child1, child2 in zip(node1.children, node2.children):
-            child_distances += self.tree_edit_distance(child1, child2)
+            child_distances += self.compute_trees_distance(child1, child2)
             
         # Add distances for unmatched children
         child_distances += abs(len(node1.children) - len(node2.children))
         return cost + child_distances
+
+    # ----------------- General GP Functions ------------------------- #
     
-    def tree_edit_distance_zss(self, node1, node2):
-        def get_children(node):
-            return node.children
-        return zss.simple_distance(node1, node2, get_children)
+    def initialize_population(self):
+        self.population = []
+        for _ in range(self.pop_size):
+            individual = Individual(self.args)
+            self.population.append(individual)
     
-    # ------------- Croosover --------------------- #
+    def calculate_fitness(self, fitness_function, curr_gen):
+        for individual in self.population:
+            individual.fitness, success = fitness_function(individual.tree)
+            if success:
+                print(f"Successful individual found in generation {curr_gen}")
+                print(f"Function: {individual.tree}")
+                self.poulation_success = True
+            
+    def tournament_selection(self, k=3):
+        selected = []
+        for _ in range(self.pop_size):
+            participants = np.random.choice(self.population, k)
+            winner = max(participants, key=lambda ind: ind.fitness)
+            selected.append(winner)
+        return selected
     
     def crossover(self, parent1, parent2):
-        # print(f"\nCurrent nº individuals in population: {len(self.population)}")
+      
+        # Check if there is inbreeding prevention mechanism. (None means inbreeding is allowed)
         if self.inbred_threshold is not None:
-            if not self.can_mate(parent1, parent2, self.inbred_threshold):
+            if not self.can_mate(parent1, parent2, self.inbred_threshold): # If distance(p1, p2) >= inbred_thres then skip bc [not False ==  True]
                 return None, None
 
         # Clone parents to avoid modifying originals
@@ -286,9 +327,6 @@ class GeneticAlgorithmGP:
         )
 
         return offspring1, offspring2
-
-
-    # ------------- Croosover --------------------- #
     
     def mutate(self, individual):
         
@@ -322,19 +360,29 @@ class GeneticAlgorithmGP:
         individual.tree = mutated_tree
 
     def measure_diversity(self):
-        # Calculate diversity based on tree structures
-        # Example: Average pairwise tree edit distance
+        """
+            Definition
+            -----------
+                Calculate diversity based on tree structures as the given average pairwise tree edit distance
+                
+                Example:  # Tree 1: (x + 1) -> tree1 = Node('+', [Node('x'), Node('1')])
+                          # Tree 2: (x + 2) -> tree2 = Node('+', [Node('x'), Node('2')])
+                          have distance of 1. 
+                          
+        """
         total_distance = 0
         count = 0
         for i in range(len(self.population)):
             for j in range(i + 1, len(self.population)):
-                distance = self.tree_edit_distance(self.population[i].tree, self.population[j].tree)
+                distance = self.compute_trees_distance(self.population[i].tree, self.population[j].tree)
                 total_distance += distance
                 count += 1
         if count == 0:
             return 0
         diversity = total_distance / count
         return diversity
+    
+    # ----------------- Main execution loop ------------------------- #
     
     def run(self, fitness_function):
         self.initialize_population()
