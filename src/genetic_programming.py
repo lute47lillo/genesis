@@ -13,32 +13,9 @@ from argparse import Namespace
 # import tests as tests
 import unittest
 
-"""
-    TODO LIST
-    
-        - Fix issues such as:
-            /gpfs1/home/e/l/elillopo/diversity/src/genetic_programming.py:337: RuntimeWarning: overflow encountered in exp
-            return np.exp(args[0])
-            /gpfs1/home/e/l/elillopo/diversity/src/genetic_programming.py:327: RuntimeWarning: overflow encountered in divide
-            result = np.true_divide(args[0], denominator)
-            /gpfs1/home/e/l/elillopo/diversity/src/genetic_programming.py:335: RuntimeWarning: invalid value encountered in sin
-            return np.sin(args[0])
-            /gpfs1/home/e/l/elillopo/diversity/src/genetic_programming.py:333: RuntimeWarning: invalid value encountered in cos
-            return np.cos(args[0])
-            /gpfs1/home/e/l/elillopo/diversity/src/genetic_programming.py:321: RuntimeWarning: overflow encountered in multiply
-            return args[0] * args[1]
-            /gpfs1/home/e/l/elillopo/diversity/src/genetic_programming.py:321: RuntimeWarning: invalid value encountered in multiply
-            return args[0] * args[1]
-            /users/e/l/elillopo/.conda/envs/neurobotics/lib/python3.11/site-packages/numpy/core/fromnumeric.py:88: RuntimeWarning: invalid value encountered in reduce
-            return ufunc.reduce(obj, axis, dtype, out, **passkwargs)
-            /gpfs1/home/e/l/elillopo/diversity/src/genetic_programming.py:321: RuntimeWarning: invalid value encountered in scalar multiply
-            return args[0] * args[1]
-            
-            that are in evaluate TREE function
-            
+"""            
         - Add the NGUYEN benchmark functions from "Effective Adaptive Mutation Rates for Program Synthesis" Paper
         and from "Better GP benchmarks: community survey results and proposals" paper.
-
 """
 
 
@@ -109,6 +86,7 @@ class GeneticAlgorithmGP:
         self.inbred_threshold = inbred_threshold
         self.max_depth = args.max_depth
         self.initial_depth = args.initial_depth
+        self.poulation_success = False
         self.population = []
         self.best_fitness_list = []
         self.diversity_list = []
@@ -125,6 +103,7 @@ class GeneticAlgorithmGP:
             if success:
                 print(f"Successful individual found in generation {curr_gen}")
                 print(f"Function: {individual.tree}")
+                self.poulation_success = True
             
     def tournament_selection(self, k=3):
         selected = []
@@ -146,9 +125,22 @@ class GeneticAlgorithmGP:
     
     def select_random_node_with_parent(self, tree):
         """
-        Selects a random node along with its parent.
-        Returns a tuple (parent_node, selected_node).
-        If the selected node is the root, parent_node is None.
+            Definition
+            -----------
+                Selects a random node along with its parent.
+                
+                Example:
+                    - tree1 = Node('+', [Node('x'), Node('1')])
+                      could return (Node(+), Node(x)) or (Node(+), Node(1)) as [parent, child] pairs.
+                
+            Parameters
+            -----------
+                - tree (Node): children node of a given individual tree
+                
+            Returns
+            -----------  
+                - tuple (parent_node, selected_node).
+                If the selected node is the root, parent_node is None.
         """
         all_nodes = self.get_all_nodes_with_parent(tree)
         if not all_nodes:
@@ -157,7 +149,14 @@ class GeneticAlgorithmGP:
 
     def get_all_nodes_with_parent(self, node, parent=None):
         """
-        Recursively collects all nodes in the tree along with their parent.
+            Definition
+            -----------
+                Recursively collects all nodes in the tree along with their parent.
+                
+                Example:
+                    - tree1 = Node('+', [Node('x'), Node('1')])
+                      returns [(None, Node(+)), (Node(+), Node(x)), (Node(+), Node(1))] as [parent, child] pairs.
+                              
         """
         nodes = [(parent, node)]
         for child in node.children:
@@ -203,7 +202,7 @@ class GeneticAlgorithmGP:
     # ------------- Croosover --------------------- #
     
     def crossover(self, parent1, parent2):
-        print(f"\nCurrent nº individuals in population: {len(self.population)}")
+        # print(f"\nCurrent nº individuals in population: {len(self.population)}")
         if self.inbred_threshold is not None:
             if not self.can_mate(parent1, parent2, self.inbred_threshold):
                 return None, None
@@ -219,14 +218,14 @@ class GeneticAlgorithmGP:
             parent_node2, node2 = self.select_random_node_with_parent(child2)
 
             if node1 is None or node2 is None:
-                print(f"Attempt {attempt+1}: One of the selected nodes is None. Retrying...")
+                # print(f"Attempt {attempt+1}: One of the selected nodes is None. Retrying...")
                 continue  # Try again
 
             # Check if both nodes have the same arity
             arity1 = parent1.get_function_arity(node1.value)
             arity2 = parent2.get_function_arity(node2.value)
             if arity1 != arity2:
-                print(f"Attempt {attempt+1}: Arities do not match (arity1={arity1}, arity2={arity2}). Retrying...")
+                # print(f"Attempt {attempt+1}: Arities do not match (arity1={arity1}, arity2={arity2}). Retrying...")
                 continue  # Arities don't match, select another pair
 
             # Swap entire subtrees
@@ -251,25 +250,25 @@ class GeneticAlgorithmGP:
                     index = parent_node2.children.index(node2)
                     parent_node2.children[index] = copy.deepcopy(node1)
                 except ValueError:
-                    print(f"Attempt {attempt}: node2 not found in parent_node2's children. Retrying...")
+                    # print(f"Attempt {attempt}: node2 not found in parent_node2's children. Retrying...")
                     continue  # node2 not found, try again
 
             # Check for depth constraints
             depth_child1 = self.tree_depth(child1)
             depth_child2 = self.tree_depth(child2)
             if depth_child1 > self.max_depth or depth_child2 > self.max_depth:
-                print(f"Attempt {attempt}: Offspring exceed max depth ({self.max_depth}). Retrying...")
+                # print(f"Attempt {attempt}: Offspring exceed max depth ({self.max_depth}). Retrying...")
                 # Revert the swap by reinitializing the trees
                 child1 = copy.deepcopy(parent1.tree)
                 child2 = copy.deepcopy(parent2.tree)
                 continue  # Try again
 
             # Successful crossover
-            print(f"Attempt {attempt}: Crossover successful.")
+            # print(f"Attempt {attempt}: Crossover successful.")
             break
         else:
             # Failed to perform a valid crossover within max_attempts
-            print("Crossover failed after maximum attempts.")
+            # print("Crossover failed after maximum attempts.")
             return None, None
 
         # Create new individuals
@@ -299,7 +298,7 @@ class GeneticAlgorithmGP:
         # Select a random node to mutate
         node_to_mutate = self.select_random_node(mutated_tree)
         if node_to_mutate is None:
-            print("Warning: No node selected for mutation")
+            # print("Warning: No node selected for mutation")
             return  # Cannot mutate without a node
 
         # Replace the subtree with a new random subtree
@@ -308,7 +307,7 @@ class GeneticAlgorithmGP:
         # Ensure that the new_subtree has the correct arity
         required_children = individual.get_function_arity(new_subtree.value)
         if len(new_subtree.children) != required_children:
-            print(f"Warning: New subtree has incorrect arity for function '{new_subtree.value}'")
+            # print(f"Warning: New subtree has incorrect arity for function '{new_subtree.value}'")
             return  # Discard mutation
         
         node_to_mutate.value = new_subtree.value
@@ -316,7 +315,7 @@ class GeneticAlgorithmGP:
         
         # Ensure the mutated tree does not exceed max depth
         if self.tree_depth(mutated_tree) > self.max_depth:
-            print("Warning: Mutated tree exceeds max depth")
+            # print("Warning: Mutated tree exceeds max depth")
             return  # Discard mutation
 
         # Update individual
@@ -342,21 +341,27 @@ class GeneticAlgorithmGP:
     
         for gen in range(self.generations):
             
-            print(f"Current generation: {gen+1}")
-            print(f"The population:")
-            for indiv in self.population:
-                print(f"Tree: {indiv.tree}, depth: {self.tree_depth(indiv.tree)}")
-            print()
+            # print(f"Current generation: {gen+1}")
+            # print(f"The population:")
+            # for indiv in self.population:
+            #     print(f"Tree: {indiv.tree}, depth: {self.tree_depth(indiv.tree)}")
+            # print()
             
             # Calculate fitness
             self.calculate_fitness(fitness_function, gen)
-                
+            
+            # Update best fitness list
             best_individual = max(self.population, key=lambda ind: ind.fitness)
             self.best_fitness_list.append(best_individual.fitness)
     
             # Measure diversity
             diversity = self.measure_diversity()
             self.diversity_list.append(diversity)
+            
+            # Early Stopping condition if successful individual has been found
+            # TODO: Return generation as well, in order to compare methods
+            if self.poulation_success == True:
+                return self.best_fitness_list, self.diversity_list, gen+1
     
             # Selection
             selected = self.tournament_selection()
@@ -388,7 +393,7 @@ class GeneticAlgorithmGP:
             if (gen + 1) % 10 == 0:
                 print(f"Generation {gen + 1}: Best Fitness = {best_individual.fitness:.4f}, Diversity = {diversity:.4f}")
     
-        return self.best_fitness_list, self.diversity_list
+        return self.best_fitness_list, self.diversity_list, gen+1
     
 class GPLandscape:
     
@@ -413,7 +418,7 @@ class GPLandscape:
     def evaluate_tree(self, node, x):
         
         if node is None:
-            print(f"Warning: evaluate_tree called with node={node}")
+            # print(f"Warning: evaluate_tree called with node={node}")
             return 0.0
 
         if node.is_terminal():
@@ -471,6 +476,7 @@ class GPLandscape:
                 return 0.0  # Return 0.0 for any error
             
     def target_function(self, x):
+        # TODO: Refactor this to be in utils.py
         
         # Define target functions
         if self.args.benchmark == 'ackley':
@@ -478,6 +484,15 @@ class GPLandscape:
         
         if self.args.benchmark == "nguyen1":
             return bf.nguyen1(x)
+        
+        if self.args.benchmark == "nguyen2":
+            return bf.nguyen2(x)
+        
+        if self.args.benchmark == "nguyen3":
+            return bf.nguyen3(x)
+        
+        if self.args.benchmark == "nguyen4":
+            return bf.nguyen4(x)
         
     # Define input vectors (sampled within the search space)
     def generate_data(self):
@@ -489,7 +504,7 @@ class GPLandscape:
     def symbolic_fitness_function(self, genome):
         total_error = 0.0
         success = True  # Assume success initially
-        epsilon = 1e-3  # Small threshold for success
+        epsilon = 1e-4  # Small threshold for success
 
         for x, target in self.data:
 
@@ -498,9 +513,11 @@ class GPLandscape:
                 # print(f"output value: {output}, target value: {target}")
                 error = output - target
                 
+                # TODO: As used in Paper Effective Adaptive MR
                 # proxy_error = np.sign(error) * np.log(0.01 + abs(error))
                 # total_error += abs(proxy_error)
                 
+                # TODO: As used in original Paper
                 total_error += abs(error)
 
                 if abs(error) > epsilon:
@@ -511,7 +528,7 @@ class GPLandscape:
                 total_error += 1e6  # Penalize invalid outputs
                 success = False
                 
-        fitness = 1 / (total_error + 1e-6)  # Fitness increases as total error decreases
+        fitness = 1 / (total_error + 1e-6)  # Fitness increases as total error decreases or could return just total error
         return fitness, success
     
 class TestGeneticProgramming(unittest.TestCase):
@@ -608,18 +625,14 @@ class TestGeneticProgramming(unittest.TestCase):
         # After mutation, check that the arity remains the same
         new_arity = individual.get_function_arity(individual.tree.value)
         self.assertEqual(original_arity, new_arity)
-
-    
-
-    
-    
+        
 if __name__ == "__main__":
     
     # Get args
     args = util.set_args()
     
     # Set file plotting name
-    args.config_plot = f"genetic_programming/{args.benchmark}/PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}" 
+    args.config_plot = f"genetic_programming/{args.benchmark}/PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
     
     args.bounds = util.get_function_bounds(args.benchmark)
     
@@ -632,157 +645,21 @@ if __name__ == "__main__":
     # # tests.test_mutate_correct_arity()
     # exit()
 
-    
     # Create Landscape
     gp_landscape = GPLandscape(args, args.bounds)
 
-    # Run experiments
+    # # Run experiments
     print("Running GA with NO Inbreeding Mating...")
     results_no_inbreeding = exp.multiple_runs_function_gp(args, gp_landscape, args.inbred_threshold)
+    util.save_accuracy(results_no_inbreeding, f"{args.config_plot}_no_inbreeding.npy")
     
-    print("Running GA with Inbreeding Mating...")
-    results_inbreeding = exp.multiple_runs_function_gp(args, gp_landscape, None)
+    # print("Running GA with Inbreeding Mating...")
+    # results_inbreeding = exp.multiple_runs_function_gp(args, gp_landscape, None)
+    # util.save_accuracy(results_inbreeding, f"{args.config_plot}_inbreeding.npy")
     
-    gs_list, fit_list, div_list, label_list = plot.collect_bootstrapping_data(args, results_no_inbreeding, results_inbreeding)
-    plot.plot_multiple_runs_GP_functions(args, gs_list, fit_list, div_list, label_list)
-
-# ------------- An example of how to change that --------- #
-
-
-# def target_function(x):
-#     return x ** 2 + 2 * x + 1  # Example: quadratic function
-
-# def symbolic_regression_fitness_function(genome):
-#     input_values = np.linspace(-10, 10, 50)
-#     return symbolic_regression_fitness(genome, target_function, input_values)
-
-# TODO: THIS FOR ACKLEY
-    # def evaluate_tree(self, node, x):
-    #     """
-    #         Evaluate the program tree with input vector x.
-
-    #         Parameters:
-    #         - node (Node): Current node in the program tree.
-    #         - x (numpy.ndarray): Input vector.
-
-    #         Returns:
-    #         - result: Result of the program's evaluation. Can be a scalar or vector.
-    #     """
-    #     if node.is_terminal():
-    #         if node.value == 'x':
-    #             return x  # Return the entire input vector
-    #         else:
-    #             return float(node.value)
-    #     else:
-    #         func = node.value
-    #         args = [self.evaluate_tree(child, x) for child in node.children]
-    #         try:
-    #             if func == '+':
-    #                 return args[0] + args[1]
-    #             elif func == '-':
-    #                 return args[0] - args[1]
-    #             elif func == '*':
-    #                 return args[0] * args[1]
-    #             elif func == '/':
-    #                 # Protected division
-    #                 denominator = args[1]
-    #                 if isinstance(denominator, (int, float, np.ndarray)):
-    #                     with np.errstate(divide='ignore', invalid='ignore'):
-    #                         result = np.true_divide(args[0], denominator)
-    #                         result[~np.isfinite(result)] = 1.0  # Replace inf, -inf, NaN with 1.0
-    #                         return result
-    #                 else:
-    #                     return 1.0
-    #             elif func == 'cos':
-    #                 return np.cos(args[0])
-    #             elif func == 'sin':
-    #                 return np.sin(args[0])
-    #             elif func == 'exp':
-    #                 return np.exp(args[0])
-    #             elif func == 'sqrt':
-    #                 return np.sqrt(np.abs(args[0]))  # Protected sqrt
-    #             elif func == 'sum':
-    #                 return np.sum(args[0])
-    #             elif func == 'norm':
-    #                 return np.linalg.norm(args[0])
-    #             else:
-    #                 # Undefined function
-    #                 raise ValueError(f"Undefined function: {func}")
-                
-    #             # After computing result, check if it's an array
-    #             if isinstance(result, np.ndarray):
-    #                 # Reduce array to scalar
-    #                 result = np.mean(result)
-    #             return result
-            
-    #         except Exception as e:
-    #             # Handle any unexpected errors
-    #             return 0.0
+    # Plot the generation of successful runs
+    # plot.plot_gen_vs_run(args, results_no_inbreeding, results_inbreeding)
     
-    # def complex_fitness_function(self, genome, input_vectors, lambda_complexity=0.1):
-    #     """
-    #         Definition
-    #         -----------
-    #             Calculation of fitness value based off Symbolic  Regression
-    #             input_vectors = self.generate_input_vectors(d=2, num_samples=100)
-    #             to generate samples
-    #     """
-    #     mse_total = 0.0
-    #     complexity = self.count_nodes(genome)
-        
-    #     for x in input_vectors:
-    #         try:
-    #             output = self.evaluate_tree(genome, x)
-    #             target = self.target_function(x)
-    #             # Ensure output and target are scalars
-    #             output = float(output)
-    #             target = float(target)
-    #             mse = (output - target) ** 2
-    #             mse_total += mse
-    #         except Exception as e:
-    #             mse_total += 1e6  # Large penalty for errors
-        
-    #     mse_average = mse_total / len(input_vectors)
-    #     fitness = (1 / (mse_average + 1e-6)) * np.exp(-lambda_complexity * complexity)
-    #     return fitness
-    
-    # def fitness_function(self, genome):
-    # input_vectors = self.generate_input_vectors(d=2, num_samples=100)
-    #     return self.complex_fitness_function(genome)
-    
-    # def get_function_arity(self, function):
-    #     # Define arity for each function
-    #     arity_dict = {
-    #         '+': 2,
-    #         '-': 2,
-    #         '*': 2,
-    #         '/': 2,
-    #         'cos': 1,
-    #         'sin': 1,
-    #         'exp': 1,
-    #         'sqrt': 1,
-    #         'sum': 1,
-    #         'norm': 1
-    #     }
-    #     return arity_dict.get(function, 0)  # Default to 0 if function not found
-    
-    # ACKLEY
-    # def random_tree(self, depth):
-    #     if depth == self.max_depth:
-    #         # At the root, use a reduction function
-    #         function = np.random.choice(['sum', 'norm'])
-    #     elif depth == 0:
-    #         # Return a terminal node
-    #         terminal = np.random.choice(['x', 'ERC'])  # Terminals are 'x' or random constants
-    #         if terminal == 'ERC':
-    #             value = np.random.uniform(self.bounds[0], self.bounds[1])  # Bounds for specific functions. TODO: only working with functions like ackley, rastrigin, etc
-    #             return Node(value)
-    #         else:
-    #             return Node('x')
-    #     else:
-    #         # Return a function node with children
-    #         function = np.random.choice(['+', '-', '*', '/', 'cos', 'sin', 'exp', 'sqrt', 'sum', 'norm'])  # Include vector functions
-    #         arity = self.get_function_arity(function)
-    #         children = [self.random_tree(depth - 1) for _ in range(arity)]
-    #         return Node(function, children)
-
+    # Plot with bootstraping only if all runs are same length of generations
+    # gs_list, fit_list, div_list, label_list = plot.collect_bootstrapping_data(args, results_no_inbreeding, results_inbreeding)
+    # plot.plot_multiple_runs_GP_functions(args, gs_list, fit_list, div_list, label_list)

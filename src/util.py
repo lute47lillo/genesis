@@ -2,7 +2,13 @@ import argparse
 import networkx as nx
 import numpy as np
 import torch
+import os
 import pandas as pd
+import benchmark_factory as bf
+from sympy import symbols, sympify, simplify, expand
+from sympy.core import Function
+import sympy
+
 
 def set_seed(seed):
     torch.manual_seed(seed)
@@ -44,7 +50,6 @@ def set_args():
     
     return args
 
-
 # ---------------- NK Landscape visualization helper functions --------------------- #
 
 def build_lineage_graph(lineage_data):
@@ -68,6 +73,14 @@ def get_lineage_frequency(lineage_data):
     frequency = df.groupby(['generation', 'ancestors']).size().reset_index(name='count')
     return frequency
 
+def save_accuracy(array, file_path_temp):
+    file_path = f"{os.getcwd()}/saved_data/" + file_path_temp
+    mode = 'wb'  # Write mode (overwrite or create if it doesn't exist)
+    with open(file_path, mode) as f:
+        np.save(f, array)
+    print(f"\nAccuracy data saved to {file_path}")
+
+
 # ---------------- Genetic Programming helper functions --------------------- #
 
 def get_function_bounds(benchmark):
@@ -86,8 +99,32 @@ def get_function_bounds(benchmark):
         bounds = (-5.12, 5.12)
     elif benchmark == 'nguyen1':
         bounds = (-4.0, 4.0)
+    elif benchmark == 'nguyen2':
+        bounds = (-4.0, 4.0)
+    elif benchmark == 'nguyen3':
+        bounds = (-4.0, 4.0)
+    elif benchmark == 'nguyen4':
+        bounds = (-4.0, 4.0)
     
     return bounds
+
+def select_benchmark(args):
+    """
+        Definition
+        -----------
+            Select the benchmark function of Optimization class.
+    """
+    benchmarks = {"ackley": bf.ackley_function, "rosenbrock":bf.rosenbrock_function,
+                  "rastrigin": bf.rastrigin_function, "schwefel": bf.schwefel_function,
+                  "griewank" :bf.griewank_function, "sphere": bf.sphere_function}
+    
+    # Get function
+    landscape_fn = benchmarks.get(args.benchmark)
+    
+    # Set the specific bounds
+    args.bounds = get_function_bounds(args.benchmark)
+    
+    return landscape_fn
 
 def get_function_arity(function):
     arity_dict = {
@@ -100,3 +137,187 @@ def get_function_arity(function):
         'log': 1
     }
     return arity_dict.get(function, 0)
+
+def set_config_parameters(benchmark):
+    
+    # Experiment Parameters
+    pop_sizes = [25, 50, 100, 200]
+    dimensions = 10
+    bounds = get_function_bounds(benchmark)
+    generations = 200
+    mutation_rate = 0.2
+    allowed_distance = 1.0
+    
+    return pop_sizes, dimensions, bounds, generations, mutation_rate, allowed_distance
+
+# --------------------------- Genetic Programming visualization ------------------------------- #
+
+class Node:
+    def __init__(self, value, children=None):
+        self.value = value  # Operator (e.g., '+', '-', '*', '/') or Operand (e.g., 'x', '1.0')
+        self.children = children if children is not None else []
+
+    def is_terminal(self):
+        """
+        Determines if the node is a terminal node (no children).
+        """
+        return len(self.children) == 0
+
+    def __repr__(self):
+        return f"Node({self.value})"
+
+def tokenize(expression):
+    """
+    Converts the input string into a list of tokens.
+    """
+    tokens = []
+    current_token = ""
+    for char in expression:
+        if char in ('(', ')'):
+            if current_token:
+                tokens.append(current_token)
+                current_token = ""
+            tokens.append(char)
+        elif char.isspace():
+            if current_token:
+                tokens.append(current_token)
+                current_token = ""
+        else:
+            current_token += char
+    if current_token:
+        tokens.append(current_token)
+    return tokens
+
+def parse(tokens):
+    """
+    Parses the list of tokens into a tree of Nodes.
+    """
+    if len(tokens) == 0:
+        return None, tokens
+
+    token = tokens.pop(0)
+
+    if token == '(':
+        # Next token should be the operator
+        if len(tokens) == 0:
+            raise SyntaxError("Unexpected end of tokens after '('")
+        operator = tokens.pop(0)
+        node = Node(operator)
+        while tokens and tokens[0] != ')':
+            child, tokens = parse(tokens)
+            if child is not None:
+                node.children.append(child)
+        if not tokens:
+            raise SyntaxError("Missing ')' in expression")
+        tokens.pop(0)  # Remove ')'
+        return node, tokens
+    elif token == ')':
+        # Should not reach here
+        raise SyntaxError("Unexpected ')' in expression")
+    else:
+        # Operand or operator without children (terminal node)
+        return Node(token), tokens
+
+
+def print_tree(node, indent=""):
+    """
+    Recursively prints the tree in an indented format.
+    """
+    if node is None:
+        print(indent + "None")
+        return
+    print(indent + str(node.value))
+    for child in node.children:
+        print_tree(child, indent + "  ")
+        
+def tree_to_expression(node):
+    """
+    Converts the Node tree into a simplified SymPy expression.
+    """
+    sympy_expr = tree_to_sympy(node)
+    expanded_expr = expand(sympy_expr)
+    simplified_expr = simplify(expanded_expr)
+    return simplified_expr
+        
+def convert_tree_to_expression(expression_str):
+    """
+    Converts a GP tree string in prefix notation into a simplified SymPy expression.
+    
+    Parameters:
+        expression_str (str): The GP tree in prefix notation.
+    
+    Returns:
+        sympy.Expr: The simplified SymPy expression.
+    """
+    tokens = tokenize(expression_str)
+    try:
+        tree, remaining = parse(tokens)
+        if remaining:
+            print("Warning: Remaining tokens after parsing:", remaining)
+    except SyntaxError as e:
+        print("Syntax Error during parsing:", e)
+        tree = None
+    
+    if tree is None:
+        raise ValueError("Invalid expression string. Parsing failed.")
+    
+    expr = tree_to_expression(tree)
+    return expr
+
+def tree_to_sympy(node):
+    """
+    Recursively converts a Node tree into a SymPy expression.
+    """
+    # Define the symbol 'x'
+    x = symbols('x')    
+    
+    if node.is_terminal():
+        if node.value == 'x':
+            return x
+        else:
+            try:
+                return sympify(node.value)
+            except:
+                raise ValueError(f"Invalid terminal node value: {node.value}")
+    else:
+        func = node.value
+        args = [tree_to_sympy(child) for child in node.children]
+        if func == '+':
+            return args[0] + args[1]
+        elif func == '-':
+            if len(args) == 1:
+                return -args[0]
+            elif len(args) == 2:
+                return args[0] - args[1]
+            else:
+                raise ValueError(f"Unsupported number of arguments for '-': {len(args)}")
+        elif func == '*':
+            return args[0] * args[1]
+        elif func == '/':
+            return args[0] / args[1]
+        elif func == 'sin':
+            return sympy.sin(args[0])
+        elif func == 'cos':
+            return sympy.cos(args[0])
+        elif func == 'log':
+            return sympy.log(args[0])
+        else:
+            raise ValueError(f"Unsupported function: {func}")
+        
+# -------------- Plotting helper functions --------------- #
+        
+def create_padded_df(data, metric, run_ids):
+    
+    # Determine the maximum length for the metric across all runs
+    max_length = max(len(run_data[metric]) for run_data in data.values())
+    
+    # Initialize a DataFrame with NaNs
+    df = pd.DataFrame(index=range(max_length), columns=run_ids, dtype=float)
+    
+    # Populate the DataFrame
+    for run_id, run_data in data.items():
+        values = run_data[metric]
+        df[run_id].iloc[:len(values)] = values
+    
+    return df
+    

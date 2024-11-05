@@ -31,8 +31,8 @@ if __name__ == "__main__":
     # landscape = bf.NKLandscape(n=args.N_NKlandscape, k=args.K_NKlandscape)
     # landscape = bf.Jump(args)
     # landscape = bf.DeceptiveLeadingBlocks(args)
-    # landscape = bf.Rastrigin(args)
-    landscape = bf.MovingPeaksLandscape(args)
+    landscape = bf.Rastrigin(args)
+    # landscape = bf.MovingPeaksLandscape(args)
     
     # Set file plotting name
     args.config_plot = f"{args.bench_name}/multipleNEWNovelty_PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_N:{args.N_NKlandscape}_K:{args.K_NKlandscape}" 

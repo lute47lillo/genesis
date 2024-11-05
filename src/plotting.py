@@ -1,8 +1,11 @@
 import matplotlib.pyplot as plt
 import os 
 import numpy as np
+from scipy.stats import bootstrap
+import util
+import pandas as pd
 
-def plot_fitness_comparison_populations(args, elem_list, parameter, results_inbreeding, results_no_inbreeding):
+def plot_opt_multiple_runs(args, parameter, ks_list, best_fitness_list, diversity_list, label_list):
     """
         Definition
         -----------
@@ -15,49 +18,101 @@ def plot_fitness_comparison_populations(args, elem_list, parameter, results_inbr
     """
     # Plot Best Fitness Comparison
     plt.figure(figsize=(16, 9))
-    for element in elem_list:
-        plt.plot(
-            results_inbreeding[element]['best_fitness'],
-            label=f'Inbreeding, {parameter} {element}'
-        )
-        plt.plot(
-            results_no_inbreeding[element]['best_fitness'],
-            label=f'No Inbreeding, {parameter} {element}',
-            linestyle='--'
-        )
-    plt.title('Best Fitness over Generations')
-    plt.xlabel('Generation')
-    plt.ylabel('Best Fitness')
-    plt.legend()
-    plt.grid(True)
-    plt.savefig(f"{os.getcwd()}/figures/{parameter}/{args.benchmark}/Fit_{args.config_plot}.png")
-    plt.close()
+    linestyles = ['-', ':', '-', ':'] # One for each methods
 
-def plot_diversity_comparison_populations(args, elem_list, parameter, results_inbreeding, results_no_inbreeding):
-    """
-        Definition
-        -----------
-            Plot the Diversity results of inbreeding prevention mechanism against no prevention over different populations sizes
-    """
-    # Plot Diversity Comparison
-    plt.figure(figsize=(16, 9))
-    for element in elem_list:
-        plt.plot(
-            results_inbreeding[element]['diversity'],
-            label=f'Inbreeding, {parameter} {element}'
-        )
-        plt.plot(
-            results_no_inbreeding[element]['diversity'],
-            label=f'No Inbreeding, {parameter} {element}',
-            linestyle='--'
-        )
-    plt.title('Genetic Diversity over Generations')
+    # Best Fitness Over Generations 
+    plt.subplot(1, 2, 1)
+    for idx, ks in enumerate(ks_list):
+        plt.plot(ks, best_fitness_list[idx][0], label=label_list[idx], linestyle=linestyles[idx])
+        plt.fill_between(ks, best_fitness_list[idx][1], best_fitness_list[idx][2], alpha=0.5)
+    
+    # Plot the global_optimum_fitness_list per generation
+    plt.title('Best Fitness vs. Global Optimum Over Generations (MPB)')
+    plt.xlabel('Generation')
+    plt.ylabel('Fitness')
+    plt.legend()
+
+    # Genetic Diversity Over Generations and the collapses
+    plt.subplot(1, 2, 2)
+    for idx, ks in enumerate(ks_list):
+        plt.plot(ks, diversity_list[idx][0], label=label_list[idx])
+        plt.fill_between(ks, diversity_list[idx][1], diversity_list[idx][2], alpha=0.5)
+    
+    plt.title('Allelic Diversity Over Generations (MPB)')
     plt.xlabel('Generation')
     plt.ylabel('Diversity')
     plt.legend()
     plt.grid(True)
-    plt.savefig(f"{os.getcwd()}/figures/{parameter}/{args.benchmark}/Div_{args.config_plot}.png")
+    
+    plt.savefig(f"{os.getcwd()}/figures/{parameter}/{args.benchmark}/{args.config_plot}.png")
     plt.close()
+
+def plot_opt_fn_parameters(args, parameter, elem_list, results_inbreeding, results_no_inbreeding):
+    """
+        Definition
+        -----------
+            Plot the Fitness results of inbreeding prevention mechanism against no prevention over different populations sizes
+            
+        Parameters
+        -----------
+            - elem_list (List): Contains the hyperparameters over to what the experiment was run. Ex: Population Sizes, Mutation Rates, ...
+            - Parameter (str): The Hyperparameter studied. For plotting and reference 
+    """
+
+    # Create a figure and two subplots
+    fig, axes = plt.subplots(1, 2, figsize=(32, 14))
+
+    # First subplot: Best Fitness over Generations
+    ax1 = axes[0]
+    for element in elem_list:
+        ax1.plot(
+            results_inbreeding[element]['best_fitness'],
+            label=f'Inbreeding, {parameter} {element}'
+        )
+        ax1.plot(
+            results_no_inbreeding[element]['best_fitness'],
+            label=f'No Inbreeding, {parameter} {element}',
+            linestyle='--'
+        )
+    ax1.set_title('Best Fitness over Generations')
+    ax1.set_xlabel('Generation')
+    ax1.set_ylabel('Best Fitness')
+    ax1.grid(True)
+
+    # Place the legend below the first subplot
+    ax1.legend(loc='upper center', bbox_to_anchor=(0.5, -0.25), ncol=2, fontsize='large')
+
+    # Second subplot: Genetic Diversity over Generations
+    ax2 = axes[1]
+    for element in elem_list:
+        ax2.plot(
+            results_inbreeding[element]['diversity'],
+            label=f'Inbreeding, {parameter} {element}'
+        )
+        ax2.plot(
+            results_no_inbreeding[element]['diversity'],
+            label=f'No Inbreeding, {parameter} {element}',
+            linestyle='--'
+        )
+    ax2.set_title('Genetic Diversity over Generations')
+    ax2.set_xlabel('Generation')
+    ax2.set_ylabel('Diversity')
+    ax2.grid(True)
+
+    # Place the legend below the second subplot
+    ax2.legend(loc='upper center', bbox_to_anchor=(0.5, -0.25), ncol=2, fontsize='large')
+
+    # Adjust layout to make space for the legends
+    plt.tight_layout()
+    fig.subplots_adjust(bottom=0.3)  # Increase bottom margin to accommodate legends
+
+    # Save the figure with tight bounding box to include legends
+    plt.savefig(
+        f"{os.getcwd()}/figures/{parameter}/{args.benchmark}/{args.config_plot}.png",
+        bbox_inches='tight'
+    )
+    plt.close()
+
     
 def plot_individual_MPL_global_optima(args, best_fitness_list, diversity_list, global_optimum_fitness_list, collapse_events, collapse_threshold):
     
@@ -283,6 +338,83 @@ def plot_mean_and_bootstrapped_ci(experimental_results, key):
     
     return generations, (mean_fitness, fit_ci_low, fit_ci_high)
 
+# ------------------ Bootstrapping Irregular lengths GP ---------------------- #
+def compute_bootstrap_ci(df, metric_name, confidence_level=0.95, n_bootstraps=1000):
+    """
+    Compute bootstrap confidence intervals for each time step.
+
+    Parameters:
+    - df: pandas DataFrame containing the metric data with runs as columns.
+    - metric_name: Name of the metric (for labeling purposes).
+    - confidence_level: Confidence level for the intervals.
+    - n_bootstraps: Number of bootstrap resamples.
+
+    Returns:
+    - summary_df: DataFrame containing mean, lower CI, and upper CI for each time step.
+    """
+    means = []
+    cis_lower = []
+    cis_upper = []
+    indices = df.index
+
+    for idx in indices:
+        # Extract available data at this time step, ignoring NaNs
+        data_at_step = df.iloc[idx].dropna().values
+
+        if len(data_at_step) < 2:
+            # Not enough data to perform bootstrap
+            if len(data_at_step) == 1:
+                mean = data_at_step[0]
+                cis_low = np.nan
+                cis_high = np.nan
+                print(f"Time Step {idx}: Only one observation available. Confidence intervals set to NaN.")
+            else:
+                mean = np.nan
+                cis_low = np.nan
+                cis_high = np.nan
+                print(f"Time Step {idx}: No observations available. Mean and confidence intervals set to NaN.")
+                
+            means.append(mean)
+            cis_lower.append(cis_low)
+            cis_upper.append(cis_high)
+            continue
+
+        try:
+            # Perform bootstrap
+            res = bootstrap(
+                (data_at_step,),
+                np.mean,
+                confidence_level=confidence_level,
+                n_resamples=n_bootstraps,
+                method='percentile'
+            )
+
+            # Compute the mean of the actual data
+            mean = np.mean(data_at_step)
+
+            # Extract confidence interval
+            cis_lower.append(res.confidence_interval.low)
+            cis_upper.append(res.confidence_interval.high)
+            means.append(mean)
+
+        except Exception as e:
+            # Handle unexpected exceptions
+            print(f"Time Step {idx}: Bootstrap failed with error: {e}. Mean and confidence intervals set to NaN.")
+            
+            means.append(np.nan)
+            cis_lower.append(np.nan)
+            cis_upper.append(np.nan)
+
+    # Create a summary DataFrame
+    summary_df = pd.DataFrame({
+        'mean': means,
+        'ci_lower': cis_lower,
+        'ci_upper': cis_upper
+    }, index=indices)
+
+    summary_df.index.name = 'Time Step'
+    return summary_df
+
 def plot_all(args, ks_list, fit_list, label_list, x_label="Generations", y_label="N", title='Comparisons'):
 
     plt.figure(figsize=(20, 10))
@@ -296,3 +428,113 @@ def plot_all(args, ks_list, fit_list, label_list, x_label="Generations", y_label
     plt.legend()
     plt.savefig(f"{os.getcwd()}/figures/{args.config_plot}_{y_label}.png")
     plt.close()
+    
+def plot_gen_vs_run(args, results_no_inbreeding, results_inbreeding):
+    
+    # Create a figure
+    plt.figure(figsize=(20, 10))
+
+    # Get number of runs
+    n_runs = args.exp_num_runs
+    run_numbers = np.arange(1, n_runs + 1)
+
+    # Colect the generations
+    generation_success_inbreeding    = [results_inbreeding[run]['generation_success'] for run in range(n_runs)]
+    generation_success_no_inbreeding = [results_no_inbreeding[run]['generation_success'] for run in range(n_runs)]
+    
+    # Plot scatter
+    plt.plot(run_numbers, generation_success_inbreeding, marker='o', linestyle='-', color='blue', label='Inbreeding')
+    plt.plot(run_numbers, generation_success_no_inbreeding, marker='x', linestyle='--', color='red', label='NO Inbreeding')
+    
+    # Show grid
+    plt.title('Successful generation over Experimental Runs')
+    plt.xlabel('Runs')
+    plt.xticks(run_numbers)
+    plt.ylabel('Generations')
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(f"{os.getcwd()}/figures/{args.config_plot}.png")
+    
+def plot_runs_with_ci(df, summary_df, metric_name, color='blue'):
+    plt.figure(figsize=(10, 6))
+    
+    # Plot individual runs
+    for run_id in df.columns:
+        plt.plot(df.index, df[run_id], marker='o', linestyle='--', alpha=0.5, label=f'Run {run_id}')
+    
+    # Plot mean and confidence intervals
+    plt.plot(summary_df.index, summary_df['mean'], label=f'Mean {metric_name}', color=color, linewidth=2)
+    plt.fill_between(summary_df.index, summary_df['ci_lower'], summary_df['ci_upper'], color=color, alpha=0.3, label='95% CI')
+    
+    plt.xlabel('Time Step')
+    plt.ylabel(metric_name)
+    plt.title(f'{metric_name} Over Time with Runs and 95% Confidence Intervals')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(f"{os.getcwd()}/{metric_name}_test.png")
+    plt.close()
+    
+
+if __name__ == "__main__":
+    
+    # expression = "(- (+ (* (* x x) (+ 1.0 x)) (+ (- 1.0 1.0) (+ (/ 1.0 1.0) (+ x x)))) (+ 1.0 x))"
+ 
+    # print("Indented Tree Structure:")
+    # expr = util.convert_tree_to_expression(expression)
+    # print(expr)
+    
+    print("NO Inbreeding")
+    config_plot = f"{os.getcwd()}/saved_data/genetic_programming/nguyen2/PopSize:300_InThres:10_Mrates:0.005_Gens:500_TourSize:3_MaxD:8_InitD:3_no_inbreeding.npy" 
+
+    data = np.load(config_plot, allow_pickle=True)
+    
+    # print(data)
+    data_dict_no = data.item()
+    
+    # for key, value in data_dict.items():
+    #     for list_key, values in value.items():
+    #         temp_v = np.array(values)
+    #         print(key, list_key, temp_v.shape)
+    #         print(temp_v)
+            
+    # # Create DataFrames
+    # run_ids = data_dict.keys()
+    # best_fitness_df = util.create_padded_df(data_dict, 'best_fitness', run_ids)
+    # diversity_df = util.create_padded_df(data_dict, 'diversity', run_ids)
+
+    # print("Best Fitness DataFrame:")
+    # print(best_fitness_df)
+    # print("\nDiversity DataFrame:")
+    # print(diversity_df)
+    
+    # # Compute bootstrap confidence intervals
+    # best_fitness_ci = compute_bootstrap_ci(best_fitness_df, 'Best Fitness')
+    # diversity_ci = compute_bootstrap_ci(diversity_df, 'Diversity')
+
+    # print("Best Fitness Confidence Intervals:")
+    # print(best_fitness_ci)
+    # print("\nDiversity Confidence Intervals:")
+    # print(diversity_ci)
+    
+    # # Plot Best Fitness with Individual Runs
+    # plot_runs_with_ci(best_fitness_df, best_fitness_ci, 'Best Fitness', color='green')
+
+    # # Plot Diversity with Individual Runs
+    # plot_runs_with_ci(diversity_df, diversity_ci, 'Diversity', color='orange')
+            
+            
+    print("Inbreeding")
+    config_plot = f"{os.getcwd()}/saved_data/genetic_programming/nguyen2/PopSize:300_InThres:10_Mrates:0.005_Gens:500_TourSize:3_MaxD:8_InitD:3_inbreeding.npy" 
+
+    data = np.load(config_plot, allow_pickle=True)
+    
+    # print(data)
+    data_dict = data.item()
+    
+    # for key, value in data_dict.items():
+    #     for list_key, values in value.items():
+    #         temp_v = np.array(values)
+    #         print(key, list_key, temp_v.shape)
+            
+    plot_gen_vs_run(10, data_dict_no, data_dict)
