@@ -435,7 +435,7 @@ def plot_gen_vs_run(args, results_no_inbreeding, results_inbreeding):
     plt.figure(figsize=(20, 10))
 
     # Get number of runs
-    n_runs = args.exp_num_runs
+    n_runs = args #args.exp_num_runs
     run_numbers = np.arange(1, n_runs + 1)
 
     # Colect the generations
@@ -454,7 +454,8 @@ def plot_gen_vs_run(args, results_no_inbreeding, results_inbreeding):
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
-    plt.savefig(f"{os.getcwd()}/figures/{args.config_plot}.png")
+    plt.savefig(f"{os.getcwd()}/figures/0.01TESTIN100pop.png")
+    # plt.savefig(f"{os.getcwd()}/figures/{args.config_plot}.png")
     
 def plot_runs_with_ci(df, summary_df, metric_name, color='blue'):
     plt.figure(figsize=(10, 6))
@@ -475,6 +476,35 @@ def plot_runs_with_ci(df, summary_df, metric_name, color='blue'):
     plt.savefig(f"{os.getcwd()}/{metric_name}_test.png")
     plt.close()
     
+def plot_generation_successes(results, mutation_rates, plot_save_title):
+    """
+    Plots the generation successes for each mutation rate over the runs.
+
+    :param results: Dictionary containing results from multiple_mrates_function_gp function.
+    :param mutation_rates: List of mutation rates used in the experiments.
+    """
+    num_runs = len(next(iter(results.values()))['generation_successes'])  # Get the number of runs
+
+    plt.figure(figsize=(12, 6))
+
+    for rate in mutation_rates:
+        generation_successes = results[rate]['generation_successes']  # List of gen_success per run
+        generation_successes = sorted(generation_successes)
+        gen_suc_mean = np.mean(generation_successes)
+        print(f"Mutatio Rate: {rate}. Mean Generation success: {gen_suc_mean}")
+        runs = range(1, num_runs + 1)
+        plt.plot(runs, generation_successes, marker='o', label=f'Mutation Rate {rate}')
+
+    plt.xlabel('Run Number')
+    plt.ylabel('Generation of Success')
+    plt.title('Generation Successes Across Runs for Different Mutation Rates')
+    plt.legend(title='Mutation Rates')
+    plt.xticks(runs)  # Ensure all run numbers are shown on the x-axis
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(f"{os.getcwd()}/figures/{plot_save_title}")
+    plt.show()
+    
 
 if __name__ == "__main__":
     
@@ -484,57 +514,72 @@ if __name__ == "__main__":
     # expr = util.convert_tree_to_expression(expression)
     # print(expr)
     
-    print("NO Inbreeding")
-    config_plot = f"{os.getcwd()}/saved_data/genetic_programming/nguyen2/PopSize:300_InThres:10_Mrates:0.005_Gens:500_TourSize:3_MaxD:8_InitD:3_no_inbreeding.npy" 
-
-    data = np.load(config_plot, allow_pickle=True)
-    
-    # print(data)
+    print("\nNO Inbreeding")
+    file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/nguyen1/mut_rates/Mrates:[0.1, 0.05, 0.01, 0.005, 0.001, 0.0005, 0.0001]_PopSize:100_InThres:4_Gens:150_TourSize:10_MaxD:8_InitD:3_no_inbreeding.npy"
+    data = np.load(file_path_name, allow_pickle=True)
     data_dict_no = data.item()
+    mutation_rates = [0.1, 0.05, 0.01, 0.005, 0.001, 0.0005, 0.0001]
+    plot_generation_successes(data_dict_no, mutation_rates, "TEST_noInbreeding")
+    
+    print("\nInbreeding")
+    file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/nguyen1/mut_rates/Mrates:[0.1, 0.05, 0.01, 0.005, 0.001, 0.0005, 0.0001]_PopSize:100_InThres:4_Gens:150_TourSize:10_MaxD:8_InitD:3_inbreeding.npy"
+    data = np.load(file_path_name, allow_pickle=True)
+    data_dict_no = data.item()
+    mutation_rates = [0.1, 0.05, 0.01, 0.005, 0.001, 0.0005, 0.0001]
+    plot_generation_successes(data_dict_no, mutation_rates, "TEST_Inbreeding")
+    
+    
+    # print("NO Inbreeding")
+    # # config_plot = f"{os.getcwd()}/saved_data/genetic_programming/nguyen1/experimental/PopSize:100_InThres:5_Mrates:0.01_Gens:100_TourSize:10_MaxD:8_InitD:2_no_inbreeding.npy" 
+
+    # data = np.load(config_plot, allow_pickle=True)
+    
+    # # print(data)
+    # data_dict_no = data.item()
+    
+    # # for key, value in data_dict.items():
+    # #     for list_key, values in value.items():
+    # #         temp_v = np.array(values)
+    # #         print(key, list_key, temp_v.shape)
+    # #         print(temp_v)
+            
+    # # # Create DataFrames
+    # # run_ids = data_dict.keys()
+    # # best_fitness_df = util.create_padded_df(data_dict, 'best_fitness', run_ids)
+    # # diversity_df = util.create_padded_df(data_dict, 'diversity', run_ids)
+
+    # # print("Best Fitness DataFrame:")
+    # # print(best_fitness_df)
+    # # print("\nDiversity DataFrame:")
+    # # print(diversity_df)
+    
+    # # # Compute bootstrap confidence intervals
+    # # best_fitness_ci = compute_bootstrap_ci(best_fitness_df, 'Best Fitness')
+    # # diversity_ci = compute_bootstrap_ci(diversity_df, 'Diversity')
+
+    # # print("Best Fitness Confidence Intervals:")
+    # # print(best_fitness_ci)
+    # # print("\nDiversity Confidence Intervals:")
+    # # print(diversity_ci)
+    
+    # # # Plot Best Fitness with Individual Runs
+    # # plot_runs_with_ci(best_fitness_df, best_fitness_ci, 'Best Fitness', color='green')
+
+    # # # Plot Diversity with Individual Runs
+    # # plot_runs_with_ci(diversity_df, diversity_ci, 'Diversity', color='orange')
+            
+            
+    # print("Inbreeding")
+    # config_plot = f"{os.getcwd()}/saved_data/genetic_programming/nguyen1/experimental/PopSize:100_InThres:5_Mrates:0.01_Gens:100_TourSize:10_MaxD:8_InitD:2_inbreeding.npy" 
+
+    # data = np.load(config_plot, allow_pickle=True)
+    
+    # # print(data)
+    # data_dict = data.item()
     
     # for key, value in data_dict.items():
     #     for list_key, values in value.items():
     #         temp_v = np.array(values)
     #         print(key, list_key, temp_v.shape)
-    #         print(temp_v)
             
-    # # Create DataFrames
-    # run_ids = data_dict.keys()
-    # best_fitness_df = util.create_padded_df(data_dict, 'best_fitness', run_ids)
-    # diversity_df = util.create_padded_df(data_dict, 'diversity', run_ids)
-
-    # print("Best Fitness DataFrame:")
-    # print(best_fitness_df)
-    # print("\nDiversity DataFrame:")
-    # print(diversity_df)
-    
-    # # Compute bootstrap confidence intervals
-    # best_fitness_ci = compute_bootstrap_ci(best_fitness_df, 'Best Fitness')
-    # diversity_ci = compute_bootstrap_ci(diversity_df, 'Diversity')
-
-    # print("Best Fitness Confidence Intervals:")
-    # print(best_fitness_ci)
-    # print("\nDiversity Confidence Intervals:")
-    # print(diversity_ci)
-    
-    # # Plot Best Fitness with Individual Runs
-    # plot_runs_with_ci(best_fitness_df, best_fitness_ci, 'Best Fitness', color='green')
-
-    # # Plot Diversity with Individual Runs
-    # plot_runs_with_ci(diversity_df, diversity_ci, 'Diversity', color='orange')
-            
-            
-    print("Inbreeding")
-    config_plot = f"{os.getcwd()}/saved_data/genetic_programming/nguyen2/PopSize:300_InThres:10_Mrates:0.005_Gens:500_TourSize:3_MaxD:8_InitD:3_inbreeding.npy" 
-
-    data = np.load(config_plot, allow_pickle=True)
-    
-    # print(data)
-    data_dict = data.item()
-    
-    # for key, value in data_dict.items():
-    #     for list_key, values in value.items():
-    #         temp_v = np.array(values)
-    #         print(key, list_key, temp_v.shape)
-            
-    plot_gen_vs_run(10, data_dict_no, data_dict)
+    # plot_gen_vs_run(5, data_dict_no, data_dict)

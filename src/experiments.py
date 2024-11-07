@@ -110,6 +110,7 @@ def multiple_runs_function_gp(args, landscape, inbred_threshold):
         print(f"Running experiment nº: {run}")
         ga_gp = GeneticAlgorithmGP(
             args=args,
+            mut_rate=args.mutation_rate,
             inbred_threshold=inbred_threshold  # Adjust based on inbreeding prevention
         )
         # Run GP-based GA for Given Function
@@ -122,11 +123,39 @@ def multiple_runs_function_gp(args, landscape, inbred_threshold):
             }
         
         # Sanity Save of results
-        if inbred_threshold == None:
-            util.save_accuracy(results, f"{args.config_plot}_inbreeding_RUN:{run}_{gen_success}.npy")
-        else:
-            util.save_accuracy(results, f"{args.config_plot}_no_inbreeding_RUN:{run}_{gen_success}.npy")
+        # if inbred_threshold == None:
+        #     util.save_accuracy(results, f"{args.config_plot}_inbreeding_RUN:{run}_{gen_success}.npy")
+        # else:
+        #     util.save_accuracy(results, f"{args.config_plot}_no_inbreeding_RUN:{run}_{gen_success}.npy")
             
         print(f"Population Size {args.pop_size} & Mutation Rate: {args.mutation_rate}: Best Fitness {best_fitness_list[-1]:.4f} ~ Best Diversity {diversity_list[-1]:.4f}")
+
+    return results
+
+def multiple_mrates_function_gp(args, mutation_rates, landscape, inbred_threshold):
+    """
+        TODO: Generalize to be for all function experiments and choose within. As of now only work with ackley
+    """
+    
+    # Initialize GP-based GA for Any given function
+    results = {}
+    for rate in mutation_rates:
+        # Initialize lists to store data across all runs for this mutation rate
+        results[rate] = {
+            'generation_successes': []   # List of gen_success from each run
+        }
+        for run in range(args.exp_num_runs):
+            print(f"Running experiment nº {run} w/ Mutation Rate: {rate}")
+            ga_gp = GeneticAlgorithmGP(
+                args=args,
+                mut_rate=rate,
+                inbred_threshold=inbred_threshold  # Adjust based on inbreeding prevention
+            )
+            # Run GP-based GA for Given Function
+            best_fitness_list, diversity_list, gen_success = ga_gp.run(landscape.symbolic_fitness_function)
+            
+            results[rate]['generation_successes'].append(gen_success)
+                
+            print(f"Population Size {args.pop_size} & Mutation Rate: {rate}: Generation Success {gen_success} ~ Best Fitness {best_fitness_list[-1]:.4f} ~ Best Diversity {diversity_list[-1]:.4f}")
 
     return results

@@ -1,6 +1,7 @@
 import unittest
 import random
 import numpy as np
+import copy
 
 class Node:
     def __init__(self, value, children=None):
@@ -22,6 +23,18 @@ class Individual:
     
     def __repr__(self):
         return f"Individual({self.tree})"
+    
+    def get_function_arity(self, function):
+        arity_dict = {
+            '+': 2,
+            '-': 2,
+            '*': 2,
+            '/': 2,
+            'sin': 1,
+            'cos': 1,
+            'log': 1
+        }
+        return arity_dict.get(function, 0)
 
 class GeneticProgrammingSystem:
     def __init__(self, population):
@@ -129,6 +142,99 @@ class GeneticProgrammingSystem:
             return 1
         else:
             return 1 + max(self.tree_depth(child) for child in node.children)
+        
+    def crossover(self, parent1, parent2, inbred_threshold, max_depth):
+      
+        # Check if there is inbreeding prevention mechanism. (None means inbreeding is allowed)
+        if inbred_threshold is not None:
+            if not self.can_mate(parent1, parent2, inbred_threshold): # If distance(p1, p2) >= inbred_thres then skip bc [not False ==  True]
+                return None, None
+
+        # Clone parents to avoid modifying originals
+        child1 = copy.deepcopy(parent1.tree)
+        child2 = copy.deepcopy(parent2.tree)
+
+        # Attempt crossover
+        max_attempts = 10
+        for attempt in range(max_attempts+1):
+            
+            # Select random nodes with their parents
+            parent_node1, node1 = self.select_random_node_with_parent(child1)
+            parent_node2, node2 = self.select_random_node_with_parent(child2)
+            
+            print(f"\nChosen Parent_node1: {parent_node1} and node1: {node1}")
+            print(f"Chosen Parent_node2: {parent_node2} and node2: {node2}")
+
+            if node1 is None or node2 is None:
+                continue  # Try again
+
+            # Check if both nodes have the same arity
+            arity1 = parent1.get_function_arity(node1.value)
+            arity2 = parent2.get_function_arity(node2.value)
+            
+            if arity1 != arity2:
+                continue  # Arities don't match, select another pair
+            
+            print(f"\nThe arity of node1: {arity1}")
+            print(f"The arity of node2: {arity2}")
+            print("PD: At this point they need to match.")
+
+            # Swap entire subtrees
+            if parent_node1 is None:
+                # node1 is root of child1
+                child1 = copy.deepcopy(node2)
+                print(f"\nCase1. Parent_node1 is NONE. Child 1 is copy of child 2: {child1}")
+            else:
+                # Find the index of node1 in its parent's children and replace it
+                try:
+                    index = parent_node1.children.index(node1)
+                    print(f"\nCase2. Index: {index} of parent_node1 {parent_node1} where node1 {node1} happens.")
+                    
+                    parent_node1.children[index] = copy.deepcopy(node2)
+                    print(f"NEW Children of parent_node1 {parent_node1} where node1 {node1} happens is node2 {node2}")
+                    
+                except ValueError:
+                    continue  # node1 not found, try again
+
+            if parent_node2 is None:
+                # node2 is root of child2
+                child2 = copy.deepcopy(node1)
+                print(f"Case3. Parent_node2 is NONE. Child 2 is copy of child 1: {child2}")
+            else:
+                # Find the index of node2 in its parent's children and replace it
+                try:
+                    index = parent_node2.children.index(node2)
+                    print(f"\nCase4. Index: {index} of parent_node2 {parent_node2} where node1 {node2} happens.")
+                    
+                    parent_node2.children[index] = copy.deepcopy(node1)
+                    print(f"NEW Children of parent_node2 {parent_node1} where node2 {node1} happens is node1 {node2}")
+                except ValueError:
+                    continue  # node2 not found, try again
+
+            # Check for depth constraints
+            depth_child1 = self.tree_depth(child1)
+            depth_child2 = self.tree_depth(child2)
+            
+            print(f"\nThe depth of child1: {depth_child1}")
+            print(f"The depth of child2: {depth_child2}")
+   
+            if depth_child1 > max_depth or depth_child2 > max_depth:
+                # Revert the swap by reinitializing the trees
+                child1 = copy.deepcopy(parent1.tree)
+                child2 = copy.deepcopy(parent2.tree)
+                continue  # Try again
+
+            # Successful crossover
+            break
+        else:
+            # Failed to perform a valid crossover within max_attempts
+            return None, None
+
+        # Create new individuals
+        offspring1 = Individual(tree=child1)
+        offspring2 = Individual(tree=child2)
+
+        return offspring1, offspring2
 
 class TestMeasureDiversity(unittest.TestCase):
     def test_measure_diversity(self):
@@ -145,6 +251,14 @@ class TestMeasureDiversity(unittest.TestCase):
         
         # Tree 4: (3 - x)
         tree4 = Node('/', [Node('3'), Node('x')])
+        
+        # Tree 5: 
+        tree5 = Node('+', [Node('*', [Node('-', [Node('x'), Node('1.0')])]), Node('+', [Node('x'), Node('1.0')])])
+        
+        tree6 = Node('+', [Node('*', [Node('x'), Node('1.0')]), Node('x')])
+        
+        # Tree 4: (3 - x)
+        tree7 = Node('/', [Node('3'), Node('x')], Node('*', [Node('x'), Node('1.0')]))
         
         # Create individuals
         individual1 = Individual(tree1)
@@ -164,7 +278,7 @@ class TestMeasureDiversity(unittest.TestCase):
         nodes = gp_system.get_all_nodes(tree1)
         print(nodes)
         
-        depth = gp_system.tree_depth(tree1.children[0])
+        depth = gp_system.tree_depth(tree7)
         print(f"The depth: {depth}")
         
         random_node = gp_system.select_random_node(tree1)
@@ -213,6 +327,129 @@ class TestMeasureDiversity(unittest.TestCase):
         
         # Additionally, assert that the diversity is greater than zero
         self.assertGreater(diversity, 0)
+        
+    def test_crossover_same_arity(self):
+        
+        tree1 = Node('+', [Node('x'), Node('1.0')])
+        tree2 = Node('+', [Node('*', [Node('x'), Node('1.0')]), Node('x')])
+        
+        # Create two parent trees with matching arities
+        individual1 = Individual(tree1)
+        individual2 = Individual(tree2)
+        
+        # Create population
+        population = [individual1, individual2]
+        
+        # Initialize GP system
+        gp_system = GeneticProgrammingSystem(population)
+        
+        dist1_2 = gp_system.tree_edit_distance(tree1, tree2)
+        print(f"Distance: {dist1_2}")
+        
+        offspring1, offspring2 = gp_system.crossover(individual1, individual2, 2, 10)
+        
+        print(f"{individual1} + {individual2} = {offspring1}")
+        print(f"{individual1} + {individual2} = {offspring2}")
+        
+        
+        self.assertIsNotNone(offspring1)
+        self.assertIsNotNone(offspring2)
 
 if __name__ == '__main__':
     unittest.main()
+    
+# TODO: Re-insert as real unit-tests if needed
+# class TestGeneticProgramming(unittest.TestCase):
+            
+#     def setUp(self):
+
+#         # Define args as an argparse.Namespace with necessary attributes
+#         self.args = Namespace(
+#             benchmark='nguyen1',
+#             initial_depth=2,
+#             max_depth=6,
+#             pop_size=50,
+#             mutation_rate=0.005,
+#             generations=50,
+#             tournament_size=3,
+#             exp_num_runs=3,
+#             inbred_threshold=5, 
+#             bounds=(-4.0, 4.0),
+#             config_plot="tests"
+#             # Add other necessary arguments here
+#         )
+     
+#         # Initialize necessary objects
+#         self.gp = GeneticAlgorithmGP(self.args)
+#         self.gp_landscape = GPLandscape(self.args, bounds=(-4, 4))
+
+#     def test_get_function_arity(self):
+#         self.assertEqual(util.get_function_arity('+'), 2)
+#         self.assertEqual(util.get_function_arity('sin'), 1)
+#         self.assertEqual(util.get_function_arity('x'), 0)
+#         self.assertEqual(util.get_function_arity('unknown'), 0)
+
+#     def test_crossover_same_arity(self):
+#         # Create two parent trees with matching arities
+#         parent1 = Individual(self.args, tree=Node('+', [Node('x'), Node('1.0')]))
+#         parent2 = Individual(self.args, tree=Node('+', [Node('*', [Node('x'), Node('1.0')]), Node('x')]))
+#         offspring1, offspring2 = self.gp.crossover(parent1, parent2)
+#         self.assertIsNotNone(offspring1)
+#         self.assertIsNotNone(offspring2)
+#         # Further assertions can be added to verify subtree swapping
+
+#     def test_crossover_different_arity(self):
+#         # Create two parent trees with different arities
+#         parent1 = Individual(self.args, tree=Node('+', [Node('x'), Node('1.0')]))
+#         parent2 = Individual(self.args, tree=Node('sin', [Node('x')]))
+#         offspring1, offspring2 = self.gp.crossover(parent1, parent2)
+#         self.assertIsNone(offspring1)
+#         self.assertIsNone(offspring2)
+
+#     def test_evaluate_tree(self):
+#         # Create a simple tree and evaluate
+#         tree = Node('+', [Node('x'), Node('1.0')])
+#         result = self.gp_landscape.evaluate_tree(tree, 2.0)
+#         self.assertEqual(result, 3.0)
+        
+#     def test_evaluate_tree_complex(self):
+#         # Test a more complex tree
+#         tree = Node('-', [
+#             Node('/', [Node('1.0'), Node('x')]),
+#             Node('-', [Node('x'), Node('x')])
+#         ])
+#         # Expected: (1.0 / x) - (x - x) = (1.0 / 2.0) - (2.0 - 2.0) = 0.5 - 0.0 = 0.5
+#         result = self.gp_landscape.evaluate_tree(tree, 2.0)
+#         self.assertEqual(result, 0.5)
+        
+#     def test_mutate_correct_arity(self):
+#         # Create an individual and mutate
+#         individual = Individual(
+#             self.args, 
+#             tree=Node('+', [Node('x'), Node('1.0')])
+#         )
+#         original_arity = individual.get_function_arity(individual.tree.value)
+#         self.gp.mutate(individual)
+#         # After mutation, check that the arity remains the same
+#         new_arity = individual.get_function_arity(individual.tree.value)
+#         self.assertEqual(original_arity, new_arity)
+    
+#     def test_mutate_correct_arity_2(self):
+#         # Create an individual and mutate
+#         individual = Individual(self.args, tree=Node('+', [Node('x'), Node('1.0')]))
+#         self.gp.mutate(individual)
+#         # After mutation, check that the arity remains 2
+#         self.assertEqual(len(individual.tree.children), 2)
+    
+#     def test_mutate_incorrect_arity(self):
+#         # Attempt to mutate and ensure arity is preserved
+#         individual = Individual(
+#             self.args, 
+#             tree=Node('sin', [Node('x')])
+#         )
+#         original_arity = individual.get_function_arity(individual.tree.value)
+#         self.gp.mutate(individual)
+        
+#         # After mutation, check that the arity remains the same
+#         new_arity = individual.get_function_arity(individual.tree.value)
+#         self.assertEqual(original_arity, new_arity)

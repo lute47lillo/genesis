@@ -77,11 +77,11 @@ class Individual:
 
 class GeneticAlgorithmGP:
     
-    def __init__(self, args, inbred_threshold=None):
+    def __init__(self, args, mut_rate, inbred_threshold=None):
         self.args = args
         self.pop_size = args.pop_size
         self.generations = args.generations
-        self.mutation_rate = args.mutation_rate
+        self.mutation_rate = mut_rate
         self.inbred_threshold = inbred_threshold
         self.max_depth = args.max_depth
         self.initial_depth = args.initial_depth
@@ -242,6 +242,26 @@ class GeneticAlgorithmGP:
         return selected
     
     def crossover(self, parent1, parent2):
+        """
+            Definition
+            -----------
+                Crossover of 2 parents in the population that produces 2 different offspring.
+                Given tree1 = Node('+', [Node('x'), Node('1.0')])
+                        tree2 = Node('+', [Node('*', [Node('x'), Node('1.0')]), Node('x')])
+                Example 1:
+                
+                    Chosen Parent_node1: (+ x 1.0) and Node1:   'x' from tree1
+                    Chosen Parent_node2: (* x 1.0) and Node2: '1.0' from tree2
+                    
+                    Arity of node1 and node2 are equal = 0. Node 'x' happens at Index 0 of parent_node1 (+ x 1.0).
+                    New children where Node 'x' happens at Index 0 in parent_node1 is Node2 '1.0'. Therefore, New offspring is (+ 1.0 1.0).
+                    
+                Example 2:
+                    Chosen Parent_node1: None and Node1:       (+ x 1.0) from tree1
+                    Chosen Parent_node2: None and Node2: (+ (* x 1.0) x) from tree2
+                    
+                    Arity of node1 and node2 are equal = 2. Parent_node1 is NONE. New offspring is copy of child 2: (+ (* x 1.0) x)        
+        """
       
         # Check if there is inbreeding prevention mechanism. (None means inbreeding is allowed)
         if self.inbred_threshold is not None:
@@ -252,8 +272,10 @@ class GeneticAlgorithmGP:
         child1 = copy.deepcopy(parent1.tree)
         child2 = copy.deepcopy(parent2.tree)
 
+        # Attempt crossover
         max_attempts = 10
         for attempt in range(max_attempts+1):
+            
             # Select random nodes with their parents
             parent_node1, node1 = self.select_random_node_with_parent(child1)
             parent_node2, node2 = self.select_random_node_with_parent(child2)
@@ -262,6 +284,8 @@ class GeneticAlgorithmGP:
                 # print(f"Attempt {attempt+1}: One of the selected nodes is None. Retrying...")
                 continue  # Try again
 
+            # TODO: Currenlty enforcnig that the parents need to have the same arity. 
+            # TODO: In the future we could deal with different arities by removing, adding nodes rather than swapping entire subtrees
             # Check if both nodes have the same arity
             arity1 = parent1.get_function_arity(node1.value)
             arity2 = parent2.get_function_arity(node2.value)
@@ -388,13 +412,7 @@ class GeneticAlgorithmGP:
         self.initialize_population()
     
         for gen in range(self.generations):
-            
-            # print(f"Current generation: {gen+1}")
-            # print(f"The population:")
-            # for indiv in self.population:
-            #     print(f"Tree: {indiv.tree}, depth: {self.tree_depth(indiv.tree)}")
-            # print()
-            
+
             # Calculate fitness
             self.calculate_fitness(fitness_function, gen)
             
@@ -407,9 +425,8 @@ class GeneticAlgorithmGP:
             self.diversity_list.append(diversity)
             
             # Early Stopping condition if successful individual has been found
-            # TODO: Return generation as well, in order to compare methods
             if self.poulation_success == True:
-                return self.best_fitness_list, self.diversity_list, gen+1
+                return self.best_fitness_list, self.diversity_list, gen + 1
     
             # Selection
             selected = self.tournament_selection()
@@ -437,7 +454,7 @@ class GeneticAlgorithmGP:
     
             self.population = next_population[:self.pop_size]
     
-            # Optional: Print progress
+            # Print progress
             if (gen + 1) % 10 == 0:
                 print(f"Generation {gen + 1}: Best Fitness = {best_individual.fitness:.4f}, Diversity = {diversity:.4f}")
     
@@ -454,7 +471,9 @@ class GPLandscape:
     
     def count_nodes(self, node):
         """
-            Count the number of nodes (functions and terminals) in a program tree.
+            Definition
+            -----------
+                Count the number of nodes (functions and terminals) in a program tree.
         """
         if node is None:
             return 0
@@ -482,14 +501,9 @@ class GPLandscape:
                     # print(f"Error converting node value to float: {e}")
                     return 0.0
         else:
-            # TODO: Problem IDENTIFIED. Some func have arity 1 not arity 2. But, there is always two children added.
             func = node.value
             args_tree = [self.evaluate_tree(child, x) for child in node.children]
-            # print(args_tree[0], func, args_tree[1])
-            # actual_arity = len(node.children)
-            # expected_arity = util.get_function_arity(func)
-            # print(f"Error: Function '{func}' expects {expected_arity} children, but got {actual_arity}. Returning 0.0")
-  
+     
             try:
                 if func == '+':
                     result = gp_math.protected_sum(args_tree[0], args_tree[1])
@@ -514,13 +528,7 @@ class GPLandscape:
 
                 return result
             except Exception as e:
-                # print(f"Error in evaluate_tree: {e}")
-                self.total_exc += 1
-                
-                # if self.total_exc > 10:
-                #     exit()
-   
-                # Handle any unexpected errors
+
                 return 0.0  # Return 0.0 for any error
             
     def target_function(self, x):
@@ -578,101 +586,6 @@ class GPLandscape:
                 
         fitness = 1 / (total_error + 1e-6)  # Fitness increases as total error decreases or could return just total error
         return fitness, success
-    
-class TestGeneticProgramming(unittest.TestCase):
-            
-    def setUp(self):
-
-        # Define args as an argparse.Namespace with necessary attributes
-        self.args = Namespace(
-            benchmark='nguyen1',
-            initial_depth=2,
-            max_depth=6,
-            pop_size=50,
-            mutation_rate=0.005,
-            generations=50,
-            tournament_size=3,
-            exp_num_runs=3,
-            inbred_threshold=5, 
-            bounds=(-4.0, 4.0),
-            config_plot="tests"
-            # Add other necessary arguments here
-        )
-     
-        # Initialize necessary objects
-        self.gp = GeneticAlgorithmGP(self.args)
-        self.gp_landscape = GPLandscape(self.args, bounds=(-4, 4))
-
-    def test_get_function_arity(self):
-        self.assertEqual(util.get_function_arity('+'), 2)
-        self.assertEqual(util.get_function_arity('sin'), 1)
-        self.assertEqual(util.get_function_arity('x'), 0)
-        self.assertEqual(util.get_function_arity('unknown'), 0)
-
-    def test_crossover_same_arity(self):
-        # Create two parent trees with matching arities
-        parent1 = Individual(self.args, tree=Node('+', [Node('x'), Node('1.0')]))
-        parent2 = Individual(self.args, tree=Node('+', [Node('*', [Node('x'), Node('1.0')]), Node('x')]))
-        offspring1, offspring2 = self.gp.crossover(parent1, parent2)
-        self.assertIsNotNone(offspring1)
-        self.assertIsNotNone(offspring2)
-        # Further assertions can be added to verify subtree swapping
-
-    def test_crossover_different_arity(self):
-        # Create two parent trees with different arities
-        parent1 = Individual(self.args, tree=Node('+', [Node('x'), Node('1.0')]))
-        parent2 = Individual(self.args, tree=Node('sin', [Node('x')]))
-        offspring1, offspring2 = self.gp.crossover(parent1, parent2)
-        self.assertIsNone(offspring1)
-        self.assertIsNone(offspring2)
-
-    def test_evaluate_tree(self):
-        # Create a simple tree and evaluate
-        tree = Node('+', [Node('x'), Node('1.0')])
-        result = self.gp_landscape.evaluate_tree(tree, 2.0)
-        self.assertEqual(result, 3.0)
-        
-    def test_evaluate_tree_complex(self):
-        # Test a more complex tree
-        tree = Node('-', [
-            Node('/', [Node('1.0'), Node('x')]),
-            Node('-', [Node('x'), Node('x')])
-        ])
-        # Expected: (1.0 / x) - (x - x) = (1.0 / 2.0) - (2.0 - 2.0) = 0.5 - 0.0 = 0.5
-        result = self.gp_landscape.evaluate_tree(tree, 2.0)
-        self.assertEqual(result, 0.5)
-        
-    def test_mutate_correct_arity(self):
-        # Create an individual and mutate
-        individual = Individual(
-            self.args, 
-            tree=Node('+', [Node('x'), Node('1.0')])
-        )
-        original_arity = individual.get_function_arity(individual.tree.value)
-        self.gp.mutate(individual)
-        # After mutation, check that the arity remains the same
-        new_arity = individual.get_function_arity(individual.tree.value)
-        self.assertEqual(original_arity, new_arity)
-    
-    def test_mutate_correct_arity_2(self):
-        # Create an individual and mutate
-        individual = Individual(self.args, tree=Node('+', [Node('x'), Node('1.0')]))
-        self.gp.mutate(individual)
-        # After mutation, check that the arity remains 2
-        self.assertEqual(len(individual.tree.children), 2)
-    
-    def test_mutate_incorrect_arity(self):
-        # Attempt to mutate and ensure arity is preserved
-        individual = Individual(
-            self.args, 
-            tree=Node('sin', [Node('x')])
-        )
-        original_arity = individual.get_function_arity(individual.tree.value)
-        self.gp.mutate(individual)
-        
-        # After mutation, check that the arity remains the same
-        new_arity = individual.get_function_arity(individual.tree.value)
-        self.assertEqual(original_arity, new_arity)
         
 if __name__ == "__main__":
     
@@ -680,30 +593,32 @@ if __name__ == "__main__":
     args = util.set_args()
     
     # Set file plotting name
-    args.config_plot = f"genetic_programming/{args.benchmark}/PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
+    # args.config_plot = f"genetic_programming/{args.benchmark}/experimental/PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
     
     args.bounds = util.get_function_bounds(args.benchmark)
     
-    # unittest.main()
-    # # tests = TestGeneticProgramming(args)
-    # # tests.test_get_function_arity()
-    # # tests.test_crossover_same_arity()
-    # # tests.test_crossover_different_arity()
-    # # tests.test_evaluate_tree()
-    # # tests.test_mutate_correct_arity()
-    # exit()
-
     # Create Landscape
     gp_landscape = GPLandscape(args, args.bounds)
 
     # # Run experiments
     print("Running GA with NO Inbreeding Mating...")
-    results_no_inbreeding = exp.multiple_runs_function_gp(args, gp_landscape, args.inbred_threshold)
-    util.save_accuracy(results_no_inbreeding, f"{args.config_plot}_no_inbreeding.npy")
+    # results_no_inbreeding = exp.multiple_runs_function_gp(args, gp_landscape, args.inbred_threshold)
+    # util.save_accuracy(results_no_inbreeding, f"{args.config_plot}_no_inbreeding.npy")
     
-    # print("Running GA with Inbreeding Mating...")
+    mutation_rates = [0.05, 0.01, 0.005, 0.001, 0.0005]
+    args.config_plot = f"genetic_programming/{args.benchmark}/mut_rates/Mrates:{mutation_rates}_PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
+    # results_no_inbreeding = exp.multiple_mrates_function_gp(args, mutation_rates, gp_landscape, args.inbred_threshold)
+    # util.save_accuracy(results_no_inbreeding, f"{args.config_plot}_no_inbreeding.npy")
+    # plot.plot_generation_successes(results_no_inbreeding, mutation_rates, f"{args.config_plot}_no_inbreeding.png")
+    
+    
+    print("Running GA with Inbreeding Mating...")
     # results_inbreeding = exp.multiple_runs_function_gp(args, gp_landscape, None)
     # util.save_accuracy(results_inbreeding, f"{args.config_plot}_inbreeding.npy")
+    
+    results_inbreeding = exp.multiple_mrates_function_gp(args, mutation_rates, gp_landscape, None)
+    util.save_accuracy(results_inbreeding, f"{args.config_plot}_inbreeding.npy")
+    plot.plot_generation_successes(results_inbreeding, mutation_rates, f"{args.config_plot}_inbreeding.png")
     
     # Plot the generation of successful runs
     # plot.plot_gen_vs_run(args, results_no_inbreeding, results_inbreeding)
