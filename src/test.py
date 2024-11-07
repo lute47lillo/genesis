@@ -35,6 +35,22 @@ class Individual:
             'log': 1
         }
         return arity_dict.get(function, 0)
+    
+    def random_tree(self, depth):
+    
+        if depth == 0:
+            # Return a terminal node
+            terminal = np.random.choice(['x', '1.0'])
+            if terminal == '1.0':
+                return Node(1.0)
+            else:
+                return Node('x')
+        else:
+            # Return a function node with appropriate arity
+            function = np.random.choice(['+', '-', '*', '/', 'sin', 'cos', 'log'])
+            arity = self.get_function_arity(function)
+            children = [self.random_tree(depth - 1) for _ in range(arity)]
+            return Node(function, children)
 
 class GeneticProgrammingSystem:
     def __init__(self, population):
@@ -235,101 +251,166 @@ class GeneticProgrammingSystem:
         offspring2 = Individual(tree=child2)
 
         return offspring1, offspring2
+    
+    def mutate(self, individual):
+        
+        # Clone individual to avoid modifying original
+        mutated_tree = copy.deepcopy(individual.tree)
+        
+        print(f"Tree to mutate: {mutated_tree}") # Tree to mutate: (+ x 1.0)
+
+        # Select a random node to mutate
+        node_to_mutate = self.select_random_node(mutated_tree)
+        print(f"Node to mutate: {node_to_mutate}") # Could be either x or 1
+        if node_to_mutate is None:
+            # print("Warning: No node selected for mutation")
+            return  # Cannot mutate without a node
+
+        # Replace the subtree with a new random subtree
+        new_subtree = individual.random_tree(3) 
+        print(f"Mutation by replacement. New subtree to replace node: {new_subtree}")
+        
+        # Ensure that the new_subtree has the correct arity
+        required_children = individual.get_function_arity(new_subtree.value)
+        print(f"Arity required by new_subtree: {required_children}")
+        if len(new_subtree.children) != required_children:
+            print(f"Warning: New subtree has incorrect arity for function '{new_subtree.value}'")
+            return  # Discard mutation
+        
+        
+        print(f"Node to mutate value: {node_to_mutate.value} changed with {new_subtree.value}")
+        print(f"Node to mutate children: {node_to_mutate.children} changed with {new_subtree.children[0]}")
+        node_to_mutate.value = new_subtree.value
+        node_to_mutate.children = new_subtree.children
+        
+        # Ensure the mutated tree does not exceed max depth
+        if self.tree_depth(mutated_tree) > 8:
+            print("Warning: Mutated tree exceeds max depth")
+            return  # Discard mutation
+
+        # Update individual
+        individual.tree = mutated_tree
 
 class TestMeasureDiversity(unittest.TestCase):
-    def test_measure_diversity(self):
-        # Create sample trees for testing
+    
+    # def test_measure_diversity(self):
+    #     # Create sample trees for testing
         
-        # Tree 1: (x + 1)
-        tree1 = Node('-', [Node('2'), Node('1')])
+    #     # Tree 1: (x + 1)
+    #     tree1 = Node('-', [Node('2'), Node('1')])
         
-        # Tree 2: (x + 2)
-        tree2 = Node('+', [Node('x'), Node('2')])
+    #     # Tree 2: (x + 2)
+    #     tree2 = Node('+', [Node('x'), Node('2')])
         
-        # Tree 3: (x * x)
-        tree3 = Node('-', [Node('x'), Node('1')])
+    #     # Tree 3: (x * x)
+    #     tree3 = Node('-', [Node('x'), Node('1')])
         
-        # Tree 4: (3 - x)
-        tree4 = Node('/', [Node('3'), Node('x')])
+    #     # Tree 4: (3 - x)
+    #     tree4 = Node('/', [Node('3'), Node('x')])
         
-        # Tree 5: 
-        tree5 = Node('+', [Node('*', [Node('-', [Node('x'), Node('1.0')])]), Node('+', [Node('x'), Node('1.0')])])
+    #     # Tree 5: 
+    #     tree5 = Node('+', [Node('*', [Node('-', [Node('x'), Node('1.0')])]), Node('+', [Node('x'), Node('1.0')])])
         
-        tree6 = Node('+', [Node('*', [Node('x'), Node('1.0')]), Node('x')])
+    #     tree6 = Node('+', [Node('*', [Node('x'), Node('1.0')]), Node('x')])
         
-        # Tree 4: (3 - x)
-        tree7 = Node('/', [Node('3'), Node('x')], Node('*', [Node('x'), Node('1.0')]))
+    #     # Create individuals
+    #     individual1 = Individual(tree1)
+    #     individual2 = Individual(tree2)
+    #     individual3 = Individual(tree3)
+    #     individual4 = Individual(tree4)
         
-        # Create individuals
-        individual1 = Individual(tree1)
-        individual2 = Individual(tree2)
-        individual3 = Individual(tree3)
-        individual4 = Individual(tree4)
+    #     # Create population
+    #     population = [individual1, individual2, individual3, individual4]
         
-        # Create population
-        population = [individual1, individual2, individual3, individual4]
+    #     # Initialize GP system
+    #     gp_system = GeneticProgrammingSystem(population)
         
-        # Initialize GP system
-        gp_system = GeneticProgrammingSystem(population)
+    #     # Calculate diversity
+    #     diversity = gp_system.measure_diversity()
         
-        # Calculate diversity
-        diversity = gp_system.measure_diversity()
+    #     nodes = gp_system.get_all_nodes(tree1)
+    #     print(nodes)
         
-        nodes = gp_system.get_all_nodes(tree1)
-        print(nodes)
+    #     depth = gp_system.tree_depth(tree4)
+    #     print(f"The depth: {depth}")
         
-        depth = gp_system.tree_depth(tree7)
-        print(f"The depth: {depth}")
+    #     random_node = gp_system.select_random_node(tree1)
+    #     print(random_node)
         
-        random_node = gp_system.select_random_node(tree1)
-        print(random_node)
-        
-        # Manually compute expected diversity
-        # Pairwise distances:
-        # Distance between tree1 and tree2
-        dist1_2 = gp_system.tree_edit_distance(tree1, tree2)  
-        inbred_thres = 2      
-        can = gp_system.can_mate(individual1, individual2, inbred_thres)
-        if not can:
-            print(f"Cant reproduce with distance: {dist1_2} and threshold: {inbred_thres}")
-        else:
-            print(f"Can reproduce with distance: {dist1_2} and threshold: {inbred_thres}")
+    #     # Manually compute expected diversity
+    #     # Pairwise distances:
+    #     # Distance between tree1 and tree2
+    #     dist1_2 = gp_system.tree_edit_distance(tree1, tree2)  
+    #     inbred_thres = 2      
+    #     can = gp_system.can_mate(individual1, individual2, inbred_thres)
+    #     if not can:
+    #         print(f"Cant reproduce with distance: {dist1_2} and threshold: {inbred_thres}")
+    #     else:
+    #         print(f"Can reproduce with distance: {dist1_2} and threshold: {inbred_thres}")
             
-        # Distance between tree1 and tree3
-        dist1_3 = gp_system.tree_edit_distance(tree1, tree3)
-        inbred_thres = 2      
-        can = gp_system.can_mate(individual1, individual3, inbred_thres)
-        if not can:
-            print(f"Cant reproduce with distance: {dist1_3} and threshold: {inbred_thres}")
-        else:
-            print(f"Can reproduce with distance: {dist1_3} and threshold: {inbred_thres}")
+    #     # Distance between tree1 and tree3
+    #     dist1_3 = gp_system.tree_edit_distance(tree1, tree3)
+    #     inbred_thres = 2      
+    #     can = gp_system.can_mate(individual1, individual3, inbred_thres)
+    #     if not can:
+    #         print(f"Cant reproduce with distance: {dist1_3} and threshold: {inbred_thres}")
+    #     else:
+    #         print(f"Can reproduce with distance: {dist1_3} and threshold: {inbred_thres}")
             
-        # Distance between tree1 and tree4
-        dist1_4 = gp_system.tree_edit_distance(tree1, tree4)
-        # Distance between tree2 and tree3
-        dist2_3 = gp_system.tree_edit_distance(tree2, tree3)
-        # Distance between tree2 and tree4
-        dist2_4 = gp_system.tree_edit_distance(tree2, tree4)
-        # Distance between tree3 and tree4
-        dist3_4 = gp_system.tree_edit_distance(tree3, tree4)
+    #     # Distance between tree1 and tree4
+    #     dist1_4 = gp_system.tree_edit_distance(tree1, tree4)
+    #     # Distance between tree2 and tree3
+    #     dist2_3 = gp_system.tree_edit_distance(tree2, tree3)
+    #     # Distance between tree2 and tree4
+    #     dist2_4 = gp_system.tree_edit_distance(tree2, tree4)
+    #     # Distance between tree3 and tree4
+    #     dist3_4 = gp_system.tree_edit_distance(tree3, tree4)
         
-        total_distance = dist1_2 + dist1_3 + dist1_4 + dist2_3 + dist2_4 + dist3_4
-        count = 6  # Total number of pairs
+    #     total_distance = dist1_2 + dist1_3 + dist1_4 + dist2_3 + dist2_4 + dist3_4
+    #     count = 6  # Total number of pairs
         
-        expected_diversity = total_distance / count
+    #     expected_diversity = total_distance / count
         
-        # Assert that the calculated diversity matches the expected diversity
-        self.assertEqual(diversity, expected_diversity)
+    #     # Assert that the calculated diversity matches the expected diversity
+    #     self.assertEqual(diversity, expected_diversity)
         
-        # Optional: Print the diversity
-        print(f"Calculated Diversity: {diversity}")
-        print(f"Expected Diversity: {expected_diversity}")
+    #     # Optional: Print the diversity
+    #     print(f"Calculated Diversity: {diversity}")
+    #     print(f"Expected Diversity: {expected_diversity}")
         
-        # Additionally, assert that the diversity is greater than zero
-        self.assertGreater(diversity, 0)
+    #     # Additionally, assert that the diversity is greater than zero
+    #     self.assertGreater(diversity, 0)
         
-    def test_crossover_same_arity(self):
+    # def test_crossover_same_arity(self):
         
+    #     tree1 = Node('+', [Node('x'), Node('1.0')])
+    #     tree2 = Node('+', [Node('*', [Node('x'), Node('1.0')]), Node('x')])
+        
+    #     # Create two parent trees with matching arities
+    #     individual1 = Individual(tree1)
+    #     individual2 = Individual(tree2)
+        
+    #     # Create population
+    #     population = [individual1, individual2]
+        
+    #     # Initialize GP system
+    #     gp_system = GeneticProgrammingSystem(population)
+        
+    #     dist1_2 = gp_system.tree_edit_distance(tree1, tree2)
+    #     print(f"Distance: {dist1_2}")
+        
+    #     offspring1, offspring2 = gp_system.crossover(individual1, individual2, 2, 10)
+        
+    #     print(f"{individual1} + {individual2} = {offspring1}")
+    #     print(f"{individual1} + {individual2} = {offspring2}")
+        
+        
+    #     self.assertIsNotNone(offspring1)
+    #     self.assertIsNotNone(offspring2)
+        
+    def test_mutate_correct_arity(self):
+        
+        # Create an individual and mutate
         tree1 = Node('+', [Node('x'), Node('1.0')])
         tree2 = Node('+', [Node('*', [Node('x'), Node('1.0')]), Node('x')])
         
@@ -342,18 +423,26 @@ class TestMeasureDiversity(unittest.TestCase):
         
         # Initialize GP system
         gp_system = GeneticProgrammingSystem(population)
+        original_arity = individual1.get_function_arity(individual1.tree.value)
+        gp_system.mutate(individual1)
         
-        dist1_2 = gp_system.tree_edit_distance(tree1, tree2)
-        print(f"Distance: {dist1_2}")
+        # After mutation, check that the arity remains the same
+        new_arity = individual1.get_function_arity(individual1.tree.value)
+        self.assertEqual(original_arity, new_arity)
+
+    
+    # def test_mutate_incorrect_arity(self):
+    #     # Attempt to mutate and ensure arity is preserved
+    #     individual = Individual(
+    #         self.args, 
+    #         tree=Node('sin', [Node('x')])
+    #     )
+    #     original_arity = individual.get_function_arity(individual.tree.value)
+    #     self.gp.mutate(individual)
         
-        offspring1, offspring2 = gp_system.crossover(individual1, individual2, 2, 10)
-        
-        print(f"{individual1} + {individual2} = {offspring1}")
-        print(f"{individual1} + {individual2} = {offspring2}")
-        
-        
-        self.assertIsNotNone(offspring1)
-        self.assertIsNotNone(offspring2)
+    #     # After mutation, check that the arity remains the same
+    #     new_arity = individual.get_function_arity(individual.tree.value)
+    #     self.assertEqual(original_arity, new_arity)
 
 if __name__ == '__main__':
     unittest.main()

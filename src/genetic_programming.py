@@ -607,18 +607,18 @@ if __name__ == "__main__":
     
     mutation_rates = [0.05, 0.01, 0.005, 0.001, 0.0005]
     args.config_plot = f"genetic_programming/{args.benchmark}/mut_rates/Mrates:{mutation_rates}_PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
-    # results_no_inbreeding = exp.multiple_mrates_function_gp(args, mutation_rates, gp_landscape, args.inbred_threshold)
-    # util.save_accuracy(results_no_inbreeding, f"{args.config_plot}_no_inbreeding.npy")
-    # plot.plot_generation_successes(results_no_inbreeding, mutation_rates, f"{args.config_plot}_no_inbreeding.png")
+    results_no_inbreeding = exp.multiple_mrates_function_gp(args, mutation_rates, gp_landscape, args.inbred_threshold)
+    util.save_accuracy(results_no_inbreeding, f"{args.config_plot}_no_inbreeding.npy")
+    plot.plot_generation_successes(results_no_inbreeding, mutation_rates, f"{args.config_plot}_no_inbreeding.png")
     
     
-    print("Running GA with Inbreeding Mating...")
+    # print("Running GA with Inbreeding Mating...")
     # results_inbreeding = exp.multiple_runs_function_gp(args, gp_landscape, None)
     # util.save_accuracy(results_inbreeding, f"{args.config_plot}_inbreeding.npy")
     
-    results_inbreeding = exp.multiple_mrates_function_gp(args, mutation_rates, gp_landscape, None)
-    util.save_accuracy(results_inbreeding, f"{args.config_plot}_inbreeding.npy")
-    plot.plot_generation_successes(results_inbreeding, mutation_rates, f"{args.config_plot}_inbreeding.png")
+    # results_inbreeding = exp.multiple_mrates_function_gp(args, mutation_rates, gp_landscape, None)
+    # util.save_accuracy(results_inbreeding, f"{args.config_plot}_inbreeding.npy")
+    # plot.plot_generation_successes(results_inbreeding, mutation_rates, f"{args.config_plot}_inbreeding.png")
     
     # Plot the generation of successful runs
     # plot.plot_gen_vs_run(args, results_no_inbreeding, results_inbreeding)

@@ -519,14 +519,14 @@ if __name__ == "__main__":
     data = np.load(file_path_name, allow_pickle=True)
     data_dict_no = data.item()
     mutation_rates = [0.1, 0.05, 0.01, 0.005, 0.001, 0.0005, 0.0001]
-    plot_generation_successes(data_dict_no, mutation_rates, "TEST_noInbreeding")
+    plot_generation_successes(data_dict_no, mutation_rates, "Mrates:[0.1, 0.05, 0.01, 0.005, 0.001, 0.0005, 0.0001]_PopSize:100_InThres:4_Gens:150_TourSize:10_MaxD:8_InitD:3_no_inbreeding.png")
     
     print("\nInbreeding")
     file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/nguyen1/mut_rates/Mrates:[0.1, 0.05, 0.01, 0.005, 0.001, 0.0005, 0.0001]_PopSize:100_InThres:4_Gens:150_TourSize:10_MaxD:8_InitD:3_inbreeding.npy"
     data = np.load(file_path_name, allow_pickle=True)
     data_dict_no = data.item()
     mutation_rates = [0.1, 0.05, 0.01, 0.005, 0.001, 0.0005, 0.0001]
-    plot_generation_successes(data_dict_no, mutation_rates, "TEST_Inbreeding")
+    plot_generation_successes(data_dict_no, mutation_rates, "Mrates:[0.1, 0.05, 0.01, 0.005, 0.001, 0.0005, 0.0001]_PopSize:100_InThres:4_Gens:150_TourSize:10_MaxD:8_InitD:3_inbreeding.png")
     
     
     # print("NO Inbreeding")
