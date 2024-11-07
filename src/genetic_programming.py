@@ -1,8 +1,22 @@
 import numpy as np
 import copy
+import os
 import zss
+import random
 import matplotlib.pyplot as plt
+import benchmark_factory as bf
+import util
+import experiments as exp
+import plotting as plot
+import gp_math
+from argparse import Namespace
+# import tests as tests
+import unittest
 
+"""            
+        - Add the NGUYEN benchmark functions from "Effective Adaptive Mutation Rates for Program Synthesis" Paper
+        and from "Better GP benchmarks: community survey results and proposals" paper.
+"""
 
 class Node:
     def __init__(self, value, children=None):
@@ -18,84 +32,173 @@ class Node:
         else:
             return f"({self.value} {' '.join(str(child) for child in self.children)})"
 
-
 class Individual:
-    def __init__(self, tree=None, id=None, ancestors=None, generation=0):
-        self.tree = tree if tree is not None else self.random_tree(depth=3)
+    def __init__(self, args, tree=None, id=None, ancestors=None, generation=0):
+        self.args = args
+        self.bounds = self.args.bounds
+        self.max_depth = self.args.max_depth # TODO
+        self.initial_depth = self.args.initial_depth
+        self.tree = tree if tree is not None else self.random_tree(depth=self.initial_depth) # Initial depth of 6 as in paper
         self.fitness = None
         self.id = id if id is not None else np.random.randint(1e9)
         self.ancestors = ancestors if ancestors is not None else set()
         self.generation = generation  # Track the generation of the individual
-
+        
+    def get_function_arity(self, function):
+        arity_dict = {
+            '+': 2,
+            '-': 2,
+            '*': 2,
+            '/': 2,
+            'sin': 1,
+            'cos': 1,
+            'log': 1
+        }
+        return arity_dict.get(function, 0)
+    
     def random_tree(self, depth):
+    
         if depth == 0:
             # Return a terminal node
-            terminal = np.random.choice(['x', '1', '2', '3'])  # Example terminals
-            return Node(terminal)
+            terminal = np.random.choice(['x', '1.0'])
+            if terminal == '1.0':
+                return Node(1.0)
+            else:
+                return Node('x')
         else:
-            # Return a function node with children
-            # function = np.random.choice(['+', '-', '*', '/'])  # Example functions
-            function = np.random.choice(['+', '-', '*', '/', 'cos', 'sin', 'exp', 'sqrt']) # Ackley and rastrigin
-            children = [self.random_tree(depth - 1) for _ in range(2)]  # Binary functions
+            # Return a function node with appropriate arity
+            function = np.random.choice(['+', '-', '*', '/', 'sin', 'cos', 'log'])
+            arity = self.get_function_arity(function)
+            children = [self.random_tree(depth - 1) for _ in range(arity)]
             return Node(function, children)
     
     def __str__(self):
         return str(self.tree)
 
 class GeneticAlgorithmGP:
-    def __init__(self, pop_size, generations, mutation_rate, allowed_distance=None, max_depth=5):
-        self.pop_size = pop_size
-        self.generations = generations
-        self.mutation_rate = mutation_rate
-        self.allowed_distance = allowed_distance
-        self.max_depth = max_depth
+    
+    def __init__(self, args, mut_rate, inbred_threshold=None):
+        self.args = args
+        self.pop_size = args.pop_size
+        self.generations = args.generations
+        self.mutation_rate = mut_rate
+        self.inbred_threshold = inbred_threshold
+        self.max_depth = args.max_depth
+        self.initial_depth = args.initial_depth
+        self.poulation_success = False
         self.population = []
         self.best_fitness_list = []
         self.diversity_list = []
-        self.lineage_data = []
     
-    def initialize_population(self):
-        self.population = []
-        for _ in range(self.pop_size):
-            individual = Individual()
-            self.population.append(individual)
-    
-    def calculate_fitness(self, fitness_function):
-        for individual in self.population:
-            individual.fitness = fitness_function(individual.tree)
-    
-    def tournament_selection(self, k=3):
-        selected = []
-        for _ in range(self.pop_size):
-            participants = np.random.choice(self.population, k)
-            winner = max(participants, key=lambda ind: ind.fitness)
-            selected.append(winner)
-        return selected
-    
-    def genetic_distance(self, ind1, ind2):
-        return self.tree_edit_distance(ind1.tree, ind2.tree)
+    # ----------------------- Tree ~ Node functions ------------------ #
     
     def select_random_node(self, tree):
+        """
+            Definition
+            -----------
+                Returns a single random node of a given tree (not Individual object).
+                Example:
+                    - tree1 = Node('+', [Node('x'), Node('1')])
+                      could return Node(+) or Node(x) or Node(1)
+        """
         nodes = self.get_all_nodes(tree)
         return np.random.choice(nodes)
 
     def get_all_nodes(self, tree):
+        """
+            Definition
+            -----------
+                Returns all nodes of a given tree (not Individual object).
+                Example:
+                    - tree1 = Node('+', [Node('x'), Node('1')])
+                      returns [Node(+), Node(x), Node(1)]
+        """
         nodes = [tree]
         for child in tree.children:
             nodes.extend(self.get_all_nodes(child))
         return nodes
     
-    def can_mate(self, ind1, ind2, allowed_distance):
-        distance = self.tree_edit_distance(ind1.tree, ind2.tree)
-        return distance >= allowed_distance
+    def select_random_node_with_parent(self, tree):
+        """
+            Definition
+            -----------
+                Selects a random node along with its parent.
+                
+                Example:
+                    - tree1 = Node('+', [Node('x'), Node('1')])
+                      could return (Node(+), Node(x)) or (Node(+), Node(1)) as [parent, child] pairs.
+                
+            Parameters
+            -----------
+                - tree (Node): children node of a given individual tree
+                
+            Returns
+            -----------  
+                - tuple (parent_node, selected_node).
+                If the selected node is the root, parent_node is None.
+        """
+        all_nodes = self.get_all_nodes_with_parent(tree)
+        if not all_nodes:
+            return None, None
+        return random.choice(all_nodes)
+
+    def get_all_nodes_with_parent(self, node, parent=None):
+        """
+            Definition
+            -----------
+                Recursively collects all nodes in the tree along with their parent.
+                
+                Example:
+                    - tree1 = Node('+', [Node('x'), Node('1')])
+                      returns [(None, Node(+)), (Node(+), Node(x)), (Node(+), Node(1))] as [parent, child] pairs.
+                              
+        """
+        nodes = [(parent, node)]
+        for child in node.children:
+            nodes.extend(self.get_all_nodes_with_parent(child, node))
+        return nodes
+    
+    def can_mate(self, ind1, ind2, inbred_threshold):
+        """
+            Definition
+            -----------
+                Inbreeding prevention mechanism based of average pairwise distance between trees.
+                
+                Example:  # Tree 1: (x + 1) -> tree1 = Node('-', [Node('x'), Node('1')])
+                          # Tree 2: (x + 2) -> tree2 = Node('+', [Node('x'), Node('2')])
+                          have distance of 2. 
+                          If inbred_threshold = None, 1 or 2 they could generate offspring.
+                          If inbred_threshold = 3 or larger they could NOT generate offspring.
+        """
+        distance = self.compute_trees_distance(ind1.tree, ind2.tree)
+        return distance >= inbred_threshold
     
     def tree_depth(self, node):
-        if node is None or node.is_terminal():
+        """
+            Definition
+            -----------
+                Returns the depth of a given individual node.
+                Example:
+                    - tree1 = Node('+', [Node('x'), Node('1')]) for Node(+) will return 2 -> 1 depth of children + 1 for itself.
+        """
+        if node is None:
+            return 0
+        if node.is_terminal():
             return 1
         else:
             return 1 + max(self.tree_depth(child) for child in node.children)
     
-    def tree_edit_distance(self, node1, node2):
+    def compute_trees_distance(self, node1, node2):
+        """
+            Definition
+            -----------
+                Computes the distance between 2 different trees through recursion.
+                Example:
+                          # Tree 1: (x + 1) -> tree1 = Node('-', [Node('x'), Node('1')])
+                          # Tree 2: (x + 2) -> tree2 = Node('+', [Node('x'), Node('2')])
+                          have distance of 2. 
+        """
+        # Base cases
         if node1 is None and node2 is None:
             return 0
         if node1 is None or node2 is None:
@@ -104,79 +207,198 @@ class GeneticAlgorithmGP:
             cost = 1
         else:
             cost = 0
+            
         # Calculate distance for children
         child_distances = 0
         for child1, child2 in zip(node1.children, node2.children):
-            child_distances += self.tree_edit_distance(child1, child2)
+            child_distances += self.compute_trees_distance(child1, child2)
             
         # Add distances for unmatched children
         child_distances += abs(len(node1.children) - len(node2.children))
         return cost + child_distances
+
+    # ----------------- General GP Functions ------------------------- #
     
-    def tree_edit_distance_zss(self, node1, node2):
-        def get_children(node):
-            return node.children
-        return zss.simple_distance(node1, node2, get_children)
+    def initialize_population(self):
+        self.population = []
+        for _ in range(self.pop_size):
+            individual = Individual(self.args)
+            self.population.append(individual)
     
-    # ------------- Croosover --------------------- #
+    def calculate_fitness(self, fitness_function, curr_gen):
+        for individual in self.population:
+            individual.fitness, success = fitness_function(individual.tree)
+            if success:
+                print(f"Successful individual found in generation {curr_gen}")
+                print(f"Function: {individual.tree}")
+                self.poulation_success = True
+            
+    def tournament_selection(self, k=3):
+        selected = []
+        for _ in range(self.pop_size):
+            participants = np.random.choice(self.population, k)
+            winner = max(participants, key=lambda ind: ind.fitness)
+            selected.append(winner)
+        return selected
     
-    def crossover(self, parent1, parent2, max_depth=10):
-        if self.allowed_distance is not None:
-            if not self.can_mate(parent1, parent2, self.allowed_distance):
+    def crossover(self, parent1, parent2):
+        """
+            Definition
+            -----------
+                Crossover of 2 parents in the population that produces 2 different offspring.
+                Given tree1 = Node('+', [Node('x'), Node('1.0')])
+                        tree2 = Node('+', [Node('*', [Node('x'), Node('1.0')]), Node('x')])
+                Example 1:
+                
+                    Chosen Parent_node1: (+ x 1.0) and Node1:   'x' from tree1
+                    Chosen Parent_node2: (* x 1.0) and Node2: '1.0' from tree2
+                    
+                    Arity of node1 and node2 are equal = 0. Node 'x' happens at Index 0 of parent_node1 (+ x 1.0).
+                    New children where Node 'x' happens at Index 0 in parent_node1 is Node2 '1.0'. Therefore, New offspring is (+ 1.0 1.0).
+                    
+                Example 2:
+                    Chosen Parent_node1: None and Node1:       (+ x 1.0) from tree1
+                    Chosen Parent_node2: None and Node2: (+ (* x 1.0) x) from tree2
+                    
+                    Arity of node1 and node2 are equal = 2. Parent_node1 is NONE. New offspring is copy of child 2: (+ (* x 1.0) x)        
+        """
+      
+        # Check if there is inbreeding prevention mechanism. (None means inbreeding is allowed)
+        if self.inbred_threshold is not None:
+            if not self.can_mate(parent1, parent2, self.inbred_threshold): # If distance(p1, p2) >= inbred_thres then skip bc [not False ==  True]
                 return None, None
-        
+
         # Clone parents to avoid modifying originals
         child1 = copy.deepcopy(parent1.tree)
         child2 = copy.deepcopy(parent2.tree)
 
-        # Select random crossover points
-        node1 = self.select_random_node(child1)
-        node2 = self.select_random_node(child2)
+        # Attempt crossover
+        max_attempts = 10
+        for attempt in range(max_attempts+1):
+            
+            # Select random nodes with their parents
+            parent_node1, node1 = self.select_random_node_with_parent(child1)
+            parent_node2, node2 = self.select_random_node_with_parent(child2)
 
-        # Swap subtrees
-        node1.value, node2.value = node2.value, node1.value
-        node1.children, node2.children = node2.children, node1.children
-        
-         # Check for depth constraints
-        if self.tree_depth(child1) > max_depth or self.tree_depth(child2) > max_depth:
-            return None, None  # Discard offspring exceeding max depth
+            if node1 is None or node2 is None:
+                # print(f"Attempt {attempt+1}: One of the selected nodes is None. Retrying...")
+                continue  # Try again
+
+            # TODO: Currenlty enforcnig that the parents need to have the same arity. 
+            # TODO: In the future we could deal with different arities by removing, adding nodes rather than swapping entire subtrees
+            # Check if both nodes have the same arity
+            arity1 = parent1.get_function_arity(node1.value)
+            arity2 = parent2.get_function_arity(node2.value)
+            if arity1 != arity2:
+                # print(f"Attempt {attempt+1}: Arities do not match (arity1={arity1}, arity2={arity2}). Retrying...")
+                continue  # Arities don't match, select another pair
+
+            # Swap entire subtrees
+            if parent_node1 is None:
+                # node1 is root of child1
+                child1 = copy.deepcopy(node2)
+            else:
+                # Find the index of node1 in its parent's children and replace it
+                try:
+                    index = parent_node1.children.index(node1)
+                    parent_node1.children[index] = copy.deepcopy(node2)
+                except ValueError:
+                    print(f"Attempt {attempt}: node1 not found in parent_node1's children. Retrying...")
+                    continue  # node1 not found, try again
+
+            if parent_node2 is None:
+                # node2 is root of child2
+                child2 = copy.deepcopy(node1)
+            else:
+                # Find the index of node2 in its parent's children and replace it
+                try:
+                    index = parent_node2.children.index(node2)
+                    parent_node2.children[index] = copy.deepcopy(node1)
+                except ValueError:
+                    # print(f"Attempt {attempt}: node2 not found in parent_node2's children. Retrying...")
+                    continue  # node2 not found, try again
+
+            # Check for depth constraints
+            depth_child1 = self.tree_depth(child1)
+            depth_child2 = self.tree_depth(child2)
+            if depth_child1 > self.max_depth or depth_child2 > self.max_depth:
+                # print(f"Attempt {attempt}: Offspring exceed max depth ({self.max_depth}). Retrying...")
+                # Revert the swap by reinitializing the trees
+                child1 = copy.deepcopy(parent1.tree)
+                child2 = copy.deepcopy(parent2.tree)
+                continue  # Try again
+
+            # Successful crossover
+            # print(f"Attempt {attempt}: Crossover successful.")
+            break
+        else:
+            # Failed to perform a valid crossover within max_attempts
+            # print("Crossover failed after maximum attempts.")
+            return None, None
 
         # Create new individuals
-        offspring1 = Individual(tree=child1, ancestors=parent1.ancestors.union(parent2.ancestors, {parent1.id, parent2.id}), generation=parent1.generation + 1)
-        offspring2 = Individual(tree=child2, ancestors=parent1.ancestors.union(parent2.ancestors, {parent1.id, parent2.id}), generation=parent1.generation + 1)
+        offspring1 = Individual(
+            self.args,
+            tree=child1,
+            ancestors=parent1.ancestors.union(parent2.ancestors, {parent1.id, parent2.id}),
+            generation=parent1.generation + 1
+        )
+        offspring2 = Individual(
+            self.args,
+            tree=child2,
+            ancestors=parent1.ancestors.union(parent2.ancestors, {parent1.id, parent2.id}),
+            generation=parent1.generation + 1
+        )
 
         return offspring1, offspring2
-
-    # ------------- Croosover --------------------- #
     
-    def mutate(self, individual, max_depth=10):
-
+    def mutate(self, individual):
+        
         # Clone individual to avoid modifying original
         mutated_tree = copy.deepcopy(individual.tree)
 
         # Select a random node to mutate
         node_to_mutate = self.select_random_node(mutated_tree)
+        if node_to_mutate is None:
+            # print("Warning: No node selected for mutation")
+            return  # Cannot mutate without a node
 
         # Replace the subtree with a new random subtree
-        new_subtree = individual.random_tree(depth=2)  # Adjust depth as needed
+        new_subtree = individual.random_tree(self.initial_depth) 
+        
+        # Ensure that the new_subtree has the correct arity
+        required_children = individual.get_function_arity(new_subtree.value)
+        if len(new_subtree.children) != required_children:
+            # print(f"Warning: New subtree has incorrect arity for function '{new_subtree.value}'")
+            return  # Discard mutation
+        
         node_to_mutate.value = new_subtree.value
         node_to_mutate.children = new_subtree.children
         
         # Ensure the mutated tree does not exceed max depth
-        if self.tree_depth(mutated_tree) > max_depth:
-            return  # Discard mutation or handle accordingly
+        if self.tree_depth(mutated_tree) > self.max_depth:
+            # print("Warning: Mutated tree exceeds max depth")
+            return  # Discard mutation
 
         # Update individual
         individual.tree = mutated_tree
 
     def measure_diversity(self):
-        # Calculate diversity based on tree structures
-        # Example: Average pairwise tree edit distance
+        """
+            Definition
+            -----------
+                Calculate diversity based on tree structures as the given average pairwise tree edit distance
+                
+                Example:  # Tree 1: (x + 1) -> tree1 = Node('+', [Node('x'), Node('1')])
+                          # Tree 2: (x + 2) -> tree2 = Node('+', [Node('x'), Node('2')])
+                          have distance of 1. 
+                          
+        """
         total_distance = 0
         count = 0
         for i in range(len(self.population)):
             for j in range(i + 1, len(self.population)):
-                distance = self.tree_edit_distance(self.population[i].tree, self.population[j].tree)
+                distance = self.compute_trees_distance(self.population[i].tree, self.population[j].tree)
                 total_distance += distance
                 count += 1
         if count == 0:
@@ -184,30 +406,27 @@ class GeneticAlgorithmGP:
         diversity = total_distance / count
         return diversity
     
+    # ----------------- Main execution loop ------------------------- #
+    
     def run(self, fitness_function):
         self.initialize_population()
     
         for gen in range(self.generations):
-            
+
             # Calculate fitness
-            self.calculate_fitness(fitness_function)
-    
-            # Record best fitness
+            self.calculate_fitness(fitness_function, gen)
+            
+            # Update best fitness list
             best_individual = max(self.population, key=lambda ind: ind.fitness)
             self.best_fitness_list.append(best_individual.fitness)
     
             # Measure diversity
             diversity = self.measure_diversity()
             self.diversity_list.append(diversity)
-    
-            # Collect lineage data
-            for ind in self.population:
-                self.lineage_data.append({
-                    'id': ind.id,
-                    'ancestors': ind.ancestors,
-                    'generation': gen,
-                    'fitness': ind.fitness
-                })
+            
+            # Early Stopping condition if successful individual has been found
+            if self.poulation_success == True:
+                return self.best_fitness_list, self.diversity_list, gen + 1
     
             # Selection
             selected = self.tournament_selection()
@@ -226,309 +445,184 @@ class GeneticAlgorithmGP:
                     next_population.extend(offspring)
                 else:
                     # Introduce new random individuals to maintain population size
-                    new_individual = Individual()
+                    new_individual = Individual(self.args)
                     next_population.append(new_individual)
                     if len(next_population) < self.pop_size:
-                        new_individual = Individual()
+                        new_individual = Individual(self.args)
                         next_population.append(new_individual)
                 i += 2
     
             self.population = next_population[:self.pop_size]
     
-            # Optional: Print progress
+            # Print progress
             if (gen + 1) % 10 == 0:
                 print(f"Generation {gen + 1}: Best Fitness = {best_individual.fitness:.4f}, Diversity = {diversity:.4f}")
     
-        return self.best_fitness_list, self.diversity_list
+        return self.best_fitness_list, self.diversity_list, gen+1
     
-
-def ackley_function(x, a=20, b=0.2, c=2*np.pi):
-    d = len(x)
-    sum_sq = np.sum(x**2)
-    sum_cos = np.sum(np.cos(c * x))
-    term1 = -a * np.exp(-b * np.sqrt(sum_sq / d))
-    term2 = -np.exp(sum_cos / d)
-    return term1 + term2 + a + np.exp(1)
-
-def rastrigin_function(x, A=10):
-    d = len(x)
-    return A * d + np.sum(x**2 - A * np.cos(2 * np.pi * x))
-
-# Define target functions
-def ackley_target(x):
-    return ackley_function(x)
-
-def rastrigin_target(x):
-    return rastrigin_function(x)
-
-# Define input vectors (sampled within the search space)
-def generate_input_vectors(d=2, num_samples=100):
-    # For Ackley, typically x_i ∈ [-5, 5]
-    # For Rastrigin, typically x_i ∈ [-5.12, 5.12]
-    return [np.random.uniform(-5, 5, d) for _ in range(num_samples)]
-
-# Initialize input vectors for Ackley
-input_vectors_ackley = generate_input_vectors(d=2, num_samples=100)
-
-# Initialize input vectors for Rastrigin
-input_vectors_rastrigin = generate_input_vectors(d=2, num_samples=100)
-
-# Define fitness functions
-def fitness_ackley(genome):
-    return complex_fitness_function(genome, ackley_target, input_vectors_ackley)
-
-def fitness_rastrigin(genome):
-    return complex_fitness_function(genome, rastrigin_target, input_vectors_rastrigin)
-
-def count_nodes(node):
-    """
-        Count the number of nodes (functions and terminals) in a program tree.
-    """
-    if node is None:
-        return 0
-    count = 1  # Count the current node
-    for child in node.children:
-        count += count_nodes(child)
-    return count
-
-def evaluate_tree(node, x):
-    """
-    Evaluate the program tree with input vector x.
-
-    Parameters:
-    - node (Node): Current node in the program tree.
-    - x (numpy.ndarray): Input vector.
-
-    Returns:
-    - result (float): Result of the program's evaluation.
-    """
-    if node.is_terminal():
-        if node.value == 'x':
-            # Assume 'x' corresponds to a specific dimension, e.g., x1
-            return x[0]  # Modify as needed for multi-dimensional x
-        else:
-            return float(node.value)
-    else:
-        # Define function implementations
-        func = node.value
-        args = [evaluate_tree(child, x) for child in node.children]
-        try:
-            if func == '+':
-                return args[0] + args[1]
-            elif func == '-':
-                return args[0] - args[1]
-            elif func == '*':
-                return args[0] * args[1]
-            elif func == '/':
-                return args[0] / args[1] if args[1] != 0 else 1.0  # Protected division
-            elif func == 'cos':
-                return np.cos(args[0])
-            elif func == 'sin':
-                return np.sin(args[0])
-            elif func == 'exp':
-                return np.exp(args[0])
-            elif func == 'sqrt':
-                return np.sqrt(args[0]) if args[0] >= 0 else 0.0  # Protected sqrt
-            else:
-                # Undefined function
-                raise ValueError(f"Undefined function: {func}")
-        except:
-            # Handle any unexpected errors
+class GPLandscape:
+    
+    def __init__(self, args, bounds):
+        self.args = args
+        self.bounds = bounds
+        self.lambda_complexity = 0.01
+        self.data = self.generate_data() # Generate all data points
+        self.total_exc = 0
+    
+    def count_nodes(self, node):
+        """
+            Definition
+            -----------
+                Count the number of nodes (functions and terminals) in a program tree.
+        """
+        if node is None:
+            return 0
+        count = 1  # Count the current node
+        for child in node.children:
+            count += self.count_nodes(child)
+        return count
+    
+    def evaluate_tree(self, node, x):
+        
+        if node is None:
+            # print(f"Warning: evaluate_tree called with node={node}")
             return 0.0
 
-def complex_fitness_function(genome, target_function, input_vectors, lambda_complexity=0.1):
-    mse_total = 0.0
-    complexity = count_nodes(genome)
+        if node.is_terminal():
+            if node.value == 'x':
+                # print(f"Evaluating terminal node 'x': {x}")
+                return x  # x is a scalar
+            else:
+                try:
+                    val = float(node.value)
+                    # print(f"Evaluating terminal node '{node.value}': {val}")
+                    return val
+                except ValueError as e:
+                    # print(f"Error converting node value to float: {e}")
+                    return 0.0
+        else:
+            func = node.value
+            args_tree = [self.evaluate_tree(child, x) for child in node.children]
+     
+            try:
+                if func == '+':
+                    result = gp_math.protected_sum(args_tree[0], args_tree[1])
+                elif func == '-':
+                    result = gp_math.protected_subtract(args_tree[0], args_tree[1])
+                elif func == '*':
+                    result = gp_math.protected_mult(args_tree[0], args_tree[1])
+                elif func == '/':
+                    result = gp_math.protected_divide(args_tree[0], args_tree[1])
+                elif func == 'sin':
+                    result = gp_math.protected_sin(args_tree[0])
+                elif func == 'cos':
+                    result = gp_math.protected_cos(args_tree[0])
+                elif func == 'log':
+                    result = gp_math.protected_log(args_tree[0])
+                else:
+                    raise ValueError(f"Undefined function: {func}")
+
+                # Clamp the result to the interval [-1e6, 1e6]
+                # Extracted of paper: Effective Adaptive Mutation Rates for Program Synthesis by Ni, Andrew and Spector, Lee 2024
+                result = np.clip(result, -1e6, 1e6)
+
+                return result
+            except Exception as e:
+
+                return 0.0  # Return 0.0 for any error
+            
+    def target_function(self, x):
+        # TODO: Refactor this to be in utils.py
+        
+        # Define target functions
+        if self.args.benchmark == 'ackley':
+            return bf.ackley_function(x)
+        
+        if self.args.benchmark == "nguyen1":
+            return bf.nguyen1(x)
+        
+        if self.args.benchmark == "nguyen2":
+            return bf.nguyen2(x)
+        
+        if self.args.benchmark == "nguyen3":
+            return bf.nguyen3(x)
+        
+        if self.args.benchmark == "nguyen4":
+            return bf.nguyen4(x)
+        
+    # Define input vectors (sampled within the search space)
+    def generate_data(self):
+        x_values = np.arange(self.bounds[0], self.bounds[1] + 0.1, 0.1)  # Include 4.0. TODO Include the step size as hyper parameters
+        y_values = self.target_function(x_values)
+        data = list(zip(x_values, y_values))
+        return data
+
+    def symbolic_fitness_function(self, genome):
+        total_error = 0.0
+        success = True  # Assume success initially
+        epsilon = 1e-4  # Small threshold for success
+
+        for x, target in self.data:
+
+            try:
+                output = self.evaluate_tree(genome, x)
+                # print(f"output value: {output}, target value: {target}")
+                error = output - target
+                
+                # TODO: As used in Paper Effective Adaptive MR
+                # proxy_error = np.sign(error) * np.log(0.01 + abs(error))
+                # total_error += abs(proxy_error)
+                
+                # TODO: As used in original Paper
+                total_error += abs(error)
+
+                if abs(error) > epsilon:
+                    success = False  # Error exceeds acceptable threshold
+                    
+            except Exception as e:
+                # print(f"Error evaluating fitness: {e}")
+                total_error += 1e6  # Penalize invalid outputs
+                success = False
+                
+        fitness = 1 / (total_error + 1e-6)  # Fitness increases as total error decreases or could return just total error
+        return fitness, success
+        
+if __name__ == "__main__":
     
-    for x in input_vectors:
-        try:
-            output = evaluate_tree(genome, x)
-            target = target_function(x)
-            mse = (output - target) ** 2
-            mse_total += mse
-        except Exception as e:
-            mse_total += 1e6  # Large penalty for errors
+    # Get args
+    args = util.set_args()
     
-    mse_average = mse_total / len(input_vectors)
-    fitness = (1 / (mse_average + 1e-6)) * np.exp(-lambda_complexity * complexity)
-    return fitness
-
-# Initialize GP-based GA for Ackley
-ga_gp_ackley = GeneticAlgorithmGP(
-    pop_size=200,
-    generations=100,
-    mutation_rate=0.005,
-    allowed_distance=10,  # Adjust based on inbreeding prevention
-    max_depth=10
-)
-import os
-# Run GP-based GA for Ackley
-best_fitness_ackley, diversity_ackley = ga_gp_ackley.run(fitness_ackley)
-
-# Plotting Results for Ackley
-plt.figure(figsize=(14, 6))
-
-# Best Fitness Over Generations
-plt.subplot(1, 2, 1)
-plt.plot(best_fitness_ackley, label='Best Fitness')
-plt.title('Best Fitness Over Generations (Ackley GP)')
-plt.xlabel('Generation')
-plt.ylabel('Fitness')
-plt.legend()
-
-# Genetic Diversity Over Generations
-plt.subplot(1, 2, 2)
-plt.plot(diversity_ackley, label='Genetic Diversity', color='orange')
-plt.title('Genetic Diversity Over Generations (Ackley GP)')
-plt.xlabel('Generation')
-plt.ylabel('Diversity')
-plt.legend()
-
-plt.tight_layout()
-plt.savefig(f'{os.getcwd()}/NO_Inbreeding_test_ackley.png')
-plt.close()
-
-# Similarly, you can run and plot for Rastrigin
-ga_gp_rastrigin = GeneticAlgorithmGP(
-    pop_size=200,
-    generations=100,
-    mutation_rate=0.005,
-    allowed_distance=10,
-    max_depth=10
-)
-
-# Run GP-based GA for Rastrigin
-best_fitness_rastrigin, diversity_rastrigin = ga_gp_rastrigin.run(fitness_rastrigin)
-
-# Plotting Results for Rastrigin
-plt.figure(figsize=(14, 6))
-
-# Best Fitness Over Generations
-plt.subplot(1, 2, 1)
-plt.plot(best_fitness_rastrigin, label='Best Fitness')
-plt.title('Best Fitness Over Generations (Rastrigin GP)')
-plt.xlabel('Generation')
-plt.ylabel('Fitness')
-plt.legend()
-
-# Genetic Diversity Over Generations
-plt.subplot(1, 2, 2)
-plt.plot(diversity_rastrigin, label='Genetic Diversity', color='orange')
-plt.title('Genetic Diversity Over Generations (Rastrigin GP)')
-plt.xlabel('Generation')
-plt.ylabel('Diversity')
-plt.legend()
-
-plt.tight_layout()
-plt.savefig(f'{os.getcwd()}/NO_Inbreeding_ratrigin.png')
-plt.close()
-
-# ------------- Symbolic
-
-# def symbolic_regression_fitness(genome, target_function, input_values):
-#     """
-#     Evaluate the fitness of a genome (function tree) based on how well it approximates the target function.
-
-#     Parameters:
-#     - genome (Node): The root node of the function tree.
-#     - target_function (callable): The target function to approximate.
-#     - input_values (list or numpy.ndarray): Input values for evaluation.
-
-#     Returns:
-#     - fitness (float): The inverse of the mean squared error.
-#     """
-#     def evaluate_tree(node, x):
-#         if node.is_terminal():
-#             if node.value == 'x':
-#                 return x
-#             else:
-#                 return float(node.value)
-#         else:
-#             func = node.value
-#             left = evaluate_tree(node.children[0], x)
-#             right = evaluate_tree(node.children[1], x)
-#             if func == '+':
-#                 return left + right
-#             elif func == '-':
-#                 return left - right
-#             elif func == '*':
-#                 return left * right
-#             elif func == '/':
-#                 return left / right if right != 0 else 1.0  # Handle division by zero
-#             else:
-#                 raise ValueError(f"Unknown function: {func}")
-
-#     errors = []
-#     for x in input_values:
-#         try:
-#             output = evaluate_tree(genome, x)
-#             target = target_function(x)
-#             error = (output - target) ** 2
-#             errors.append(error)
-#         except Exception as e:
-#             errors.append(float('inf'))  # Penalize invalid programs
-
-#     mse = np.mean(errors)
-#     fitness = 1 / (mse + 1e-6)  # Avoid division by zero
-#     return fitness
-
-# def target_function(x):
-#     return x ** 2 + 2 * x + 1  # Example: quadratic function
-
-# def symbolic_regression_fitness_function(genome):
-#     input_values = np.linspace(-10, 10, 50)
-#     return symbolic_regression_fitness(genome, target_function, input_values)
-
-# import matplotlib.pyplot as plt
-
-# # GA Parameters
-# pop_size = 200
-# generations = 100
-# mutation_rate = 0.05
-# allowed_distance = 10  # Adjust based on your inbreeding prevention strategy
-
-# # Initialize GP GA
-# ga_gp = GeneticAlgorithmGP(
-#     pop_size=pop_size,
-#     generations=generations,
-#     mutation_rate=mutation_rate,
-#     allowed_distance=allowed_distance,
-#     max_depth=5
-# )
-
-# import os
-# # Run GP GA
-# best_fitness_list, diversity_list = ga_gp.run(symbolic_regression_fitness_function)
-
-# # Plotting Results
-# plt.figure(figsize=(14, 6))
-
-# # Best Fitness Over Generations
-# plt.subplot(1, 2, 1)
-# plt.plot(best_fitness_list, label='Best Fitness')
-# plt.title('Best Fitness Over Generations (Symbolic Regression GP)')
-# plt.xlabel('Generation')
-# plt.ylabel('Fitness')
-# plt.legend()
-
-# # Genetic Diversity Over Generations
-# plt.subplot(1, 2, 2)
-# plt.plot(diversity_list, label='Genetic Diversity', color='orange')
-# plt.title('Genetic Diversity Over Generations (Symbolic Regression GP)')
-# plt.xlabel('Generation')
-# plt.ylabel('Diversity')
-# plt.legend()
-
-# plt.tight_layout()
-# plt.savefig(f"{os.getcwd()}/test_div_fitGP_noInbreeding.png")
-# plt.close()
-
-
-# """Nuanced version of tree edit distance"""
-# # import zss
-
-# # def tree_edit_distance_zss(node1, node2):
-# #     def get_children(node):
-# #         return node.children
+    # Set file plotting name
+    # args.config_plot = f"genetic_programming/{args.benchmark}/experimental/PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
     
-# #     return zss.simple_distance(node1, node2, get_children)
+    args.bounds = util.get_function_bounds(args.benchmark)
+    
+    # Create Landscape
+    gp_landscape = GPLandscape(args, args.bounds)
+
+    # # Run experiments
+    print("Running GA with NO Inbreeding Mating...")
+    # results_no_inbreeding = exp.multiple_runs_function_gp(args, gp_landscape, args.inbred_threshold)
+    # util.save_accuracy(results_no_inbreeding, f"{args.config_plot}_no_inbreeding.npy")
+    
+    mutation_rates = [0.05, 0.01, 0.005, 0.001, 0.0005]
+    args.config_plot = f"genetic_programming/{args.benchmark}/mut_rates/Mrates:{mutation_rates}_PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
+    results_no_inbreeding = exp.multiple_mrates_function_gp(args, mutation_rates, gp_landscape, args.inbred_threshold)
+    util.save_accuracy(results_no_inbreeding, f"{args.config_plot}_no_inbreeding.npy")
+    plot.plot_generation_successes(results_no_inbreeding, mutation_rates, f"{args.config_plot}_no_inbreeding.png")
+    
+    
+    # print("Running GA with Inbreeding Mating...")
+    # results_inbreeding = exp.multiple_runs_function_gp(args, gp_landscape, None)
+    # util.save_accuracy(results_inbreeding, f"{args.config_plot}_inbreeding.npy")
+    
+    # results_inbreeding = exp.multiple_mrates_function_gp(args, mutation_rates, gp_landscape, None)
+    # util.save_accuracy(results_inbreeding, f"{args.config_plot}_inbreeding.npy")
+    # plot.plot_generation_successes(results_inbreeding, mutation_rates, f"{args.config_plot}_inbreeding.png")
+    
+    # Plot the generation of successful runs
+    # plot.plot_gen_vs_run(args, results_no_inbreeding, results_inbreeding)
+    
+    # Plot with bootstraping only if all runs are same length of generations
+    # gs_list, fit_list, div_list, label_list = plot.collect_bootstrapping_data(args, results_no_inbreeding, results_inbreeding)
+    # plot.plot_multiple_runs_GP_functions(args, gs_list, fit_list, div_list, label_list)

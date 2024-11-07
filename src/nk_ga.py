@@ -31,21 +31,21 @@ if __name__ == "__main__":
     # landscape = bf.NKLandscape(n=args.N_NKlandscape, k=args.K_NKlandscape)
     # landscape = bf.Jump(args)
     # landscape = bf.DeceptiveLeadingBlocks(args)
-    # landscape = bf.Rastrigin(args)
-    landscape = bf.MovingPeaksLandscape(args)
+    landscape = bf.Rastrigin(args)
+    # landscape = bf.MovingPeaksLandscape(args)
     
     # Set file plotting name
-    args.config_plot = f"{args.bench_name}/NEWNovelty_PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_N:{args.N_NKlandscape}_K:{args.K_NKlandscape}" 
+    args.config_plot = f"{args.bench_name}/multipleNEWNovelty_PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_N:{args.N_NKlandscape}_K:{args.K_NKlandscape}" 
 
     # Run Individual
     # args.inbred_threshold = 10
     # individual_ga_run(args, landscape, args.inbred_threshold)
     
     # # Run experiments
-    # print("Running GA with NO Inbreeding Mating...")
+    print("Running GA with NO Inbreeding Mating...")
     results_no_inbreeding = multiple_runs_experiment(args, landscape, args.inbred_threshold)
 
-    # print("Running GA with Inbreeding Mating...")
+    print("Running GA with Inbreeding Mating...")
     results_inbreeding = multiple_runs_experiment(args, landscape, None)
 
     # # Plot experiments
