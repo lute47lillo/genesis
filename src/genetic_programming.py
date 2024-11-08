@@ -1,17 +1,10 @@
 import numpy as np
 import copy
-import os
-import zss
 import random
-import matplotlib.pyplot as plt
-import benchmark_factory as bf
 import util
 import experiments as exp
 import plotting as plot
 import gp_math
-from argparse import Namespace
-# import tests as tests
-import unittest
 
 """            
         - Add the NGUYEN benchmark functions from "Effective Adaptive Mutation Rates for Program Synthesis" Paper
@@ -462,12 +455,12 @@ class GeneticAlgorithmGP:
     
 class GPLandscape:
     
-    def __init__(self, args, bounds):
+    def __init__(self, args):
+        
         self.args = args
-        self.bounds = bounds
-        self.lambda_complexity = 0.01
+        self.target_function = util.select_gp_benchmark(args)
+        self.bounds = args.bounds
         self.data = self.generate_data() # Generate all data points
-        self.total_exc = 0
     
     def count_nodes(self, node):
         """
@@ -484,21 +477,19 @@ class GPLandscape:
     
     def evaluate_tree(self, node, x):
         
+        # Base case checking for error
         if node is None:
-            # print(f"Warning: evaluate_tree called with node={node}")
             return 0.0
 
+        # Check if node is terminal (leave) or not
         if node.is_terminal():
             if node.value == 'x':
-                # print(f"Evaluating terminal node 'x': {x}")
                 return x  # x is a scalar
             else:
                 try:
                     val = float(node.value)
-                    # print(f"Evaluating terminal node '{node.value}': {val}")
                     return val
                 except ValueError as e:
-                    # print(f"Error converting node value to float: {e}")
                     return 0.0
         else:
             func = node.value
@@ -530,34 +521,24 @@ class GPLandscape:
             except Exception as e:
 
                 return 0.0  # Return 0.0 for any error
-            
-    def target_function(self, x):
-        # TODO: Refactor this to be in utils.py
         
-        # Define target functions
-        if self.args.benchmark == 'ackley':
-            return bf.ackley_function(x)
-        
-        if self.args.benchmark == "nguyen1":
-            return bf.nguyen1(x)
-        
-        if self.args.benchmark == "nguyen2":
-            return bf.nguyen2(x)
-        
-        if self.args.benchmark == "nguyen3":
-            return bf.nguyen3(x)
-        
-        if self.args.benchmark == "nguyen4":
-            return bf.nguyen4(x)
-        
-    # Define input vectors (sampled within the search space)
     def generate_data(self):
-        x_values = np.arange(self.bounds[0], self.bounds[1] + 0.1, 0.1)  # Include 4.0. TODO Include the step size as hyper parameters
+        """
+            Definition
+            -----------
+                Define input vectors (sampled within the search space).
+        """
+        x_values = np.arange(self.bounds[0], self.bounds[1] + 0.1, 0.1)  # TODO Include the step size (0.1) as hyper parameters if adding more benchmarks
         y_values = self.target_function(x_values)
         data = list(zip(x_values, y_values))
         return data
 
     def symbolic_fitness_function(self, genome):
+        """
+            Definition
+            -----------
+                Calculate the fitness of the individual after evaluating the tree.
+        """
         total_error = 0.0
         success = True  # Assume success initially
         epsilon = 1e-4  # Small threshold for success
@@ -566,12 +547,7 @@ class GPLandscape:
 
             try:
                 output = self.evaluate_tree(genome, x)
-                # print(f"output value: {output}, target value: {target}")
                 error = output - target
-                
-                # TODO: As used in Paper Effective Adaptive MR
-                # proxy_error = np.sign(error) * np.log(0.01 + abs(error))
-                # total_error += abs(proxy_error)
                 
                 # TODO: As used in original Paper
                 total_error += abs(error)
@@ -580,7 +556,6 @@ class GPLandscape:
                     success = False  # Error exceeds acceptable threshold
                     
             except Exception as e:
-                # print(f"Error evaluating fitness: {e}")
                 total_error += 1e6  # Penalize invalid outputs
                 success = False
                 
@@ -592,37 +567,40 @@ if __name__ == "__main__":
     # Get args
     args = util.set_args()
     
-    # Set file plotting name
-    # args.config_plot = f"genetic_programming/{args.benchmark}/experimental/PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
-    
-    args.bounds = util.get_function_bounds(args.benchmark)
-    
     # Create Landscape
-    gp_landscape = GPLandscape(args, args.bounds)
+    gp_landscape = GPLandscape(args)
 
-    # # Run experiments
-    print("Running GA with NO Inbreeding Mating...")
+    # -------------------------------- Experiment: Multiple Runs w/ fixed population and fixed mutation rate --------------------------- #
+    
+    # args.config_plot = f"genetic_programming/{args.benchmark}/experimental/PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
+
+    # print("Running GA with NO Inbreeding Mating...")
     # results_no_inbreeding = exp.multiple_runs_function_gp(args, gp_landscape, args.inbred_threshold)
     # util.save_accuracy(results_no_inbreeding, f"{args.config_plot}_no_inbreeding.npy")
     
-    mutation_rates = [0.05, 0.01, 0.005, 0.001, 0.0005]
-    args.config_plot = f"genetic_programming/{args.benchmark}/mut_rates/Mrates:{mutation_rates}_PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
-    results_no_inbreeding = exp.multiple_mrates_function_gp(args, mutation_rates, gp_landscape, args.inbred_threshold)
-    util.save_accuracy(results_no_inbreeding, f"{args.config_plot}_no_inbreeding.npy")
-    plot.plot_generation_successes(results_no_inbreeding, mutation_rates, f"{args.config_plot}_no_inbreeding.png")
-    
-    
-    # print("Running GA with Inbreeding Mating...")
+    # # print("Running GA with Inbreeding Mating...")
     # results_inbreeding = exp.multiple_runs_function_gp(args, gp_landscape, None)
     # util.save_accuracy(results_inbreeding, f"{args.config_plot}_inbreeding.npy")
     
-    # results_inbreeding = exp.multiple_mrates_function_gp(args, mutation_rates, gp_landscape, None)
-    # util.save_accuracy(results_inbreeding, f"{args.config_plot}_inbreeding.npy")
-    # plot.plot_generation_successes(results_inbreeding, mutation_rates, f"{args.config_plot}_inbreeding.png")
-    
-    # Plot the generation of successful runs
+    # # Plot the generation of successful runs
     # plot.plot_gen_vs_run(args, results_no_inbreeding, results_inbreeding)
     
     # Plot with bootstraping only if all runs are same length of generations
     # gs_list, fit_list, div_list, label_list = plot.collect_bootstrapping_data(args, results_no_inbreeding, results_inbreeding)
     # plot.plot_multiple_runs_GP_functions(args, gs_list, fit_list, div_list, label_list)
+    
+    # -------------------------------- Experiment: Multiple Runs w/ fixed population and Variable mutation rate --------------------------- #
+    
+    mutation_rates = [0.05, 0.01, 0.005, 0.001, 0.0005]
+    args.config_plot = f"genetic_programming/{args.benchmark}/mut_rates/Mrates:{mutation_rates}_PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
+
+    # print("Running GA with NO Inbreeding Mating...")
+    # results_no_inbreeding = exp.multiple_mrates_function_gp(args, mutation_rates, gp_landscape, args.inbred_threshold)
+    # util.save_accuracy(results_no_inbreeding, f"{args.config_plot}_no_inbreeding.npy")
+    # plot.plot_generation_successes(results_no_inbreeding, mutation_rates, f"{args.config_plot}_no_inbreeding.png")
+    
+    print("Running GA with Inbreeding Mating...")
+    results_inbreeding = exp.multiple_mrates_function_gp(args, mutation_rates, gp_landscape, None)
+    util.save_accuracy(results_inbreeding, f"{args.config_plot}_inbreeding.npy")
+    plot.plot_generation_successes(results_inbreeding, mutation_rates, f"{args.config_plot}_inbreeding.png")
+    

@@ -26,23 +26,30 @@ def set_args():
     argparser.add_argument('--benchmark', type=str, help='Optimization function to run', default="rastrigin")
     argparser.add_argument('--bench_name', type=str, help='Problem landscape name (ie: MovingPeaksLandscape)', default="none")
     argparser.add_argument('--config_plot', type=str, help='plot info details', default="none")
-    argparser.add_argument('--dimensions', type=int, help='GA dimensions', default=10) 
     
-    # Genetic Programming variables
-    argparser.add_argument('--max_depth', type=int, help='GP Tree maximum depth', default=15)
-    argparser.add_argument('--initial_depth', type=int, help='GP Tree maximum depth', default=6)
-    
-    # NK-Landscape arguments
-    argparser.add_argument('--generations', type=int, help='Nº of generations to run the GA. (Used interchangeably with args.dimensions in this case)', default=100)
-    argparser.add_argument('--N_NKlandscape', type=int, help='Genome Length (N) value', default=100)
-    argparser.add_argument('--K_NKlandscape', type=int, help='Nº of interactions per loci (K) value', default=14)
+    # Experimental Hyperparameters
     argparser.add_argument('--pop_size', type=int, help='Population Size (could be used as fixed parameter in many settings)', default=100)
     argparser.add_argument('--mutation_rate', type=float, help='Mutation Rate (could be used as fixed parameter in many settings)', default=0.01)
     argparser.add_argument('--inbred_threshold', type=int, help='Inbreeding Threshold. Below threshold is considered inbreeding. \
                             Minimum genetic (Hamming) distance required to allow mating', default=5)
     argparser.add_argument('--tournament_size', type=int, help='Nº of individuals to take part in the Tournament selection', default=3)
     argparser.add_argument('--exp_num_runs', type=int, help='Nº of experimental runs. (Fixed hyperparameters)', default=5)
-
+    argparser.add_argument('--dimensions', type=int, help='GA dimensions', default=10) 
+    argparser.add_argument('--collapse_threshold', type=int, help='TODO', default=0.2) 
+    argparser.add_argument('--collapse_fraction', type=int, help='TODO', default=0.1) 
+    argparser.add_argument('--mpl_shift_interval', type=int, help='nº of generations for shifting global maximum in the MovingPeaksLandscape', default=30) 
+    
+    # Genetic Programming variables
+    argparser.add_argument('--max_depth', type=int, help='GP Tree maximum depth', default=15)
+    argparser.add_argument('--initial_depth', type=int, help='GP Tree maximum depth', default=6)
+    
+    # Rugged arguments
+    argparser.add_argument('--generations', type=int, help='Nº of generations to run the GA. (Used interchangeably with args.dimensions in this case)', default=100)
+    argparser.add_argument('--N_NKlandscape', type=int, help='Genome Length (N) value', default=100)
+    argparser.add_argument('--K_NKlandscape', type=int, help='Nº of interactions per loci (K) value', default=14)
+    argparser.add_argument('--max_kinship', type=float, help='Maximal Inbreeding prevention ratio', default=0.5)
+    
+    # Parse all arguments
     args = argparser.parse_args()
     
     # Set the seed for reproducibility
@@ -87,7 +94,7 @@ def get_function_bounds(benchmark):
     
     if benchmark == 'ackley':
         bounds = (-32.768, 32.768)
-    elif benchmark == 'rastrigin':
+    elif benchmark == 'rastrigin' or benchmark == 'sphere':
         bounds = (-5.12, 5.12)
     elif benchmark == 'rosenbrock':
         bounds = (-2.048, 2.048)
@@ -95,16 +102,10 @@ def get_function_bounds(benchmark):
         bounds = (-500, 500)
     elif benchmark == 'griewank':
         bounds = (-600, 600)   
-    elif benchmark == 'sphere':
-        bounds = (-5.12, 5.12)
-    elif benchmark == 'nguyen1':
+    elif benchmark == 'nguyen1' or benchmark == 'nguyen2' or benchmark == 'nguyen3' or benchmark == 'nguyen4' or benchmark == 'nguyen5' or benchmark == 'nguyen6':
         bounds = (-4.0, 4.0)
-    elif benchmark == 'nguyen2':
-        bounds = (-4.0, 4.0)
-    elif benchmark == 'nguyen3':
-        bounds = (-4.0, 4.0)
-    elif benchmark == 'nguyen4':
-        bounds = (-4.0, 4.0)
+    elif benchmark == 'nguyen7' or benchmark == 'nguyen8':
+        bounds = (0.0, 8.0)
     
     return bounds
 
@@ -151,6 +152,25 @@ def set_config_parameters(benchmark):
     return pop_sizes, dimensions, bounds, generations, mutation_rate, allowed_distance
 
 # --------------------------- Genetic Programming visualization ------------------------------- #
+
+def select_gp_benchmark(args):
+    """
+        Definition
+        -----------
+            Select the benchmark for Genetic Programming experiments.
+    """
+    benchmarks = {"nguyen1": bf.nguyen1, "nguyen2": bf.nguyen2,
+                  "nguyen3": bf.nguyen3, "nguyen4": bf.nguyen4,
+                  "nguyen5": bf.nguyen5, "nguyen6": bf.nguyen6,
+                  "nguyen7": bf.nguyen7, "nguyen8": bf.nguyen8}
+    
+    # Get function
+    gp_bench_fn = benchmarks.get(args.benchmark)
+    
+    # Set the specific bounds
+    args.bounds = get_function_bounds(args.benchmark)
+    
+    return gp_bench_fn
 
 class Node:
     def __init__(self, value, children=None):
@@ -321,3 +341,39 @@ def create_padded_df(data, metric, run_ids):
     
     return df
     
+# ---------------------- Rugged Landscape Functions ------------------------- #
+
+def compute_distance_to_nearest_peak(genome, landscape):
+        """
+            Compute the Euclidean distance from a position to the nearest peak in Moving Peaks Landscape
+
+            Parameters:
+            - position (numpy.ndarray): The position of the individual in the search space.
+
+            Returns:
+            - distance (float): The shortest Euclidean distance to any peak.
+        """
+        position = np.sum(genome)
+        peaks = landscape.peaks  # Access peaks directly from the landscape
+        if not peaks:
+            return float('inf')  # No peaks defined
+
+        distances = [
+            min(abs(peak.position - position), landscape.n - abs(peak.position - position))
+            for peak in peaks
+        ]
+        return min(distances)
+    
+def extract_behavior(genome, landscape):
+    """
+        Extract the behavior descriptor for an individual based on its genes.
+
+        Parameters:
+        - genes (numpy.ndarray): The genes of the individual.
+
+        Returns:
+        - behavior (list or numpy.ndarray): The behavior descriptor.
+    """
+    distance = compute_distance_to_nearest_peak(genome, landscape)
+    behavior = [distance]  # Behavior can be a list with the distance
+    return behavior

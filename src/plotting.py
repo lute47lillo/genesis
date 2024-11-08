@@ -131,7 +131,7 @@ def plot_individual_MPL_global_optima(args, best_fitness_list, diversity_list, g
     # Genetic Diversity Over Generations
     plt.subplot(1, 2, 2)
     plt.plot(diversity_list, label='Allelic Diversity', color='orange')
-    plt.axhline(y=collapse_threshold, color='red', linestyle='--', label='Collapse Threshold')
+    # plt.axhline(y=collapse_threshold, color='red', linestyle='--', label='Collapse Threshold') # TODO: Not being used currently
     
     # Mark collapse events
     for event in collapse_events:
@@ -172,7 +172,7 @@ def plot_multiple_runs_MPL_global_optima(args, ks_list, best_fitness_list, diver
         plt.plot(ks, diversity_list[idx][0], label=label_list[idx])
         plt.fill_between(ks, diversity_list[idx][1], diversity_list[idx][2], alpha=0.5)
     
-    plt.axhline(y=collapse_threshold, color='red', linestyle='--', label='Collapse Threshold')
+    # plt.axhline(y=collapse_threshold, color='red', linestyle='--', label='Collapse Threshold') # TODO: Not being used currently
     plt.title('Allelic Diversity Over Generations (MPB)')
     plt.xlabel('Generation')
     plt.ylabel('Diversity')
@@ -276,7 +276,7 @@ def collect_bootstrapping_data(args, results_no_inbreeding, results_inbreeding):
     return gs_list, fit_list, div_list, label_list
 
 # Function to calculate bootstrapped confidence intervals
-def compute_bootstrap_ci(data, n_bootstrap=1000, ci=0.95):
+def compute_bootstrap_ci_rugged(data, n_bootstrap=1000, ci=0.95):
     """Compute bootstrap confidence interval for 1D data array."""
     data = np.asarray(data)
     means = []
@@ -330,7 +330,7 @@ def plot_mean_and_bootstrapped_ci(experimental_results, key):
         mean_fit = np.mean(fitness_values)
         
         # Compute bootstrap confidence intervals
-        fit_ci_l, fit_ci_h = compute_bootstrap_ci(fitness_values)
+        fit_ci_l, fit_ci_h = compute_bootstrap_ci_rugged(fitness_values)
         
         mean_fitness.append(mean_fit)
         fit_ci_low.append(fit_ci_l)
@@ -339,7 +339,8 @@ def plot_mean_and_bootstrapped_ci(experimental_results, key):
     return generations, (mean_fitness, fit_ci_low, fit_ci_high)
 
 # ------------------ Bootstrapping Irregular lengths GP ---------------------- #
-def compute_bootstrap_ci(df, metric_name, confidence_level=0.95, n_bootstraps=1000):
+
+def compute_bootstrap_ci(df, confidence_level=0.95, n_bootstraps=1000):
     """
     Compute bootstrap confidence intervals for each time step.
 

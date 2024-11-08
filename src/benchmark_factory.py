@@ -265,13 +265,13 @@ class MovingPeaksLandscape:
         Due to its constant shift of landscape it evaluates the resilience of an algorihtm to changes and disruptions
     
     """
-    def __init__(self, args, m=5, h_min=1.0, h_max=5.0, w_min=1, w_max=5, shift_interval=30):
+    def __init__(self, args, m=5, h_min=1.0, h_max=5.0, w_min=1, w_max=5):
         
         # Landscape attributes
-        self.n = args.N_NKlandscape           # Genome length
-        self.m = m                            # Number of peaks or optima present at any given time.
-        self.shift_interval = shift_interval  # Generations between shifts
-        self.global_optimum = None            # To store current global optimum
+        self.n = args.N_NKlandscape                     # Genome length
+        self.m = m                                      # Number of peaks or optima present at any given time.
+        self.shift_interval = args.mpl_shift_interval   # Generations between shifts
+        self.global_optimum = None                      # To store current global optimum
         
         # Peak Height min/max
         self.h_min = h_min
@@ -300,7 +300,6 @@ class MovingPeaksLandscape:
             position = np.random.randint(0, self.n)
             height = np.random.uniform(self.h_min, self.h_max)
             width = np.random.randint(self.w_min, self.w_max + 1)
-            # self.peaks.append({'position': position, 'height': height, 'width': width})
             self.peaks.append(Peak(position, height, width))
             
         self.update_global_optimum()
