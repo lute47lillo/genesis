@@ -1,12 +1,11 @@
 """
 
-    TODO: Need to compare Novelty against fitness methods
+    
 """
 
 
 import numpy as np
 from scipy.spatial import distance
-import random
 
 import util as util
 import copy
@@ -37,18 +36,18 @@ class Individual:
         self.generation = generation
         self.landscape = landscape
 
+        # Initial generation individual
         if not self.parents:
-            # Initial generation individual
             self.ancestors.add(self.id)
             
         # Update ancestors with depth limitation
         max_depth = 10  # Set the desired ancestry depth. Edit for computational issues
-        self.ancestors = set()
         for parent in self.parents:
             if parent.generation >= self.generation - max_depth:
                 self.ancestors.update(parent.ancestors)
                 self.ancestors.add(parent.id)
-                
+        
+        # Set the initial fitness and novelty of the individual wrt novelty archive and the population behaviors
         self.get_novel_fit_indiv(curr_pop_behave, novelty_archive)
                 
     def get_novel_fit_indiv(self, population_behaviors, novelty_archive):
@@ -56,7 +55,7 @@ class Individual:
         # Set landscape-based fitness
         self.fitness = self.landscape.get_fitness(self.genes)
         
-        # TODO: Can probably be moved for later. Extract behavior of individual
+        # Extract behavior of individual
         self.behavior = util.extract_behavior(self.genes, self.landscape)
                 
         # Get novelty
@@ -74,12 +73,15 @@ class Individual:
 class NoveltyArchive:
     def __init__(self, threshold=0.1, k=5, max_size=500):
         """
-        Initialize the Novelty Archive.
+            Definition:
+            ------------
+                Initialize the Novelty Archive.
 
-        Parameters:
-        - threshold (float): Distance threshold for considering behaviors as novel.
-        - k (int): Number of nearest neighbors to consider for novelty calculation.
-        - max_size (int): Maximum size of the archive.
+            Parameters:
+            ------------
+                - threshold (float): Distance threshold for considering behaviors as novel.
+                - k (int): Number of nearest neighbors to consider for novelty calculation.
+                - max_size (int): Maximum size of the archive.
         """
         self.archive = []
         self.threshold = threshold
@@ -88,14 +90,18 @@ class NoveltyArchive:
 
     def compute_novelty(self, behavior, population_behaviors):
         """
-        Compute the novelty of a given behavior.
+            Definition
+            ------------
+                Compute the novelty of a given behavior.
 
-        Parameters:
-        - behavior (list or numpy.ndarray): Behavior descriptor of the individual.
-        - population_behaviors (list): List of behavior descriptors of the current population.
+            Parameters:
+            ------------
+                - behavior (list or numpy.ndarray): Behavior descriptor of the individual.
+                - population_behaviors (list): List of behavior descriptors of the current population.
 
-        Returns:
-        - novelty (float): Calculated novelty score.
+            Returns:
+            ------------
+                - novelty (float): Calculated novelty score.
         """
         # Combine archive and current population behaviors
         all_behaviors = self.archive + population_behaviors
@@ -104,42 +110,38 @@ class NoveltyArchive:
             return float('inf')  # Maximum novelty for the first individual
 
         # Compute distances to all behaviors
-        distances = distance.cdist([behavior], all_behaviors, 'euclidean')[0]
+        distances = [util.behavior_distance(behavior, b) for b in all_behaviors]
         
         # Exclude distance to self if present
-        distances = distances[distances != 0]
+        distances = [d for d in distances if d != 0]
 
-        # Version 1
+        # Check for behaviors to compare in the archive
         effective_k = min(self.k, len(distances))
-        if effective_k == 0:
-            # Handle the special case where there are no other behaviors to compare with
-            print(f"\nNo more behaviors")
+        if effective_k == 0: # No more behaviors to compare to.
             return 0.0  # Or some default novelty value
-        nearest_distances = np.partition(distances, effective_k - 1)[:effective_k]
         
-        # Version 2
-        # Get k nearest distances
-        # if len(distances) >= self.k:
-        #     nearest_distances = np.partition(distances, self.k)[:self.k]
-        # else:
-        #     nearest_distances = distances
-
+        nearest_distances = np.partition(distances, effective_k - 1)[:effective_k]
         novelty = np.mean(nearest_distances)
+        
         return novelty
 
     def add(self, behavior):
         """
-        Add a new behavior to the archive if it is novel enough.
+            Definition:
+            ------------
+                Add a new behavior to the archive if it is novel enough.
 
-        Parameters:
-        - behavior (list or numpy.ndarray): Behavior descriptor of the individual.
+            Parameters:
+            ------------
+                - behavior (list or numpy.ndarray): Behavior descriptor of the individual.
         """
+        # Check archive is not empty
         if len(self.archive) == 0:
             self.archive.append(behavior)
             return
 
         # Compute distance to all behaviors in the archive
-        distances = distance.cdist([behavior], self.archive, 'euclidean')[0]
+        distances = [util.behavior_distance(behavior, b) for b in self.archive]
         min_distance = np.min(distances)
 
         if min_distance > self.threshold:
@@ -163,7 +165,8 @@ class GeneticAlgorithmRugged:
         self.tournament_size = args.tournament_size
         self.inbred_threshold = inbred_threshold
         self.initial_pop_size = self.pop_size
-        
+        self.max_kinship = args.max_kinship  # Threshold for kinship coefficient. 0.125 is first cousings. 0.0625 is second cousins
+
         # Metrics and Lists
         self.population = []
         self.best_fitness_list = []
@@ -175,12 +178,8 @@ class GeneticAlgorithmRugged:
         self.landscape = landscape
         self.args.landscape = landscape
         
-        # Existing initialization code...
-        self.max_kinship = args.max_kinship # max_kinship  # Threshold for kinship coefficient. 0.125 is first cousings. 0.0625 is second cousins
-        
-        # Initialize the Novelty Archive
-        # TODO: Create hyperparameters for the novelty
-        self.novelty_archive = NoveltyArchive(threshold=0.1, k=10, max_size=self.pop_size)
+        # Initialize the Novelty Archive 
+        self.novelty_archive = NoveltyArchive(threshold=args.archive_threshold, k=args.archive_nn, max_size=self.pop_size)
         
     def log_ancestry(self, generation_number):
         if self.current_generation == generation_number:
@@ -207,6 +206,10 @@ class GeneticAlgorithmRugged:
                             alpha = 1.0  # Weight for fitness
                             beta = 1.0   # Weight for novelty           
         """
+        # Set importance values. Default to 1.0
+        alpha = self.args.fit_weight        # Weight for fitness
+        beta = self.args.novelty_weight     # Weight for novelty
+        
         # Collect behaviors for the current population
         population_behaviors = []
         for individual in self.population:
@@ -225,7 +228,7 @@ class GeneticAlgorithmRugged:
             
             # Combine fitness and novelty normalizing over M of MPL
             novelty_fitness = individual.novelty / self.landscape.m
-            individual.total_fitness = individual.fitness + novelty_fitness
+            individual.total_fitness = alpha * individual.fitness + beta * novelty_fitness
             
             # Add to the archive
             self.novelty_archive.add(individual.behavior)
@@ -254,7 +257,6 @@ class GeneticAlgorithmRugged:
         selected = []
         for i in range(self.pop_size):
             participants = np.random.choice(self.population, k)
-            # winner = max(participants, key=lambda ind: ind.fitness) # ind.total_fitness for novelty + fitness / fitness for just fitness
             winner = max(participants, key=lambda ind: ind.total_fitness) # ind.total_fitness for novelty + fitness / fitness for just fitness
             selected.append(winner)
         return selected
@@ -263,18 +265,11 @@ class GeneticAlgorithmRugged:
         return np.sum(ind1.genes != ind2.genes)  # Hamming distance
     
     def crossover(self, parent1, parent2):
+        # Calculate kinship coefficient
         if self.inbred_threshold is not None:
-            
-            # Calculate kinship coefficient
             f = self.kinship_coefficient(parent1, parent2)
-            if f > self.max_kinship: # Large F kinship ratio prevents crossover
-                
-                # Prevent mating
+            if f > self.max_kinship: # Large F kinship ratio prevents crossover. Prevent Mating
                 return None, None
-            
-            # distance = self.genetic_distance(parent1, parent2)
-            # if distance < self.inbred_threshold: # the bigger the allowed distance, the farther apart the parents need to be
-            #     return None, None
 
         # One-point crossover
         crossover_point = np.random.randint(1, self.dimensions)
@@ -348,29 +343,6 @@ class GeneticAlgorithmRugged:
         diversity = np.mean(heterozygosities)
         return diversity
     
-    def study_inbred_chances(self, gen):
-        
-        print(f"GEN: {gen+1}. Studying inbreeding relationship")
-        i = 0
-        true_mating = 0
-        false_mating = 0
-        while i < len(self.population):
-            parent1 = self.population[i]
-            parent2 = self.population[(i + 1) % len(self.population)]
-            f = self.kinship_coefficient(parent1, parent2) 
-            mate = f < self.max_kinship
-            if mate:
-                true_mating += 1
-            else:
-                false_mating += 1
-            print(f"Individual {i+1} and {i+2} have kinship coeff: {f}. Can they mate? {mate}")
-            
-            i += 2
-            
-        print(f"There were {true_mating} pairs that can mate.")
-        print(f"There were {false_mating} pairs that cannot mate.\n\n")
-    
-
     def run(self):
         
         # Initialize the population
@@ -388,19 +360,16 @@ class GeneticAlgorithmRugged:
 
             # Calculate fitness and novelty
             if self.args.bench_name == 'MovingPeaksLandscape':
-                # Calculate fitness and novelty
+                
                 self.calculate_fitness_and_novelty()
-            
+                best_individual = max(self.population, key=lambda ind: ind.total_fitness)
+                self.best_fitness_list.append(best_individual.total_fitness)
             else:
-                self.calculate_fitness() # TODO disable for other methods
-            
+                
+                self.calculate_fitness() # TODO Other methods
                 best_fitness = max(self.population, key=lambda ind: ind.fitness).fitness
                 self.best_fitness_list.append(best_fitness)
-                
-            # TODO: This goes with novelty search. Record best fitness
-            best_individual = max(self.population, key=lambda ind: ind.total_fitness)
-            self.best_fitness_list.append(best_individual.total_fitness)
-            
+                        
             # Record global optimum fitness
             if self.args.bench_name == 'MovingPeaksLandscape':
                 global_optimum_fitness = self.landscape.get_current_global_optimum_fitness()
@@ -409,8 +378,125 @@ class GeneticAlgorithmRugged:
             # Calculate diversity by the heterozygosity at each locus
             diversity = self.measure_diversity()
             self.diversity_list.append(diversity)
-                
-            # # Check for population collapse
+
+            # Tournament selection.
+            selected = self.tournament_selection(self.tournament_size)
+        
+            # Selection            
+            next_population = []
+            lambda_pop = self.pop_size * 2
+            i = 0
+            while i < lambda_pop: # Used to be len(selected)
+                parent1 = selected[i % len(selected)]
+                parent2 = selected[(i+1) % len(selected)]
+                offspring = self.crossover(parent1, parent2)
+
+                if offspring[0] is not None and offspring[1] is not None:
+                    
+                    # Mutate offspring
+                    self.mutate(offspring[0])
+                    self.mutate(offspring[1])        
+                    next_population.extend(offspring)
+                    
+                else:
+                    # Append parents if Inbreeding is allowed
+                    if self.inbred_threshold is None: 
+                        next_population.append(copy.deepcopy(parent1))
+                        next_population.append(copy.deepcopy(parent2))
+                    else:
+                        # Introduce new individuals if inbreeding is not allowed
+                        genes = np.random.randint(2, size=self.dimensions)
+                        individual = Individual(genes, generation=gen+1, 
+                                                landscape=self.landscape,
+                                                curr_pop_behave=self.population_behaviors, 
+                                                novelty_archive=self.novelty_archive)
+
+                        next_population.append(individual)
+                        
+                        if len(next_population) < self.pop_size:
+                            genes = np.random.randint(2, size=self.dimensions)
+                            individual = Individual(genes, generation=gen+1, 
+                                                    landscape=self.landscape,
+                                                    curr_pop_behave=self.population_behaviors, 
+                                                    novelty_archive=self.novelty_archive)
+                            next_population.append(individual)
+                i += 2
+
+            # Combine the population (mu+lambda)
+            combined_population = next_population[:lambda_pop] + self.population            
+            combined_population.sort(key=lambda ind: ind.total_fitness, reverse=True)
+
+            # Update the population
+            self.population = combined_population[:self.pop_size]
+            self.pop_size = len(self.population)
+
+        return self.best_fitness_list, self.diversity_list, global_optimum_fitness_list, self.collapse_events
+    
+def testing():
+    # Suppose we have a peak at position [1, 0, 1, 0, 1]
+    peak_position = np.array([1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1])
+    peak = bf.Peak(position=peak_position, height=100, width=10)
+
+    # Create test genomes
+    genome_same = np.array([1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1])  # Distance 0
+    genome_close = np.array([0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1])  # Distance 1
+    genome_far = np.array([0, 1, 1, 0, 1, 0, 0, 1, 1, 1, 1, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 1, 1, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 0, 0, 1, 0, 0, 1, 1, 1, 0, 1, 0])    # Distance 5
+
+    # Compute distance
+    distance_same = np.sum(genome_same != peak.position)
+    distance_close = np.sum(genome_close != peak.position)
+    distance_far = np.sum(genome_far != peak.position)
+    
+    # Compute fitness
+    fitness_same = peak.height * np.exp(- (distance_same ** 2) / (2 * (peak.width ** 2)))  # Should be 100
+    fitness_close = peak.height * np.exp(- (distance_close ** 2) / (2 * (peak.width ** 2)))  # Less than 100
+    fitness_far = peak.height * np.exp(- (distance_far ** 2) / (2 * (peak.width ** 2)))    # Much less than 100
+    
+    print(fitness_same, fitness_close, fitness_far)
+
+if __name__ == "__main__":
+    
+    # ---------------------- MovingPeaksLandscape ---------------------- #
+    
+    # Get args
+    args = util.set_args()
+    
+    landscape = bf.MovingPeaksLandscape(args)
+    
+    # Set file plotting name
+    term1 = f"{args.bench_name}/NoveltyCollapseKinship/Pop:{args.pop_size}_MR:{args.mutation_rate}_"
+    term2 = f"G:{args.generations}_Kc:{args.max_kinship}_TSize:{args.tournament_size}_Dim:{args.dimensions}_"
+    term3 = f"MPLShift:{args.mpl_shift_interval}_FitW:{args.fit_weight}_NovW:{args.novelty_weight}_Ann:{args.archive_nn}_"
+    term4 = f"ArcT:{args.archive_threshold}" 
+    
+    args.config_plot = term1 + term2 + term3 + term4
+    # Run Individual
+    # args.inbred_threshold = 10
+    # individual_ga_run(args, landscape, args.inbred_threshold)
+    
+    # # Run experiments
+    print("Running GA with NO Inbreeding Mating...")
+    results_no_inbreeding = exp.multiple_runs_experiment(args, landscape, args.inbred_threshold)
+
+    print("Running GA with Inbreeding Mating...")
+    results_inbreeding = exp.multiple_runs_experiment(args, landscape, None)
+
+    # # # Plot experiments
+    gs_list, fit_list, div_list, label_list = plot.collect_bootstrapping_data(args, results_no_inbreeding, results_inbreeding)
+    plot.plot_multiple_runs_MPL_global_optima(args, gs_list, fit_list, div_list, label_list)
+    
+    # plot.plot_all(args, gs_list, fit_list, label_list, x_label='Generations', y_label='Fitness', title=f'Inbreeding vs no Inbreeding w/ PopSize: {args.pop_size} & MutRate: {args.mutation_rate}')
+    # plot.plot_all(args, gs_list, div_list, label_list, x_label='Generations', y_label='Diversity', title=f'Inbreeding vs no Inbreeding w/ PopSize: {args.pop_size} & MutRate: {args.mutation_rate}')
+    
+    # ---------------------- Other ---------------------- #
+    
+    # Create an instance of the Landscape
+    # landscape = bf.NKLandscape(n=args.N_NKlandscape, k=args.K_NKlandscape)
+    # landscape = bf.Jump(args)
+    # landscape = bf.DeceptiveLeadingBlocks(args)
+    # landscape = bf.Rastrigin(args)
+    
+# # Check for population collapse
             # if self.args.bench_name == 'MovingPeaksLandscape':
             #     # Check for population collapse condition
             #     if diversity < self.args.collapse_threshold:
@@ -434,61 +520,9 @@ class GeneticAlgorithmRugged:
             #         # Genetic Collapse: Occurs when diversity is significantly reduced, making the population vulnerable to being trapped in local optima
             #         self.collapse_events.append(gen + 1)
             #         print(f"Generation {gen + 1}: Diversity {diversity:.4f} below threshold. Replaced {num_to_replace} individuals.")
-
-            # Tournament selection.
-            selected = self.tournament_selection(self.tournament_size)
-        
-            # Selection            
-            next_population = []
-            lambda_pop = self.pop_size * 2
-            i = 0
-            while i < lambda_pop: # Used to be len(selected)
-                parent1 = selected[i % len(selected)]
-                parent2 = selected[(i+1) % len(selected)]
-                offspring = self.crossover(parent1, parent2)
-
-                if offspring[0] is not None and offspring[1] is not None:
-                    
-                    # Mutate offspring
-                    self.mutate(offspring[0])
-                    self.mutate(offspring[1])        
-                    next_population.extend(offspring)
-                    
-                else:
-                    if self.inbred_threshold is None:
-                        next_population.append(copy.deepcopy(parent1))
-                        next_population.append(copy.deepcopy(parent2))
-                    else:
-                        genes = np.random.randint(2, size=self.dimensions)
-                        individual = Individual(genes, generation=gen+1, 
-                                                landscape=self.landscape,
-                                                curr_pop_behave=self.population_behaviors, 
-                                                novelty_archive=self.novelty_archive)
-
-                        next_population.append(individual)
-                        
-                        if len(next_population) < self.pop_size:
-                            genes = np.random.randint(2, size=self.dimensions)
-                            individual = Individual(genes, generation=gen+1, 
-                                                    landscape=self.landscape,
-                                                    curr_pop_behave=self.population_behaviors, 
-                                                    novelty_archive=self.novelty_archive)
-                            next_population.append(individual)
-                i += 2
-                
-            # Update the population
-            # self.population = next_population[:self.pop_size]
-            # self.pop_size = len(self.population)
-            
-            # Combine the population (mu+lambda)
-            combined_population = next_population[:lambda_pop] + self.population            
-            combined_population.sort(key=lambda ind: ind.total_fitness, reverse=True)
-
-            # Update the population
-            self.population = combined_population[:self.pop_size]
-            self.pop_size = len(self.population)
-
-            # ---------------------- Complex selection with collapse ---------------- #
+    
+    
+# ---------------------- Complex selection with collapse ---------------- #
             
             # Selection
             # individuals_needing_mates = selected.copy()
@@ -561,47 +595,31 @@ class GeneticAlgorithmRugged:
             
             # self.pop_size = len(self.population)
             # print(f"New pop size: {self.pop_size}")
-
-        return self.best_fitness_list, self.diversity_list, global_optimum_fitness_list, self.collapse_events
-    
-
-if __name__ == "__main__":
-    
-    # ---------------------- MovingPeaksLandscape ---------------------- #
-    
-    # Get args
-    args = util.set_args()
-    
-    # Double-check special case dimension hyperparameter
-    args.dimensions = args.N_NKlandscape  # Genome length
-
-    landscape = bf.MovingPeaksLandscape(args)
-    
-    # Set file plotting name
-    args.config_plot = f"{args.bench_name}/NoveltyCollapseKinship/Pop:{args.pop_size}_MR:{args.mutation_rate}_G:{args.generations}_Kc{args.max_kinship}_TSize:{args.tournament_size}_N:{args.N_NKlandscape}_K:{args.K_NKlandscape}" 
-
-    # Run Individual
-    # args.inbred_threshold = 10
-    # individual_ga_run(args, landscape, args.inbred_threshold)
-    
-    # # Run experiments
-    print("Running GA with NO Inbreeding Mating...")
-    results_no_inbreeding = exp.multiple_runs_experiment(args, landscape, args.inbred_threshold)
-
-    print("Running GA with Inbreeding Mating...")
-    results_inbreeding = exp.multiple_runs_experiment(args, landscape, None)
-
-    # # # Plot experiments
-    gs_list, fit_list, div_list, label_list = plot.collect_bootstrapping_data(args, results_no_inbreeding, results_inbreeding)
-    plot.plot_multiple_runs_MPL_global_optima(args, gs_list, fit_list, div_list, label_list)
-    
-    # plot.plot_all(args, gs_list, fit_list, label_list, x_label='Generations', y_label='Fitness', title=f'Inbreeding vs no Inbreeding w/ PopSize: {args.pop_size} & MutRate: {args.mutation_rate}')
-    # plot.plot_all(args, gs_list, div_list, label_list, x_label='Generations', y_label='Diversity', title=f'Inbreeding vs no Inbreeding w/ PopSize: {args.pop_size} & MutRate: {args.mutation_rate}')
-    
-    # ---------------------- Other ---------------------- #
-    
-    # Create an instance of the Landscape
-    # landscape = bf.NKLandscape(n=args.N_NKlandscape, k=args.K_NKlandscape)
-    # landscape = bf.Jump(args)
-    # landscape = bf.DeceptiveLeadingBlocks(args)
-    # landscape = bf.Rastrigin(args)
+            
+        
+            # distance = self.genetic_distance(parent1, parent2)
+            # if distance < self.inbred_threshold: # the bigger the allowed distance, the farther apart the parents need to be
+            #     return None, None
+            
+            
+        # def study_inbred_chances(self, gen):
+        
+        # print(f"GEN: {gen+1}. Studying inbreeding relationship")
+        # i = 0
+        # true_mating = 0
+        # false_mating = 0
+        # while i < len(self.population):
+        #     parent1 = self.population[i]
+        #     parent2 = self.population[(i + 1) % len(self.population)]
+        #     f = self.kinship_coefficient(parent1, parent2) 
+        #     mate = f < self.max_kinship
+        #     if mate:
+        #         true_mating += 1
+        #     else:
+        #         false_mating += 1
+        #     print(f"Individual {i+1} and {i+2} have kinship coeff: {f}. Can they mate? {mate}")
+            
+        #     i += 2
+            
+        # print(f"There were {true_mating} pairs that can mate.")
+        # print(f"There were {false_mating} pairs that cannot mate.\n\n")

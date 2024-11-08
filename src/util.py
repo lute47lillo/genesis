@@ -34,10 +34,16 @@ def set_args():
                             Minimum genetic (Hamming) distance required to allow mating', default=5)
     argparser.add_argument('--tournament_size', type=int, help='Nº of individuals to take part in the Tournament selection', default=3)
     argparser.add_argument('--exp_num_runs', type=int, help='Nº of experimental runs. (Fixed hyperparameters)', default=5)
-    argparser.add_argument('--dimensions', type=int, help='GA dimensions', default=10) 
+    argparser.add_argument('--dimensions', type=int, help='GA dimensions. Used in Rugged benchmarks like MPL', default=100) 
     argparser.add_argument('--collapse_threshold', type=int, help='TODO', default=0.2) 
     argparser.add_argument('--collapse_fraction', type=int, help='TODO', default=0.1) 
     argparser.add_argument('--mpl_shift_interval', type=int, help='nº of generations for shifting global maximum in the MovingPeaksLandscape', default=30) 
+    
+    # Novelty Archive hyperparameters
+    argparser.add_argument('--archive_nn', type=int, help='Number of nearest neighbors to consider for novelty calculation', default=20)
+    argparser.add_argument('--archive_threshold', type=int, help='Minimum distance threshold for considering behaviors as novel', default=0.1) 
+    argparser.add_argument('--fit_weight', type=float, help='Weight given to pure-fitness calculating individual total fitness', default=1.0)
+    argparser.add_argument('--novelty_weight', type=float, help='Weight given to novelty calculating individual total fitness', default=1.0)
     
     # Genetic Programming variables
     argparser.add_argument('--max_depth', type=int, help='GP Tree maximum depth', default=15)
@@ -344,36 +350,67 @@ def create_padded_df(data, metric, run_ids):
 # ---------------------- Rugged Landscape Functions ------------------------- #
 
 def compute_distance_to_nearest_peak(genome, landscape):
-        """
-            Compute the Euclidean distance from a position to the nearest peak in Moving Peaks Landscape
-
-            Parameters:
-            - position (numpy.ndarray): The position of the individual in the search space.
-
-            Returns:
-            - distance (float): The shortest Euclidean distance to any peak.
-        """
-        position = np.sum(genome)
-        peaks = landscape.peaks  # Access peaks directly from the landscape
-        if not peaks:
-            return float('inf')  # No peaks defined
-
-        distances = [
-            min(abs(peak.position - position), landscape.n - abs(peak.position - position))
-            for peak in peaks
-        ]
-        return min(distances)
-    
-def extract_behavior(genome, landscape):
     """
-        Extract the behavior descriptor for an individual based on its genes.
+        Definition
+        -----------
+            Compute the Hamming distance from the genome to the nearest peak in the binary Moving Peaks Landscape.
 
         Parameters:
-        - genes (numpy.ndarray): The genes of the individual.
+        ------------
+            - genome (numpy.ndarray): The genome of the individual (binary array).
+            - landscape (MovingPeaksLandscape): The landscape object containing the peaks.
 
         Returns:
-        - behavior (list or numpy.ndarray): The behavior descriptor.
+        ---------
+            - distance (int): The minimum Hamming distance to any peak.
     """
-    distance = compute_distance_to_nearest_peak(genome, landscape)
-    behavior = [distance]  # Behavior can be a list with the distance
+    # Access peaks directly from the landscape
+    peaks = landscape.peaks  
+    if not peaks:
+        return float('inf')  # No peaks defined
+
+    # Get Hamming distance
+    distances = [
+        np.sum(genome != peak.position)  
+        for peak in peaks
+    ]
+    return min(distances)
+    
+# def extract_behavior(genome, landscape):
+#     """
+#         Extract the behavior descriptor for an individual based on its genes.
+
+#         Parameters:
+#         - genes (numpy.ndarray): The genes of the individual.
+
+#         Returns:
+#         - behavior (list or numpy.ndarray): The behavior descriptor.
+#     """
+#     distance = compute_distance_to_nearest_peak(genome, landscape)
+#     behavior = [distance]  # Behavior can be a list with the distance
+#     return behavior
+
+def extract_behavior(genome, landscape):
+    peaks = landscape.peaks
+    distances = [np.sum(genome != peak.position) for peak in peaks]
+    min_distance = min(distances)
+    closest_peak_index = distances.index(min_distance)
+    normalized_distance = min_distance / landscape.n  # Normalize by genome length
+    behavior = (closest_peak_index, normalized_distance)
     return behavior
+
+def behavior_distance(b1, b2):
+    """
+        Definition
+        -----------
+        
+        Parameters
+        -----------
+            - b1 and b2 (tuples): (closest_peak_index, normalized_distance)
+    """
+    
+    peak_index_distance = 0 if b1[0] == b2[0] else 1
+    distance_difference = abs(b1[1] - b2[1])
+    
+    # You can weight the components differently if needed
+    return peak_index_distance + distance_difference
