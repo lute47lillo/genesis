@@ -173,6 +173,7 @@ class GeneticAlgorithmRugged:
         self.population_behaviors = []
         self.diversity_list = []
         self.collapse_events = []
+        self.global_optimum_fitness_list = []
         
         # Others
         self.landscape = landscape
@@ -347,7 +348,6 @@ class GeneticAlgorithmRugged:
         
         # Initialize the population
         self.initialize_population()
-        global_optimum_fitness_list = []
 
         for gen in range(self.generations):
             # self.study_inbred_chances(gen)
@@ -364,17 +364,16 @@ class GeneticAlgorithmRugged:
                 self.calculate_fitness_and_novelty()
                 best_individual = max(self.population, key=lambda ind: ind.total_fitness)
                 self.best_fitness_list.append(best_individual.total_fitness)
+                
+                # Record global optimum fitness after shifting
+                self.global_optimum_fitness_list.append(self.landscape.global_optimum.height)
             else:
                 
                 self.calculate_fitness() # TODO Other methods
                 best_fitness = max(self.population, key=lambda ind: ind.fitness).fitness
                 self.best_fitness_list.append(best_fitness)
-                        
-            # Record global optimum fitness
-            if self.args.bench_name == 'MovingPeaksLandscape':
-                global_optimum_fitness = self.landscape.get_current_global_optimum_fitness()
-                global_optimum_fitness_list.append(global_optimum_fitness)
-
+         
+        
             # Calculate diversity by the heterozygosity at each locus
             diversity = self.measure_diversity()
             self.diversity_list.append(diversity)
@@ -430,7 +429,7 @@ class GeneticAlgorithmRugged:
             self.population = combined_population[:self.pop_size]
             self.pop_size = len(self.population)
 
-        return self.best_fitness_list, self.diversity_list, global_optimum_fitness_list, self.collapse_events
+        return self.best_fitness_list, self.diversity_list, self.global_optimum_fitness_list, self.collapse_events
     
 def testing():
     # Suppose we have a peak at position [1, 0, 1, 0, 1]
@@ -475,10 +474,10 @@ if __name__ == "__main__":
     # individual_ga_run(args, landscape, args.inbred_threshold)
     
     # # Run experiments
-    print("Running GA with NO Inbreeding Mating...")
+    print("\n#---------- Running GA with NO Inbreeding Mating... ----------#")
     results_no_inbreeding = exp.multiple_runs_experiment(args, landscape, args.inbred_threshold)
 
-    print("Running GA with Inbreeding Mating...")
+    print("\n#---------- Running GA with Inbreeding Mating... ----------#")
     results_inbreeding = exp.multiple_runs_experiment(args, landscape, None)
 
     # # # Plot experiments

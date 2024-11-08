@@ -73,7 +73,24 @@ def multiple_runs_experiment(args, landscape, inbred_threshold):
             'global_optimum': global_optimum_fitness_list, 
             'collapse_events': collapse_events
         }
-        print(f"Population Size {args.pop_size} & Mutation Rate: {args.mutation_rate}: Best Fitness {best_fitness_list[-1]:.4f} ~ Best Diversity {diversity_list[-1]:.4f}")
+
+        print(f"\nExperiment Run {run+1}. Population Size {args.pop_size} & Mutation Rate: {args.mutation_rate}")
+        
+        # TODO: Catch error for some number of shifts with respect to the print
+        n_shifts = int(args.generations / args.mpl_shift_interval)
+        shifts_fit_avg, shifts_gl_avf, shifts_div_avg = 0, 0, 0
+        for n in range(1, n_shifts+1): 
+            idx = (args.mpl_shift_interval)*n
+            if idx == args.generations:
+                n_shifts -= 1 # for printing purposes
+                break
+            
+            shifts_fit_avg += best_fitness_list[idx]
+            shifts_gl_avf += global_optimum_fitness_list[idx]
+            shifts_div_avg += diversity_list[idx]
+            print(f"\tPeak Shift {n}. Best Fitness {best_fitness_list[idx]:.4f} ({global_optimum_fitness_list[idx]:.4f}) ~ Best Diversity {diversity_list[idx]:.4f}")
+        
+        print(f"Average Across Peak Shifts. Fitness: {(shifts_fit_avg/n_shifts):.4f} ({(shifts_gl_avf/n_shifts):.4f}) ~ Diversity: {(shifts_div_avg/n_shifts):.4f}")
         
     return results
 

@@ -308,9 +308,9 @@ class MovingPeaksLandscape:
             peak.position[flip_indices] = 1 - peak.position[flip_indices]
             
             # Adjust height and width
-            peak.height += np.random.normal(0, 0.5)
+            peak.height += np.random.normal(0, 2.5)
             peak.height = np.clip(peak.height, self.h_min, self.h_max)
-            peak.width += np.random.normal(0, 0.5)
+            peak.width += np.random.normal(0, 1)
             peak.width = np.clip(peak.width, self.w_min, self.w_max)
             
         # print(f"Shifted Peaks:")
@@ -330,16 +330,6 @@ class MovingPeaksLandscape:
             self.global_optimum = None
             return
         self.global_optimum = max(self.peaks, key=lambda peak: peak.height)
-
-    def get_current_global_optimum_fitness(self):
-        """
-            Definition
-            -----------
-                Return the global optimum at any given time.
-        """
-        if self.global_optimum is None:
-            return None
-        return self.global_optimum.height
 
     def get_fitness(self, genome):
         """
