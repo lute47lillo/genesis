@@ -377,9 +377,11 @@ class GeneticAlgorithmRugged:
             
             # Add-on needed only for MovingPeaksLandscape
             if self.args.bench_name == 'MovingPeaksLandscape':
-                if gen % self.landscape.shift_interval == 0 and gen != 0:
-                    print(f"\nGeneration of shift: {gen+1}\n")
-                    self.landscape.shift_peaks()
+                if gen % self.landscape.shift_interval == 0:# and gen != 0:
+                    self.landscape.apply_shift_peaks(gen) # When using same peaks.
+                    # self.landscape.shift_peaks() # When using independent peaks for inbreeding and no inbreeding treatments
+                # elif gen == 0:
+                #     self.landscape.peaks = self.landscape.original_peaks
 
             # Calculate fitness and novelty
             if self.args.bench_name == 'MovingPeaksLandscape':
@@ -388,7 +390,7 @@ class GeneticAlgorithmRugged:
                 self.calculate_fitness_and_novelty()
                 best_individual = max(self.population, key=lambda ind: ind.fitness)
                 self.best_fitness_list.append(best_individual.fitness)
-                print(f"Generation {gen+1}. Fitness: {best_individual.fitness}. Novelty: {best_individual.total_fitness - best_individual.fitness}. Total Finess: {best_individual.total_fitness}")
+                # print(f"Generation {gen+1}. Fitness: {best_individual.fitness}. Novelty: {best_individual.total_fitness - best_individual.fitness}. Total Finess: {best_individual.total_fitness}")
                             
                 # Record global optimum fitness after shifting
                 self.global_optimum_fitness_list.append(self.landscape.global_optimum.height)
@@ -476,28 +478,6 @@ class GeneticAlgorithmRugged:
         #     print(f"Gen {k} ~ Individuals added: {v}")
 
         return self.best_fitness_list, self.diversity_list, self.global_optimum_fitness_list, self.collapse_events
-    
-def testing():
-    # Suppose we have a peak at position [1, 0, 1, 0, 1]
-    peak_position = np.array([1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1])
-    peak = bf.Peak(position=peak_position, height=100, width=10)
-
-    # Create test genomes
-    genome_same = np.array([1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1])  # Distance 0
-    genome_close = np.array([0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1])  # Distance 1
-    genome_far = np.array([0, 1, 1, 0, 1, 0, 0, 1, 1, 1, 1, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 1, 1, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 0, 0, 1, 0, 0, 1, 1, 1, 0, 1, 0])    # Distance 5
-
-    # Compute distance
-    distance_same = np.sum(genome_same != peak.position)
-    distance_close = np.sum(genome_close != peak.position)
-    distance_far = np.sum(genome_far != peak.position)
-    
-    # Compute fitness
-    fitness_same = peak.height * np.exp(- (distance_same ** 2) / (2 * (peak.width ** 2)))  # Should be 100
-    fitness_close = peak.height * np.exp(- (distance_close ** 2) / (2 * (peak.width ** 2)))  # Less than 100
-    fitness_far = peak.height * np.exp(- (distance_far ** 2) / (2 * (peak.width ** 2)))    # Much less than 100
-    
-    print(fitness_same, fitness_close, fitness_far)
 
 if __name__ == "__main__":
     

@@ -2,6 +2,33 @@ import unittest
 import random
 import numpy as np
 import copy
+import benchmark_factory as bf
+
+# ----------------- Rugged Landscapes ----------------- #
+
+def testing():
+    # Suppose we have a peak at position [1, 0, 1, 0, 1]
+    peak_position = np.array([1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1])
+    peak = bf.Peak(position=peak_position, height=100, width=10)
+
+    # Create test genomes
+    genome_same = np.array([1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1])  # Distance 0
+    genome_close = np.array([0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1])  # Distance 1
+    genome_far = np.array([0, 1, 1, 0, 1, 0, 0, 1, 1, 1, 1, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 1, 1, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 0, 0, 1, 0, 0, 1, 1, 1, 0, 1, 0])    # Distance 5
+
+    # Compute distance
+    distance_same = np.sum(genome_same != peak.position)
+    distance_close = np.sum(genome_close != peak.position)
+    distance_far = np.sum(genome_far != peak.position)
+    
+    # Compute fitness
+    fitness_same = peak.height * np.exp(- (distance_same ** 2) / (2 * (peak.width ** 2)))  # Should be 100
+    fitness_close = peak.height * np.exp(- (distance_close ** 2) / (2 * (peak.width ** 2)))  # Less than 100
+    fitness_far = peak.height * np.exp(- (distance_far ** 2) / (2 * (peak.width ** 2)))    # Much less than 100
+    
+    print(fitness_same, fitness_close, fitness_far)
+    
+# ----------------- Genetic Programming -------------- #
 
 class Node:
     def __init__(self, value, children=None):
