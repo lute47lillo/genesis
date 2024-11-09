@@ -149,7 +149,7 @@ def plot_individual_MPL_global_optima(args, best_fitness_list, diversity_list, g
 def plot_multiple_runs_MPL_global_optima(args, ks_list, best_fitness_list, diversity_list, label_list, collapse_threshold=0.2):
     
     # Plotting Results
-    plt.figure(figsize=(14, 6))
+    plt.figure(figsize=(24, 12))
     linestyles = ['-', ':', '-', ':'] # One for each methods
 
     # Best Fitness Over Generations 
@@ -255,12 +255,13 @@ def collect_bootstrapping_data(args, results_no_inbreeding, results_inbreeding):
         gen_noI, gopt_noI = plot_mean_and_bootstrapped_ci(results_no_inbreeding, key='global_optimum')
         gs_list.append(gen_noI)
         fit_list.append(gopt_noI)
-        label_list.append("Global Optimum Fitness NO Inbreeding")
+        label_list.append("Global Optimum Fitness")
         
-        gen_I, gopt_I = plot_mean_and_bootstrapped_ci(results_inbreeding, key='global_optimum')
-        gs_list.append(gen_I)
-        fit_list.append(gopt_I)
-        label_list.append("Global Optimum Fitness Inbreeding")
+        # Only used if different global optimums per experiment
+        # gen_I, gopt_I = plot_mean_and_bootstrapped_ci(results_inbreeding, key='global_optimum')
+        # gs_list.append(gen_I)
+        # fit_list.append(gopt_I)
+        # label_list.append("Global Optimum Fitness Inbreeding")
         
         # # Genetic Collapse
         # gen_col_no, col_no = plot_mean_and_bootstrapped_ci(results_no_inbreeding, key='collapse_events')

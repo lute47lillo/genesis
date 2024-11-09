@@ -469,7 +469,7 @@ class GeneticAlgorithmRugged:
             self.population = combined_population[:self.pop_size]
             self.pop_size = len(self.population)
 
-        print(f"\nCrossovers")
+        # print(f"\nCrossovers")
         # for k,v in cross_count.items():
         #     print(f"Gen {k} ~ Offspring Crossovers: {v}")
             

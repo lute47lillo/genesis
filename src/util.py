@@ -9,7 +9,6 @@ from sympy import symbols, sympify, simplify, expand
 from sympy.core import Function
 import sympy
 
-
 def set_seed(seed):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
@@ -26,6 +25,7 @@ def set_args():
     argparser.add_argument('--benchmark', type=str, help='Optimization function to run', default="rastrigin")
     argparser.add_argument('--bench_name', type=str, help='Problem landscape name (ie: MovingPeaksLandscape)', default="none")
     argparser.add_argument('--config_plot', type=str, help='plot info details', default="none")
+    argparser.add_argument('--current_run', type=int, help='Current experimental run if multiple runs', default=0)
     
     # Experimental Hyperparameters
     argparser.add_argument('--pop_size', type=int, help='Population Size (could be used as fixed parameter in many settings)', default=100)

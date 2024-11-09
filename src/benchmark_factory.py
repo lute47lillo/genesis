@@ -1,9 +1,9 @@
 import numpy as np
-import matplotlib.pyplot as plt
 import copy
-import os
 import math
 import numpy as np
+import util
+import random
 
 class NKLandscape:
     """ N-K Fitness Landscape """
@@ -283,7 +283,6 @@ class MovingPeaksLandscape:
         self.shift_interval = args.mpl_shift_interval       # Generations between shifts
         self.n_shifts = int(self.args.generations / self.args.mpl_shift_interval)
         self.peaks = []
-        self.initialize_peaks()
         self.pre_compute_shifted_peaks()
         args.bench_name = 'MovingPeaksLandscape'
         
@@ -307,41 +306,53 @@ class MovingPeaksLandscape:
             -----------
                 Precompute the shifting effect on the Peaks in order to use the same Peaks and Landscape for both inbreeding and no inbreeding controls.
         """
-        # Save a copy of the original initialization to re-start for the second treatment.
-        self.original_peaks = copy.deepcopy(self.peaks)
+        # Init peaks
+        self.initialize_peaks()
         
         # Init dictionary to story the peaks at every shift with a deep copy
         temp_peaks = copy.deepcopy(self.peaks)
+        
+        # Initialize the pre_peaks dictionary to store data for all runs
         self.pre_peaks = {}
         
-        # Base Case, initialize the original shifts
-        self.pre_peaks[0] = {'peaks': []}
-        for peak in temp_peaks:
-            self.pre_peaks[0]['peaks'].append(peak)
-        
-        # For all shifts, pre-calculate the shifts
-        for shift in range(1, self.n_shifts+1):
-            self.pre_peaks[shift] = {
-                'peaks': []
-            }
-            shifted_peaks = copy.deepcopy(temp_peaks)
-            for peak in shifted_peaks:
-                
-                # Flip a random number of bits to shift the peak
-                num_bits_to_flip = np.random.randint(1, int(0.3 * self.n) + 1)  # Flip up to N% of bits. TODO: Adjust as hyperparameter for difficulty
-                flip_indices = np.random.choice(self.n, num_bits_to_flip, replace=False)
-                peak.position[flip_indices] = 1 - peak.position[flip_indices]
-                
-                # Adjust height and width
-                peak.height += np.random.normal(0, 2.5)
-                peak.height = np.clip(peak.height, self.h_min, self.h_max)
-                peak.width += np.random.normal(0, 0.5)
-                peak.width = np.clip(peak.width, self.w_min, self.w_max)
+        for run in range(0, self.args.exp_num_runs):
             
-                # Append the updated peaks at any given shift-time.
-                self.pre_peaks[shift]['peaks'].append(peak)
+            # Reinitialize the seed so every run is different
+            util.set_seed(random.randint(0, 9999))
+            
+            # Deep copy the original peaks to avoid mutating them across runs
+            temp_peaks = copy.deepcopy(self.peaks)
+            self.pre_peaks[run] = {}
+            
+            # Base Case: Shift 0 (original peaks)
+            self.pre_peaks[run][0] = {'peaks': []}
+            for peak in temp_peaks:
+                # It's important to deepcopy each peak if they are mutable
+                self.pre_peaks[run][0]['peaks'].append(copy.deepcopy(peak))
+        
+            # For all shifts, pre-calculate the shifts
+            for shift in range(1, self.n_shifts+1):
+                # Init shift dict and create a deep copy
+                self.pre_peaks[run][shift] = {'peaks': []}
+                shifted_peaks = copy.deepcopy(temp_peaks)
+                
+                for peak in shifted_peaks:
+                    
+                    # Flip a random number of bits to shift the peak
+                    num_bits_to_flip = np.random.randint(1, int(0.3 * self.n) + 1)  # Flip up to N% of bits. TODO: Adjust as hyperparameter for difficulty
+                    flip_indices = np.random.choice(self.n, num_bits_to_flip, replace=False)
+                    peak.position[flip_indices] = 1 - peak.position[flip_indices]
+                    
+                    # Adjust height and width
+                    peak.height += np.random.normal(0, 2.5)
+                    peak.height = np.clip(peak.height, self.h_min, self.h_max)
+                    peak.width += np.random.normal(0, 0.5)
+                    peak.width = np.clip(peak.width, self.w_min, self.w_max)
+                
+                    # Append the updated peaks at any given shift-time.
+                    self.pre_peaks[run][shift]['peaks'].append(copy.deepcopy(peak))
 
-            temp_peaks = shifted_peaks
+                temp_peaks = shifted_peaks
         
         # Print for debug
         # for shift in range(self.n_shifts):
@@ -355,7 +366,7 @@ class MovingPeaksLandscape:
         curr_shift = int(curr_gen / self.shift_interval) 
         
         # Update peaks
-        self.peaks = copy.deepcopy(self.pre_peaks[curr_shift]['peaks'])
+        self.peaks = copy.deepcopy(self.pre_peaks[self.args.current_run][curr_shift]['peaks'])
         
         # Update global
         self.update_global_optimum()            

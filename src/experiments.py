@@ -3,6 +3,7 @@ from ga_optimization import GeneticAlgorithmOpt
 from genetic_programming import GeneticAlgorithmGP
 import plotting as plot
 import util as util
+import random
 
 # -------------------------- Optimization Functions ------------------------------ #
 
@@ -60,6 +61,7 @@ def multiple_runs_experiment(args, landscape, max_kinship):
     # Initialize Novelty Archive
     results = {}
     for run in range(args.exp_num_runs):
+        args.current_run = run
         ga = GeneticAlgorithmRugged(
             args=args,
             landscape=landscape,
