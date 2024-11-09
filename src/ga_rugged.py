@@ -16,7 +16,7 @@ import experiments as exp
 class Individual:
     
     # TODO: Landscape could be initialize since terminal line
-    def __init__(self, genes, curr_pop_behave, novelty_archive, landscape=None, id=None, parents=None, generation=0):
+    def __init__(self, args, genes, curr_pop_behave, novelty_archive, landscape=None, id=None, parents=None, generation=0):
         """
             Definition
             -----------
@@ -24,7 +24,7 @@ class Individual:
                 - id: A unique identifier for each individual.
                 - parents=None: A set containing the IDs of all ancestors.
         """
-        # self.genes = genes
+        self.args = args
         self.genes = genes if genes is not None else []
         self.fitness = None
         self.novelty = None
@@ -35,6 +35,7 @@ class Individual:
         self.ancestors = set() # IDs of all ancestors
         self.generation = generation
         self.landscape = landscape
+        self.novelty_max = 2  # Max behavior distance (1 for peak index + 1 for normalized distance)
 
         # Initial generation individual
         if not self.parents:
@@ -49,21 +50,31 @@ class Individual:
         
         # Set the initial fitness and novelty of the individual wrt novelty archive and the population behaviors
         self.get_novel_fit_indiv(curr_pop_behave, novelty_archive)
+
                 
     def get_novel_fit_indiv(self, population_behaviors, novelty_archive):
         
-        # Set landscape-based fitness
+        # Set importance values. Default to 1.0
+        alpha = self.args.fit_weight        # Weight for fitness
+        beta = self.args.novelty_weight     # Weight for novelty
+        
+        fitness_max = max(peak.height for peak in self.landscape.peaks)  # Max peak height
+
+        # Compute scaling factor
+        scaling_factor = (fitness_max - 0) / (self.novelty_max - 0) # 0s represent minimum value
+        
+        # Get landscape-based fitness
         self.fitness = self.landscape.get_fitness(self.genes)
         
-        # Extract behavior of individual
-        self.behavior = util.extract_behavior(self.genes, self.landscape)
-                
         # Get novelty
+        self.behavior = util.extract_behavior(self.genes, self.landscape)
         self.novelty = novelty_archive.compute_novelty(self.behavior, population_behaviors)
-        
-        # Combine fitness and novelty normalizing over M of MPL
-        novelty_fitness = self.novelty / self.landscape.m
-        self.total_fitness = self.fitness + novelty_fitness
+
+        # Scale novelty to fitness range
+        novelty_scaled = self.novelty * scaling_factor
+
+        # Combine fitness and scaled novelty
+        self.total_fitness = alpha * self.fitness + beta * novelty_scaled
         
         # Add to the archive
         novelty_archive.add(self.behavior)
@@ -153,7 +164,7 @@ class NoveltyArchive:
 
 class GeneticAlgorithmRugged:
     
-    def __init__(self, args, landscape, bounds, inbred_threshold=None):
+    def __init__(self, args, landscape, bounds, max_kinship=None):
         
         # Hyperparameters
         self.args = args
@@ -163,7 +174,7 @@ class GeneticAlgorithmRugged:
         self.generations = args.generations
         self.mutation_rate = args.mutation_rate
         self.tournament_size = args.tournament_size
-        self.inbred_threshold = inbred_threshold
+        self.max_kinship = max_kinship
         self.initial_pop_size = self.pop_size
         self.max_kinship = args.max_kinship  # Threshold for kinship coefficient. 0.125 is first cousings. 0.0625 is second cousins
 
@@ -181,6 +192,7 @@ class GeneticAlgorithmRugged:
         
         # Initialize the Novelty Archive 
         self.novelty_archive = NoveltyArchive(threshold=args.archive_threshold, k=args.archive_nn, max_size=self.pop_size)
+        self.novelty_max = 2 # Maximum value of Novelty. Hardcoded value for scaling
         
     def log_ancestry(self, generation_number):
         if self.current_generation == generation_number:
@@ -194,7 +206,7 @@ class GeneticAlgorithmRugged:
         self.population = []
         for _ in range(self.pop_size):
             genes = np.random.randint(2, size=self.dimensions)
-            individual = Individual(genes, self.population_behaviors, self.novelty_archive, self.landscape)
+            individual = Individual(self.args, genes, self.population_behaviors, self.novelty_archive, self.landscape)
             self.population.append(individual)
 
     def calculate_fitness(self):
@@ -203,13 +215,19 @@ class GeneticAlgorithmRugged:
 
     def calculate_fitness_and_novelty(self):
         """
-            TODO: Implement 
-                            alpha = 1.0  # Weight for fitness
-                            beta = 1.0   # Weight for novelty           
+            Definition
+            -----------
+                Calculate combined fitness of Peak distance and novelty for a given population.         
         """
         # Set importance values. Default to 1.0
         alpha = self.args.fit_weight        # Weight for fitness
         beta = self.args.novelty_weight     # Weight for novelty
+
+        # Recalculate fitness_max based on current peak heights
+        fitness_max = max(peak.height for peak in self.landscape.peaks)
+
+        # Compute scaling factor
+        scaling_factor = fitness_max / self.novelty_max if self.novelty_max > 0 else 0
         
         # Collect behaviors for the current population
         population_behaviors = []
@@ -226,9 +244,9 @@ class GeneticAlgorithmRugged:
         # Compute novelty scores and update fitness
         for individual in self.population:
             individual.novelty = self.novelty_archive.compute_novelty(individual.behavior, population_behaviors)
-            
-            # Combine fitness and novelty normalizing over M of MPL
-            novelty_fitness = individual.novelty / self.landscape.m
+                        
+            # Scale novelty to fitness scale
+            novelty_fitness = individual.novelty * scaling_factor
             individual.total_fitness = alpha * individual.fitness + beta * novelty_fitness
             
             # Add to the archive
@@ -257,7 +275,7 @@ class GeneticAlgorithmRugged:
     def tournament_selection(self, k=3):
         selected = []
         for i in range(self.pop_size):
-            participants = np.random.choice(self.population, k)
+            participants = np.random.choice(self.population, k, replace=True) # Each participant is unique
             winner = max(participants, key=lambda ind: ind.total_fitness) # ind.total_fitness for novelty + fitness / fitness for just fitness
             selected.append(winner)
         return selected
@@ -267,7 +285,7 @@ class GeneticAlgorithmRugged:
     
     def crossover(self, parent1, parent2):
         # Calculate kinship coefficient
-        if self.inbred_threshold is not None:
+        if self.max_kinship is not None:
             f = self.kinship_coefficient(parent1, parent2)
             if f > self.max_kinship: # Large F kinship ratio prevents crossover. Prevent Mating
                 return None, None
@@ -279,6 +297,7 @@ class GeneticAlgorithmRugged:
 
         # Create offspring with updated ancestry
         child1 = Individual(
+            args=self.args,
             genes=child_genes1,
             parents=[parent1, parent2],
             generation=max(parent1.generation, parent2.generation) + 1,
@@ -287,6 +306,7 @@ class GeneticAlgorithmRugged:
             novelty_archive=self.novelty_archive
         )
         child2 = Individual(
+            args=self.args,
             genes=child_genes2,
             parents=[parent1, parent2],
             generation=max(parent1.generation, parent2.generation) + 1,
@@ -348,6 +368,8 @@ class GeneticAlgorithmRugged:
         
         # Initialize the population
         self.initialize_population()
+        cross_count = {}
+        inmigration_count = {}
 
         for gen in range(self.generations):
             # self.study_inbred_chances(gen)
@@ -356,15 +378,18 @@ class GeneticAlgorithmRugged:
             # Add-on needed only for MovingPeaksLandscape
             if self.args.bench_name == 'MovingPeaksLandscape':
                 if gen % self.landscape.shift_interval == 0 and gen != 0:
+                    print(f"\nGeneration of shift: {gen+1}\n")
                     self.landscape.shift_peaks()
 
             # Calculate fitness and novelty
             if self.args.bench_name == 'MovingPeaksLandscape':
                 
+                # Best individual is ranked for Pure-Fitness -> Distance to Peak.
                 self.calculate_fitness_and_novelty()
-                best_individual = max(self.population, key=lambda ind: ind.total_fitness)
-                self.best_fitness_list.append(best_individual.total_fitness)
-                
+                best_individual = max(self.population, key=lambda ind: ind.fitness)
+                self.best_fitness_list.append(best_individual.fitness)
+                print(f"Generation {gen+1}. Fitness: {best_individual.fitness}. Novelty: {best_individual.total_fitness - best_individual.fitness}. Total Finess: {best_individual.total_fitness}")
+                            
                 # Record global optimum fitness after shifting
                 self.global_optimum_fitness_list.append(self.landscape.global_optimum.height)
             else:
@@ -385,7 +410,9 @@ class GeneticAlgorithmRugged:
             next_population = []
             lambda_pop = self.pop_size * 2
             i = 0
+            count_true, count_false = 0,0
             while i < lambda_pop: # Used to be len(selected)
+            # while len(next_population) < self.pop_size:
                 parent1 = selected[i % len(selected)]
                 parent2 = selected[(i+1) % len(selected)]
                 offspring = self.crossover(parent1, parent2)
@@ -396,38 +423,57 @@ class GeneticAlgorithmRugged:
                     self.mutate(offspring[0])
                     self.mutate(offspring[1])        
                     next_population.extend(offspring)
+                    count_true += 1
                     
                 else:
                     # Append parents if Inbreeding is allowed
-                    if self.inbred_threshold is None: 
+                    if self.max_kinship is None: 
                         next_population.append(copy.deepcopy(parent1))
                         next_population.append(copy.deepcopy(parent2))
+                        count_false += 1
                     else:
                         # Introduce new individuals if inbreeding is not allowed
                         genes = np.random.randint(2, size=self.dimensions)
-                        individual = Individual(genes, generation=gen+1, 
+                        individual = Individual(self.args, genes, generation=gen+1, 
                                                 landscape=self.landscape,
                                                 curr_pop_behave=self.population_behaviors, 
                                                 novelty_archive=self.novelty_archive)
 
                         next_population.append(individual)
+                        count_false += 1
                         
                         if len(next_population) < self.pop_size:
                             genes = np.random.randint(2, size=self.dimensions)
-                            individual = Individual(genes, generation=gen+1, 
+                            individual = Individual(self.args, genes, generation=gen+1, 
                                                     landscape=self.landscape,
                                                     curr_pop_behave=self.population_behaviors, 
                                                     novelty_archive=self.novelty_archive)
                             next_population.append(individual)
+                            count_false += 1
                 i += 2
-
+                
+            cross_count[gen] = count_true
+            inmigration_count[gen] = count_false
+            # BUG: Probably few of next population are being chosen, given the combination
+            # of novelty and fitness and that we are just ranking. Maybe we have to select based on one thing?
             # Combine the population (mu+lambda)
-            combined_population = next_population[:lambda_pop] + self.population            
+            # self.population = next_population[:self.pop_size]
+            combined_population = next_population[:lambda_pop] + self.population # BUG: I had self.population before, but it had to be selected right?          
             combined_population.sort(key=lambda ind: ind.total_fitness, reverse=True)
 
-            # Update the population
+            # # print(f"Lenght of new population: {len(next_population)} + Length of population selected: {len(selected)}. Allowed {self.pop_size}")
+            # # exit()
+            # # Update the population
             self.population = combined_population[:self.pop_size]
             self.pop_size = len(self.population)
+
+        print(f"\nCrossovers")
+        # for k,v in cross_count.items():
+        #     print(f"Gen {k} ~ Offspring Crossovers: {v}")
+            
+        # print("\nAdding indiv")
+        # for k,v in inmigration_count.items():
+        #     print(f"Gen {k} ~ Individuals added: {v}")
 
         return self.best_fitness_list, self.diversity_list, self.global_optimum_fitness_list, self.collapse_events
     
@@ -475,7 +521,7 @@ if __name__ == "__main__":
     
     # # Run experiments
     print("\n#---------- Running GA with NO Inbreeding Mating... ----------#")
-    results_no_inbreeding = exp.multiple_runs_experiment(args, landscape, args.inbred_threshold)
+    results_no_inbreeding = exp.multiple_runs_experiment(args, landscape, args.max_kinship)
 
     print("\n#---------- Running GA with Inbreeding Mating... ----------#")
     results_inbreeding = exp.multiple_runs_experiment(args, landscape, None)

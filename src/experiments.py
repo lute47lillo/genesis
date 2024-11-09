@@ -50,7 +50,7 @@ def run_inbreeding_mutation_rates(args, mutation_rates, landscape, inbred_thresh
     
 # ---------------------------- Rugged Landscape Functions -------------------------- #
 
-def multiple_runs_experiment(args, landscape, inbred_threshold):
+def multiple_runs_experiment(args, landscape, max_kinship):
     """
         Definition
         -----------
@@ -64,7 +64,7 @@ def multiple_runs_experiment(args, landscape, inbred_threshold):
             args=args,
             landscape=landscape,
             bounds=None,
-            inbred_threshold=inbred_threshold
+            max_kinship=max_kinship
         )
         best_fitness_list, diversity_list, global_optimum_fitness_list, collapse_events = ga.run()
         results[run] = {
@@ -80,7 +80,7 @@ def multiple_runs_experiment(args, landscape, inbred_threshold):
         n_shifts = int(args.generations / args.mpl_shift_interval)
         shifts_fit_avg, shifts_gl_avf, shifts_div_avg = 0, 0, 0
         for n in range(1, n_shifts+1): 
-            idx = (args.mpl_shift_interval)*n
+            idx = (args.mpl_shift_interval)*n - 1
             if idx == args.generations:
                 n_shifts -= 1 # for printing purposes
                 break
@@ -94,9 +94,9 @@ def multiple_runs_experiment(args, landscape, inbred_threshold):
         
     return results
 
-def individual_ga_run(args, landscape, inbred_threshold):
+def individual_ga_run(args, landscape, max_kinship):
 
-    if inbred_threshold == None:
+    if max_kinship == None:
         print("Running GA with Inbreeding Mating...")
     else:
         print("Running GA with NO Inbreeding Mating...")
@@ -106,12 +106,12 @@ def individual_ga_run(args, landscape, inbred_threshold):
         args=args,
         landscape=landscape,
         bounds=None,
-        inbred_threshold=inbred_threshold
+        max_kinship=max_kinship
     )
     best_fitness_list, diversity_list, global_optimum_fitness_list, collapse_events = ga.run()
     plot.plot_individual_MPL_global_optima(args, best_fitness_list, diversity_list, global_optimum_fitness_list, collapse_events, collapse_threshold=0.2)
     
-def multiple_mrates_rugged_ga(args, mutation_rates, landscape, inbred_threshold):
+def multiple_mrates_rugged_ga(args, mutation_rates, landscape, max_kinship):
     """
         TODO: Generalize to be for all function experiments and choose within. As of now only work with ackley
     """
@@ -132,7 +132,7 @@ def multiple_mrates_rugged_ga(args, mutation_rates, landscape, inbred_threshold)
                 args=args,
                 landscape=landscape,
                 bounds=None,
-                inbred_threshold=inbred_threshold
+                max_kinship=max_kinship
             )
             
             best_fitness_list, diversity_list, global_optimum_fitness_list, collapse_events = ga_gp.run()

@@ -349,61 +349,27 @@ def create_padded_df(data, metric, run_ids):
     
 # ---------------------- Rugged Landscape Functions ------------------------- #
 
-def compute_distance_to_nearest_peak(genome, landscape):
-    """
-        Definition
-        -----------
-            Compute the Hamming distance from the genome to the nearest peak in the binary Moving Peaks Landscape.
-
-        Parameters:
-        ------------
-            - genome (numpy.ndarray): The genome of the individual (binary array).
-            - landscape (MovingPeaksLandscape): The landscape object containing the peaks.
-
-        Returns:
-        ---------
-            - distance (int): The minimum Hamming distance to any peak.
-    """
-    # Access peaks directly from the landscape
-    peaks = landscape.peaks  
-    if not peaks:
-        return float('inf')  # No peaks defined
-
-    # Get Hamming distance
-    distances = [
-        np.sum(genome != peak.position)  
-        for peak in peaks
-    ]
-    return min(distances)
-    
-# def extract_behavior(genome, landscape):
-#     """
-#         Extract the behavior descriptor for an individual based on its genes.
-
-#         Parameters:
-#         - genes (numpy.ndarray): The genes of the individual.
-
-#         Returns:
-#         - behavior (list or numpy.ndarray): The behavior descriptor.
-#     """
-#     distance = compute_distance_to_nearest_peak(genome, landscape)
-#     behavior = [distance]  # Behavior can be a list with the distance
-#     return behavior
-
 def extract_behavior(genome, landscape):
-    peaks = landscape.peaks
-    distances = [np.sum(genome != peak.position) for peak in peaks]
+    
+    # Get all distances
+    distances = [np.sum(genome != peak.position) for peak in landscape.peaks]
+    
+    # Get the minimum distance to any peak for getting closest peak
     min_distance = min(distances)
     closest_peak_index = distances.index(min_distance)
-    normalized_distance = min_distance / landscape.n  # Normalize by genome length
+    
+    # Normalize over the genome length
+    normalized_distance = min_distance / landscape.n  
     behavior = (closest_peak_index, normalized_distance)
+
     return behavior
 
 def behavior_distance(b1, b2):
     """
         Definition
         -----------
-        
+            Get the behavioral distance between 2 different behaviors of individuals. Maximum is 2.
+            
         Parameters
         -----------
             - b1 and b2 (tuples): (closest_peak_index, normalized_distance)

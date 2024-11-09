@@ -303,14 +303,14 @@ class MovingPeaksLandscape:
         for peak in self.peaks:
             
             # Flip a random number of bits to shift the peak
-            num_bits_to_flip = np.random.randint(1, int(0.1 * self.n) + 1)  # Flip up to N% of bits. TODO: Adjust as hyperparameter for difficulty
+            num_bits_to_flip = np.random.randint(1, int(0.3 * self.n) + 1)  # Flip up to N% of bits. TODO: Adjust as hyperparameter for difficulty
             flip_indices = np.random.choice(self.n, num_bits_to_flip, replace=False)
             peak.position[flip_indices] = 1 - peak.position[flip_indices]
             
             # Adjust height and width
             peak.height += np.random.normal(0, 2.5)
             peak.height = np.clip(peak.height, self.h_min, self.h_max)
-            peak.width += np.random.normal(0, 1)
+            peak.width += np.random.normal(0, 0.5)
             peak.width = np.clip(peak.width, self.w_min, self.w_max)
             
         # print(f"Shifted Peaks:")
@@ -335,16 +335,18 @@ class MovingPeaksLandscape:
         """
             Definition
             -----------
-                Returns the fitness of the given individual. 
+                Returns the fitness of the given individual as the highest fitness with respect to all peaks.
         """
         # Fitness is the maximum value among all peaks
         max_fitness = float('-inf')
+        
         for peak in self.peaks:
             distance = np.sum(genome != peak.position)  # Hamming distance
             # Gaussian-like function using Hamming distance
             fitness = peak.height * np.exp(- (distance ** 2) / (2 * (peak.width ** 2)))
             if fitness > max_fitness:
                 max_fitness = fitness
+                
         return max_fitness
 
 
