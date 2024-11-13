@@ -416,7 +416,7 @@ class GeneticAlgorithmRugged:
             next_population = []
             lambda_pop = self.pop_size * 2
             i = 0
-            count_true, count_false = 0,0
+   
             while i < lambda_pop: 
                 parent1 = selected[i % len(selected)]
                 parent2 = selected[(i+1) % len(selected)]
@@ -428,14 +428,12 @@ class GeneticAlgorithmRugged:
                     self.mutate(offspring[0])
                     self.mutate(offspring[1])        
                     next_population.extend(offspring)
-                    count_true += 1
                     
                 else:
                     # Append parents if Inbreeding is allowed
                     if self.max_kinship is None: 
                         next_population.append(copy.deepcopy(parent1))
                         next_population.append(copy.deepcopy(parent2))
-                        count_false += 1
                     else:
                         # Introduce new individuals if inbreeding is not allowed
                         genes = np.random.randint(2, size=self.dimensions)
@@ -445,8 +443,7 @@ class GeneticAlgorithmRugged:
                                                 novelty_archive=self.novelty_archive)
 
                         next_population.append(individual)
-                        count_false += 1
-                        
+                                                
                         if len(next_population) < self.pop_size:
                             genes = np.random.randint(2, size=self.dimensions)
                             individual = Individual(self.args, genes, generation=gen+1, 
@@ -454,7 +451,6 @@ class GeneticAlgorithmRugged:
                                                     curr_pop_behave=self.population_behaviors, 
                                                     novelty_archive=self.novelty_archive)
                             next_population.append(individual)
-                            count_false += 1
                 i += 2
                 
             # Combine the population (mu+lambda)

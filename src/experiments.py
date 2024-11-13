@@ -1,6 +1,7 @@
 from ga_rugged import GeneticAlgorithmRugged
 from ga_optimization import GeneticAlgorithmOpt
 from genetic_programming import GeneticAlgorithmGP
+from gp_testing import GeneticAlgorithmGPTesting
 import plotting as plot
 import util as util
 import random
@@ -191,6 +192,37 @@ def multiple_runs_function_gp(args, landscape, inbred_threshold):
         # else:
         #     util.save_accuracy(results, f"{args.config_plot}_no_inbreeding_RUN:{run}_{gen_success}.npy")
             
+        print(f"Population Size {args.pop_size} & Mutation Rate: {args.mutation_rate}: Best Fitness {best_fitness_list[-1]:.4f} ~ Best Diversity {diversity_list[-1]:.4f}")
+
+    return results
+
+def test_multiple_runs_function_gp(args, landscape, inbred_threshold, testing):
+    """
+        TODO: Generalize to be for all function experiments and choose within. As of now only work with ackley
+    """
+    
+    # Initialize GP-based GA for Any given function
+    results = {}
+    for run in range(args.exp_num_runs):
+        # Reset the seed for every run
+        util.set_seed(random.randint(0, 999999))
+       
+        print(f"Running experiment nº: {run}")
+        ga_gp = GeneticAlgorithmGPTesting(
+            args=args,
+            mut_rate=args.mutation_rate,
+            testing_gp=testing,
+            inbred_threshold=inbred_threshold  # Adjust based on inbreeding prevention
+        )
+        # Run GP-based GA for Given Function
+        best_fitness_list, diversity_list, gen_success = ga_gp.run(landscape.symbolic_fitness_function)
+        
+        results[run] = {
+                'best_fitness': best_fitness_list,
+                'diversity': diversity_list, 
+                'generation_success': gen_success
+            }
+        
         print(f"Population Size {args.pop_size} & Mutation Rate: {args.mutation_rate}: Best Fitness {best_fitness_list[-1]:.4f} ~ Best Diversity {diversity_list[-1]:.4f}")
 
     return results
