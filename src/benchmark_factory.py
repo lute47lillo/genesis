@@ -7,10 +7,12 @@ import random
 
 class NKLandscape:
     """ N-K Fitness Landscape """
-    def __init__(self, args, n=10, k=2):
-        self.n = n  # The number of genes (loci) in the genome. Genome length
-        self.k = k  # Number of other loci interacting with each gene. For each gene 2^(k+1) possible combinations of gene states that affect its fitness contribution
-        self.gene_contribution_weight_matrix = np.random.rand(n, 2**(k+1)) 
+    def __init__(self, args):
+        self.n=args.N_NKlandscape
+        self.k=args.K_NKlandscape
+        # self.n = n  # The number of genes (loci) in the genome. Genome length
+        # self.k = k  # Number of other loci interacting with each gene. For each gene 2^(k+1) possible combinations of gene states that affect its fitness contribution
+        self.gene_contribution_weight_matrix = np.random.rand(self.n, 2**(self.k+1)) 
         args.bench_name = 'nk_landscape'
         
     def get_contributing_gene_values(self, genome, gene_num):
@@ -225,7 +227,7 @@ class DeceptiveLeadingBlocks:
         Global Optimum: When all blocks have 0s given we are working with binaray genome strings.
     """
     
-    def __init__(self, args, block_size=5):
+    def __init__(self, args, block_size=2):
         self.block_size = block_size
         args.bench_name = 'DeceptiveLeadingBlocks'
     
@@ -253,7 +255,9 @@ class DeceptiveLeadingBlocks:
             fitness += self.deceptive_block(block)
         return fitness
     
+    
 # --------------- More advanced Novelty-Search / Open-end benchmarks ---------- #
+
 class Peak:
         
     def __init__(self, position, height, width):
@@ -272,10 +276,10 @@ class MovingPeaksLandscape:
                 of having individuals close to peaks when they move.
     
     """
-    def __init__(self, args, m=3, h_min=70.0, h_max=100.0, w_min=10.0, w_max=12.0):
+    def __init__(self, args, h_min=90.0, h_max=100.0, w_min=12.0, w_max=13.0):
         self.args = args
         self.n = args.dimensions  # Genome length
-        self.m = m  # Number of peaks
+        self.m = args.n_peaks  # Number of peaks
         self.h_min = h_min
         self.h_max = h_max
         self.w_min = w_min
@@ -285,11 +289,6 @@ class MovingPeaksLandscape:
         self.peaks = []
         self.pre_compute_shifted_peaks()
         args.bench_name = 'MovingPeaksLandscape'
-        
-        # print(f"Initial Peaks:")
-        # for idx, peak in enumerate(self.peaks):
-        #     print(f"\nPeak {idx}. Position: {peak.position}.")
-        #     print(f"Height: {peak.height}. Width: {peak.width}")
         
     def initialize_peaks(self):
         self.peaks = []
@@ -316,9 +315,6 @@ class MovingPeaksLandscape:
         self.pre_peaks = {}
         
         for run in range(0, self.args.exp_num_runs):
-            
-            # Reinitialize the seed so every run is different
-            util.set_seed(random.randint(0, 9999))
             
             # Deep copy the original peaks to avoid mutating them across runs
             temp_peaks = copy.deepcopy(self.peaks)
@@ -361,6 +357,11 @@ class MovingPeaksLandscape:
         #         print(f"\tPeak {i+1}. Position: {peaks.position}")
         
     def apply_shift_peaks(self, curr_gen):
+        """
+            Definition:
+            ------------
+                Apply the shifts (change in position, width and height) to the N Peaks of the landscape at a given experimental run.
+        """
         
         # Get current shift
         curr_shift = int(curr_gen / self.shift_interval) 
@@ -370,27 +371,6 @@ class MovingPeaksLandscape:
         
         # Update global
         self.update_global_optimum()            
-
-    def shift_peaks(self):
-        for peak in self.peaks:
-            
-            # Flip a random number of bits to shift the peak
-            num_bits_to_flip = np.random.randint(1, int(0.3 * self.n) + 1)  # Flip up to N% of bits. TODO: Adjust as hyperparameter for difficulty
-            flip_indices = np.random.choice(self.n, num_bits_to_flip, replace=False)
-            peak.position[flip_indices] = 1 - peak.position[flip_indices]
-            
-            # Adjust height and width
-            peak.height += np.random.normal(0, 2.5)
-            peak.height = np.clip(peak.height, self.h_min, self.h_max)
-            peak.width += np.random.normal(0, 0.5)
-            peak.width = np.clip(peak.width, self.w_min, self.w_max)
-            
-        # print(f"Shifted Peaks:")
-        # for idx, peak in enumerate(self.peaks):
-        #     print(f"\nPeak {idx}. Position: {peak.position}.")
-        #     print(f"Height: {peak.height}. Width: {peak.width}")
-            
-        self.update_global_optimum()
 
     def update_global_optimum(self):
         """

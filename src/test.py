@@ -9,7 +9,12 @@ import benchmark_factory as bf
 def testing():
     # Suppose we have a peak at position [1, 0, 1, 0, 1]
     peak_position = np.array([1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1])
-    peak = bf.Peak(position=peak_position, height=100, width=10)
+    peak = bf.Peak(position=peak_position, height=100, width=12)
+    
+    print(peak.width, peak.height)
+    peak.height += np.random.normal(0, 4)
+    peak.width += np.random.normal(0, 1.0)
+    print(peak.width, peak.height)
 
     # Create test genomes
     genome_same = np.array([1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1])  # Distance 0
@@ -26,7 +31,9 @@ def testing():
     fitness_close = peak.height * np.exp(- (distance_close ** 2) / (2 * (peak.width ** 2)))  # Less than 100
     fitness_far = peak.height * np.exp(- (distance_far ** 2) / (2 * (peak.width ** 2)))    # Much less than 100
     
-    print(fitness_same, fitness_close, fitness_far)
+    print(distance_same, fitness_same)
+    print(distance_close, fitness_close)
+    print(distance_far, fitness_far)
     
 # ----------------- Genetic Programming -------------- #
 
@@ -231,10 +238,10 @@ class GeneticProgrammingSystem:
                 # Find the index of node1 in its parent's children and replace it
                 try:
                     index = parent_node1.children.index(node1)
-                    print(f"\nCase2. Index: {index} of parent_node1 {parent_node1} where node1 {node1} happens.")
+                    print(f"\nCase2. Index: {index} of parent_node1 {parent_node1} is where node1 {node1} happens.")
                     
                     parent_node1.children[index] = copy.deepcopy(node2)
-                    print(f"NEW Children of parent_node1 {parent_node1} where node1 {node1} happens is node2 {node2}")
+                    print(f"NEW Children of parent_node1 {parent_node1} at index {index} where node1 {node1} happened is now node2 {node2}")
                     
                 except ValueError:
                     continue  # node1 not found, try again
@@ -408,36 +415,8 @@ class TestMeasureDiversity(unittest.TestCase):
     #     # Additionally, assert that the diversity is greater than zero
     #     self.assertGreater(diversity, 0)
         
-    # def test_crossover_same_arity(self):
+    def test_crossover_same_arity(self):
         
-    #     tree1 = Node('+', [Node('x'), Node('1.0')])
-    #     tree2 = Node('+', [Node('*', [Node('x'), Node('1.0')]), Node('x')])
-        
-    #     # Create two parent trees with matching arities
-    #     individual1 = Individual(tree1)
-    #     individual2 = Individual(tree2)
-        
-    #     # Create population
-    #     population = [individual1, individual2]
-        
-    #     # Initialize GP system
-    #     gp_system = GeneticProgrammingSystem(population)
-        
-    #     dist1_2 = gp_system.tree_edit_distance(tree1, tree2)
-    #     print(f"Distance: {dist1_2}")
-        
-    #     offspring1, offspring2 = gp_system.crossover(individual1, individual2, 2, 10)
-        
-    #     print(f"{individual1} + {individual2} = {offspring1}")
-    #     print(f"{individual1} + {individual2} = {offspring2}")
-        
-        
-    #     self.assertIsNotNone(offspring1)
-    #     self.assertIsNotNone(offspring2)
-        
-    def test_mutate_correct_arity(self):
-        
-        # Create an individual and mutate
         tree1 = Node('+', [Node('x'), Node('1.0')])
         tree2 = Node('+', [Node('*', [Node('x'), Node('1.0')]), Node('x')])
         
@@ -450,12 +429,40 @@ class TestMeasureDiversity(unittest.TestCase):
         
         # Initialize GP system
         gp_system = GeneticProgrammingSystem(population)
-        original_arity = individual1.get_function_arity(individual1.tree.value)
-        gp_system.mutate(individual1)
         
-        # After mutation, check that the arity remains the same
-        new_arity = individual1.get_function_arity(individual1.tree.value)
-        self.assertEqual(original_arity, new_arity)
+        dist1_2 = gp_system.tree_edit_distance(tree1, tree2)
+        print(f"Distance: {dist1_2}")
+        
+        offspring1, offspring2 = gp_system.crossover(individual1, individual2, 2, 10)
+        
+        print(f"{individual1} + {individual2} = {offspring1}")
+        print(f"{individual1} + {individual2} = {offspring2}")
+        
+        
+        self.assertIsNotNone(offspring1)
+        self.assertIsNotNone(offspring2)
+        
+    # def test_mutate_correct_arity(self):
+        
+    #     # Create an individual and mutate
+    #     tree1 = Node('+', [Node('x'), Node('1.0')])
+    #     tree2 = Node('+', [Node('*', [Node('x'), Node('1.0')]), Node('x')])
+        
+    #     # Create two parent trees with matching arities
+    #     individual1 = Individual(tree1)
+    #     individual2 = Individual(tree2)
+        
+    #     # Create population
+    #     population = [individual1, individual2]
+        
+    #     # Initialize GP system
+    #     gp_system = GeneticProgrammingSystem(population)
+    #     original_arity = individual1.get_function_arity(individual1.tree.value)
+    #     gp_system.mutate(individual1)
+        
+    #     # After mutation, check that the arity remains the same
+    #     new_arity = individual1.get_function_arity(individual1.tree.value)
+    #     self.assertEqual(original_arity, new_arity)
 
     
     # def test_mutate_incorrect_arity(self):
@@ -472,6 +479,7 @@ class TestMeasureDiversity(unittest.TestCase):
     #     self.assertEqual(original_arity, new_arity)
 
 if __name__ == '__main__':
+    # testing()
     unittest.main()
     
 # TODO: Re-insert as real unit-tests if needed

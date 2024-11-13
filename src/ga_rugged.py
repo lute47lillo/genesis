@@ -49,9 +49,12 @@ class Individual:
                 self.ancestors.add(parent.id)
         
         # Set the initial fitness and novelty of the individual wrt novelty archive and the population behaviors
-        self.get_novel_fit_indiv(curr_pop_behave, novelty_archive)
-
-                
+        
+        if self.args.bench_name == 'MovingPeaksLandscape':
+            self.get_novel_fit_indiv(curr_pop_behave, novelty_archive)
+        else:
+            self.fitness = self.landscape.get_fitness(self.genes)    
+        
     def get_novel_fit_indiv(self, population_behaviors, novelty_archive):
         
         # Set importance values. Default to 1.0
@@ -276,7 +279,10 @@ class GeneticAlgorithmRugged:
         selected = []
         for i in range(self.pop_size):
             participants = np.random.choice(self.population, k, replace=True) # Each participant is unique
-            winner = max(participants, key=lambda ind: ind.total_fitness) # ind.total_fitness for novelty + fitness / fitness for just fitness
+            if self.args.bench_name == 'MovingPeaksLandscape':
+                winner = max(participants, key=lambda ind: ind.total_fitness) # ind.total_fitness for novelty + fitness / fitness for just fitness
+            else:
+                winner = max(participants, key=lambda ind: ind.fitness)
             selected.append(winner)
         return selected
 
@@ -379,9 +385,6 @@ class GeneticAlgorithmRugged:
             if self.args.bench_name == 'MovingPeaksLandscape':
                 if gen % self.landscape.shift_interval == 0:# and gen != 0:
                     self.landscape.apply_shift_peaks(gen) # When using same peaks.
-                    # self.landscape.shift_peaks() # When using independent peaks for inbreeding and no inbreeding treatments
-                # elif gen == 0:
-                #     self.landscape.peaks = self.landscape.original_peaks
 
             # Calculate fitness and novelty
             if self.args.bench_name == 'MovingPeaksLandscape':
@@ -399,6 +402,7 @@ class GeneticAlgorithmRugged:
                 self.calculate_fitness() # TODO Other methods
                 best_fitness = max(self.population, key=lambda ind: ind.fitness).fitness
                 self.best_fitness_list.append(best_fitness)
+                self.global_optimum_fitness_list.append(self.args.dimensions)
          
         
             # Calculate diversity by the heterozygosity at each locus
@@ -413,8 +417,7 @@ class GeneticAlgorithmRugged:
             lambda_pop = self.pop_size * 2
             i = 0
             count_true, count_false = 0,0
-            while i < lambda_pop: # Used to be len(selected)
-            # while len(next_population) < self.pop_size:
+            while i < lambda_pop: 
                 parent1 = selected[i % len(selected)]
                 parent2 = selected[(i+1) % len(selected)]
                 offspring = self.crossover(parent1, parent2)
@@ -454,29 +457,17 @@ class GeneticAlgorithmRugged:
                             count_false += 1
                 i += 2
                 
-            cross_count[gen] = count_true
-            inmigration_count[gen] = count_false
-            # BUG: Probably few of next population are being chosen, given the combination
-            # of novelty and fitness and that we are just ranking. Maybe we have to select based on one thing?
             # Combine the population (mu+lambda)
-            # self.population = next_population[:self.pop_size]
-            combined_population = next_population[:lambda_pop] + self.population # BUG: I had self.population before, but it had to be selected right?          
-            combined_population.sort(key=lambda ind: ind.total_fitness, reverse=True)
+            combined_population = next_population[:lambda_pop] + self.population     
+            if self.args.bench_name == 'MovingPeaksLandscape':   
+                combined_population.sort(key=lambda ind: ind.total_fitness, reverse=True)
+            else:
+                combined_population.sort(key=lambda ind: ind.fitness, reverse=True)
 
-            # # print(f"Lenght of new population: {len(next_population)} + Length of population selected: {len(selected)}. Allowed {self.pop_size}")
-            # # exit()
-            # # Update the population
+            # Update the population
             self.population = combined_population[:self.pop_size]
             self.pop_size = len(self.population)
-
-        # print(f"\nCrossovers")
-        # for k,v in cross_count.items():
-        #     print(f"Gen {k} ~ Offspring Crossovers: {v}")
             
-        # print("\nAdding indiv")
-        # for k,v in inmigration_count.items():
-        #     print(f"Gen {k} ~ Individuals added: {v}")
-
         return self.best_fitness_list, self.diversity_list, self.global_optimum_fitness_list, self.collapse_events
 
 if __name__ == "__main__":
@@ -486,29 +477,42 @@ if __name__ == "__main__":
     # Get args
     args = util.set_args()
     
-    landscape = bf.MovingPeaksLandscape(args)
+    # landscape = bf.MovingPeaksLandscape(args)
+    
+    # landscape = bf.DeceptiveLeadingBlocks(args)
+    landscape = bf.NKLandscape(args)
+
     
     # Set file plotting name
     term1 = f"{args.bench_name}/NoveltyCollapseKinship/Pop:{args.pop_size}_MR:{args.mutation_rate}_"
     term2 = f"G:{args.generations}_Kc:{args.max_kinship}_TSize:{args.tournament_size}_Dim:{args.dimensions}_"
     term3 = f"MPLShift:{args.mpl_shift_interval}_FitW:{args.fit_weight}_NovW:{args.novelty_weight}_Ann:{args.archive_nn}_"
-    term4 = f"ArcT:{args.archive_threshold}" 
+    term4 = f"ArcT:{args.archive_threshold}_NPeaks:{args.n_peaks}" 
     
     args.config_plot = term1 + term2 + term3 + term4
-    # Run Individual
-    # args.inbred_threshold = 10
-    # individual_ga_run(args, landscape, args.inbred_threshold)
     
-    # # Run experiments
+    # # # Run experiments
     print("\n#---------- Running GA with NO Inbreeding Mating... ----------#")
     results_no_inbreeding = exp.multiple_runs_experiment(args, landscape, args.max_kinship)
 
     print("\n#---------- Running GA with Inbreeding Mating... ----------#")
     results_inbreeding = exp.multiple_runs_experiment(args, landscape, None)
-
+    
     # # # Plot experiments
     gs_list, fit_list, div_list, label_list = plot.collect_bootstrapping_data(args, results_no_inbreeding, results_inbreeding)
     plot.plot_multiple_runs_MPL_global_optima(args, gs_list, fit_list, div_list, label_list)
+    
+    # ------------------------- Mutation Rate Experiments ------------------------ #
+    # mutation_rates = [0.1, 0.05, 0.01, 0.005, 0.001]
+    # mutation_rates = [0.01, 0.005]
+    # print("\n#---------- Running GA with NO Inbreeding Mating... ----------#")
+    # results_no_inbreeding = exp.multiple_mrates_rugged_ga(args, mutation_rates, landscape, args.max_kinship)
+    
+    # # print("\n#---------- Running GA with Inbreeding Mating... ----------#")
+    # results_inbreeding = exp.multiple_mrates_rugged_ga(args, mutation_rates, landscape, None)
+    
+    # plot.plot_mean_and_bootstrapped_ci_multiple_parameters(args, mutation_rates, results_no_inbreeding, "no_inbreeding")
+    # plot.plot_mean_and_bootstrapped_ci_multiple_parameters(args, mutation_rates, results_inbreeding, "inbreeding")
     
     # plot.plot_all(args, gs_list, fit_list, label_list, x_label='Generations', y_label='Fitness', title=f'Inbreeding vs no Inbreeding w/ PopSize: {args.pop_size} & MutRate: {args.mutation_rate}')
     # plot.plot_all(args, gs_list, div_list, label_list, x_label='Generations', y_label='Diversity', title=f'Inbreeding vs no Inbreeding w/ PopSize: {args.pop_size} & MutRate: {args.mutation_rate}')

@@ -572,18 +572,20 @@ if __name__ == "__main__":
 
     # -------------------------------- Experiment: Multiple Runs w/ fixed population and fixed mutation rate --------------------------- #
     
-    # args.config_plot = f"genetic_programming/{args.benchmark}/experimental/PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
+    args.config_plot = f"genetic_programming/{args.benchmark}/meeting/PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
 
-    # print("Running GA with NO Inbreeding Mating...")
-    # results_no_inbreeding = exp.multiple_runs_function_gp(args, gp_landscape, args.inbred_threshold)
-    # util.save_accuracy(results_no_inbreeding, f"{args.config_plot}_no_inbreeding.npy")
+    print("Running GA with NO Inbreeding Mating...")
+    results_no_inbreeding = exp.multiple_runs_function_gp(args, gp_landscape, args.inbred_threshold)
+    util.save_accuracy(results_no_inbreeding, f"{args.config_plot}_no_inbreeding.npy")
     
-    # # print("Running GA with Inbreeding Mating...")
-    # results_inbreeding = exp.multiple_runs_function_gp(args, gp_landscape, None)
-    # util.save_accuracy(results_inbreeding, f"{args.config_plot}_inbreeding.npy")
+    print("Running GA with Inbreeding Mating...")
+    results_inbreeding = exp.multiple_runs_function_gp(args, gp_landscape, None)
+    util.save_accuracy(results_inbreeding, f"{args.config_plot}_inbreeding.npy")
     
-    # # Plot the generation of successful runs
-    # plot.plot_gen_vs_run(args, results_no_inbreeding, results_inbreeding)
+    # Plot the generation of successful runs
+    plot.plot_gen_vs_run(args, results_no_inbreeding, results_inbreeding)
+    plot.plot_diversity_generation_over_time(args, results_no_inbreeding, results_inbreeding)
+    plot.plot_time_of_convergence_vs_diversity(args, results_no_inbreeding, results_inbreeding)
     
     # Plot with bootstraping only if all runs are same length of generations
     # gs_list, fit_list, div_list, label_list = plot.collect_bootstrapping_data(args, results_no_inbreeding, results_inbreeding)
@@ -599,8 +601,8 @@ if __name__ == "__main__":
     # util.save_accuracy(results_no_inbreeding, f"{args.config_plot}_no_inbreeding.npy")
     # plot.plot_generation_successes(results_no_inbreeding, mutation_rates, f"{args.config_plot}_no_inbreeding.png")
     
-    print("Running GA with Inbreeding Mating...")
-    results_inbreeding = exp.multiple_mrates_function_gp(args, mutation_rates, gp_landscape, None)
-    util.save_accuracy(results_inbreeding, f"{args.config_plot}_inbreeding.npy")
-    plot.plot_generation_successes(results_inbreeding, mutation_rates, f"{args.config_plot}_inbreeding.png")
+    # print("Running GA with Inbreeding Mating...")
+    # results_inbreeding = exp.multiple_mrates_function_gp(args, mutation_rates, gp_landscape, None)
+    # util.save_accuracy(results_inbreeding, f"{args.config_plot}_inbreeding.npy")
+    # plot.plot_generation_successes(results_inbreeding, mutation_rates, f"{args.config_plot}_inbreeding.png")
     
