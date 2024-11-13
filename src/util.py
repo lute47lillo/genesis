@@ -6,9 +6,8 @@ import os
 import pandas as pd
 import benchmark_factory as bf
 from sympy import symbols, sympify, simplify, expand
-from sympy.core import Function
 import sympy
-
+import random
 
 def set_seed(seed):
     torch.manual_seed(seed)
@@ -26,26 +25,44 @@ def set_args():
     argparser.add_argument('--benchmark', type=str, help='Optimization function to run', default="rastrigin")
     argparser.add_argument('--bench_name', type=str, help='Problem landscape name (ie: MovingPeaksLandscape)', default="none")
     argparser.add_argument('--config_plot', type=str, help='plot info details', default="none")
-    argparser.add_argument('--dimensions', type=int, help='GA dimensions', default=10) 
+    argparser.add_argument('--current_run', type=int, help='Current experimental run if multiple runs', default=0)
     
-    # Genetic Programming variables
-    argparser.add_argument('--max_depth', type=int, help='GP Tree maximum depth', default=15)
-    argparser.add_argument('--initial_depth', type=int, help='GP Tree maximum depth', default=6)
-    
-    # NK-Landscape arguments
-    argparser.add_argument('--generations', type=int, help='Nº of generations to run the GA. (Used interchangeably with args.dimensions in this case)', default=100)
-    argparser.add_argument('--N_NKlandscape', type=int, help='Genome Length (N) value', default=100)
-    argparser.add_argument('--K_NKlandscape', type=int, help='Nº of interactions per loci (K) value', default=14)
+    # Experimental Hyperparameters
     argparser.add_argument('--pop_size', type=int, help='Population Size (could be used as fixed parameter in many settings)', default=100)
     argparser.add_argument('--mutation_rate', type=float, help='Mutation Rate (could be used as fixed parameter in many settings)', default=0.01)
     argparser.add_argument('--inbred_threshold', type=int, help='Inbreeding Threshold. Below threshold is considered inbreeding. \
                             Minimum genetic (Hamming) distance required to allow mating', default=5)
     argparser.add_argument('--tournament_size', type=int, help='Nº of individuals to take part in the Tournament selection', default=3)
     argparser.add_argument('--exp_num_runs', type=int, help='Nº of experimental runs. (Fixed hyperparameters)', default=5)
+    
+    # Moving Peaks Benchmark hyperparameters
+    argparser.add_argument('--dimensions', type=int, help='GA dimensions. Used in Rugged benchmarks like MPL', default=100) 
+    argparser.add_argument('--collapse_threshold', type=float, help='TODO', default=0.2) 
+    argparser.add_argument('--collapse_fraction', type=float, help='TODO', default=0.1) 
+    argparser.add_argument('--mpl_shift_interval', type=int, help='nº of generations for shifting global maximum in the MovingPeaksLandscape', default=30)
+    argparser.add_argument('--n_peaks', type=int, help='Number of Peaks (optimas) used in Rugged benchmarks like MPL', default=5) 
 
+    # Novelty Archive hyperparameters
+    argparser.add_argument('--archive_nn', type=int, help='Number of nearest neighbors to consider for novelty calculation', default=20)
+    argparser.add_argument('--archive_threshold', type=int, help='Minimum distance threshold for considering behaviors as novel', default=0.1) 
+    argparser.add_argument('--fit_weight', type=float, help='Weight given to pure-fitness calculating individual total fitness', default=1.0)
+    argparser.add_argument('--novelty_weight', type=float, help='Weight given to novelty calculating individual total fitness', default=1.0)
+    
+    # Genetic Programming variables
+    argparser.add_argument('--max_depth', type=int, help='GP Tree maximum depth', default=15)
+    argparser.add_argument('--initial_depth', type=int, help='GP Tree maximum depth', default=6)
+    
+    # Rugged arguments
+    argparser.add_argument('--generations', type=int, help='Nº of generations to run the GA. (Used interchangeably with args.dimensions in this case)', default=100)
+    argparser.add_argument('--N_NKlandscape', type=int, help='Genome Length (N) value', default=100)
+    argparser.add_argument('--K_NKlandscape', type=int, help='Nº of interactions per loci (K) value', default=14)
+    argparser.add_argument('--max_kinship', type=float, help='Maximal Inbreeding prevention ratio', default=0.5)
+    
+    # Parse all arguments
     args = argparser.parse_args()
     
     # Set the seed for reproducibility
+    args.seed = random.randint(0, 999999)
     set_seed(args.seed)
     
     return args
@@ -87,7 +104,7 @@ def get_function_bounds(benchmark):
     
     if benchmark == 'ackley':
         bounds = (-32.768, 32.768)
-    elif benchmark == 'rastrigin':
+    elif benchmark == 'rastrigin' or benchmark == 'sphere':
         bounds = (-5.12, 5.12)
     elif benchmark == 'rosenbrock':
         bounds = (-2.048, 2.048)
@@ -95,16 +112,10 @@ def get_function_bounds(benchmark):
         bounds = (-500, 500)
     elif benchmark == 'griewank':
         bounds = (-600, 600)   
-    elif benchmark == 'sphere':
-        bounds = (-5.12, 5.12)
-    elif benchmark == 'nguyen1':
+    elif benchmark == 'nguyen1' or benchmark == 'nguyen2' or benchmark == 'nguyen3' or benchmark == 'nguyen4' or benchmark == 'nguyen5' or benchmark == 'nguyen6':
         bounds = (-4.0, 4.0)
-    elif benchmark == 'nguyen2':
-        bounds = (-4.0, 4.0)
-    elif benchmark == 'nguyen3':
-        bounds = (-4.0, 4.0)
-    elif benchmark == 'nguyen4':
-        bounds = (-4.0, 4.0)
+    elif benchmark == 'nguyen7' or benchmark == 'nguyen8':
+        bounds = (0.0, 8.0)
     
     return bounds
 
@@ -151,6 +162,25 @@ def set_config_parameters(benchmark):
     return pop_sizes, dimensions, bounds, generations, mutation_rate, allowed_distance
 
 # --------------------------- Genetic Programming visualization ------------------------------- #
+
+def select_gp_benchmark(args):
+    """
+        Definition
+        -----------
+            Select the benchmark for Genetic Programming experiments.
+    """
+    benchmarks = {"nguyen1": bf.nguyen1, "nguyen2": bf.nguyen2,
+                  "nguyen3": bf.nguyen3, "nguyen4": bf.nguyen4,
+                  "nguyen5": bf.nguyen5, "nguyen6": bf.nguyen6,
+                  "nguyen7": bf.nguyen7, "nguyen8": bf.nguyen8}
+    
+    # Get function
+    gp_bench_fn = benchmarks.get(args.benchmark)
+    
+    # Set the specific bounds
+    args.bounds = get_function_bounds(args.benchmark)
+    
+    return gp_bench_fn
 
 class Node:
     def __init__(self, value, children=None):
@@ -320,4 +350,151 @@ def create_padded_df(data, metric, run_ids):
         df[run_id].iloc[:len(values)] = values
     
     return df
+
+def pad_sublist(sublist, target_length):
+    """
+    Pads the sublist to the target_length by repeating the last element.
     
+    Parameters:
+    - sublist (list): The original sublist.
+    - target_length (int): The desired length after padding.
+    
+    Returns:
+    - list: The padded sublist.
+    """
+    current_length = len(sublist)
+    if current_length < target_length:
+        padding = [sublist[-1]] * (target_length - current_length)
+        return sublist + padding
+    else:
+        return sublist
+    
+# Flatten the Data
+def flatten_results_depths(treatment_name, depths):
+    data_df = []
+    for depth in depths:
+        # Load dict data
+        file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/nguyen2/meeting/PopSize:300_InThres:4_Mrates:0.0005_Gens:150_TourSize:15_MaxD:{depth}_InitD:3_{treatment_name}.npy"
+        data = np.load(file_path_name, allow_pickle=True)
+        data_dict = data.item()
+        
+        # Iterate over and create DataFram
+        for run, metrics in data_dict.items():
+            # diversity = metrics['diversity']# TODO: For another plto
+            generation_success = metrics['generation_success']
+            data_df.append({
+                'Treatment': treatment_name,
+                'Depth': depth,
+                'Run': run,
+                'Generation_Success': generation_success
+            })
+    return pd.DataFrame(data_df)
+
+# Flatten the Data
+def flatten_results_thresholds(treatment_name, thresholds):
+    data_df = []
+    for thres in thresholds:
+        # Load dict data
+        file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/nguyen2/meeting/PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:9_InitD:3_{treatment_name}.npy"
+        data = np.load(file_path_name, allow_pickle=True)
+        data_dict = data.item()
+        
+        # Iterate over and create DataFram
+        for run, metrics in data_dict.items():
+            # diversity = metrics['diversity']# TODO: For another plto
+            generation_success = metrics['generation_success']
+            data_df.append({
+                'Treatment': treatment_name,
+                'Thresholds': thres,
+                'Run': run,
+                'Generation_Success': generation_success
+            })
+    return pd.DataFrame(data_df)
+
+def flatten_results_in_max_depth_diversity(treatment_name, thresholds, depths):
+    data_df = []
+    for thres in thresholds:
+        for depth in depths:
+            # Load dict data
+            file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/nguyen2/meeting/PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:{depth}_InitD:3_{treatment_name}.npy"
+            data = np.load(file_path_name, allow_pickle=True)
+            data_dict = data.item()
+            for run, metrics in data_dict.items():
+                # TODO: If Wanted al values needs to padd:
+                # padded_diversity = [pad_sublist(sublist, target_length) for sublist in metrics['diversity']]
+                # metrics['diversity'] = padded_diversity
+                diversity = metrics['diversity'][-1]
+                generation_success = metrics['generation_success']
+        
+                # Update
+                data_df.append({
+                    'Treatment': treatment_name,
+                    'Max_Depth': depth,
+                    'Inbred_Threshold': thres,
+                    'Run': run,
+                    'Generation_Success': generation_success,
+                    'Diversity': diversity
+                })
+    return pd.DataFrame(data_df)
+
+# Padding Function
+def pad_sublist(sublist, target_length):
+    current_length = len(sublist)
+    if current_length < target_length:
+        padding = [sublist[-1]] * (target_length - current_length)
+        return sublist + padding
+    else:
+        return sublist
+
+# Determine Global Maximum Depth
+def get_global_max_depth(*results_dicts):
+    max_depth = 0
+    for results in results_dicts:
+        for run in results:
+            current_depth = len(results[run]['diversity'])
+            if current_depth > max_depth:
+                max_depth = current_depth
+    return max_depth
+
+# Pad 'diversity' Lists
+def pad_diversity_lists(results_dict, target_length):
+    for run in results_dict:
+        original_length = len(results_dict[run]['diversity'])
+        padded_diversity = [pad_sublist(sublist, target_length) for sublist in results_dict[run]['diversity']]
+        results_dict[run]['diversity'] = padded_diversity
+        print(f"Run {run}: Padded Diversity Lengths = {[len(s) for s in results_dict[run]['diversity']]}")
+    return results_dict
+    
+# ---------------------- Rugged Landscape Functions ------------------------- #
+
+def extract_behavior(genome, landscape):
+    
+    # Get all distances
+    distances = [np.sum(genome != peak.position) for peak in landscape.peaks]
+    
+    # Get the minimum distance to any peak for getting closest peak
+    min_distance = min(distances)
+    closest_peak_index = distances.index(min_distance)
+    
+    # Normalize over the genome length
+    normalized_distance = min_distance / landscape.n  
+    behavior = (closest_peak_index, normalized_distance)
+
+    return behavior
+
+def behavior_distance(b1, b2):
+    """
+        Definition
+        -----------
+            Get the behavioral distance between 2 different behaviors of individuals. Maximum is 2.
+            
+        Parameters
+        -----------
+            - b1 and b2 (tuples): (closest_peak_index, normalized_distance)
+    """
+    
+    peak_index_distance = 0 if b1[0] == b2[0] else 1
+    distance_difference = abs(b1[1] - b2[1])
+    
+    # You can weight the components differently if needed
+    return peak_index_distance + distance_difference

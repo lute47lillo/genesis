@@ -29,7 +29,7 @@ class Individual:
         self.ancestors = ancestors if ancestors is not None else set() # IDs of all ancestors
         self.generation = generation
                 
-class GeneticAlgorithm:
+class GeneticAlgorithmOpt:
     def __init__(self, args, landscape, pop_size, mutation_rate, inbred_threshold=None):
         self.args = args
         self.pop_size = pop_size

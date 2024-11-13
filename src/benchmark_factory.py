@@ -1,16 +1,18 @@
 import numpy as np
-import matplotlib.pyplot as plt
 import copy
-import os
 import math
 import numpy as np
+import util
+import random
 
 class NKLandscape:
     """ N-K Fitness Landscape """
-    def __init__(self, args, n=10, k=2):
-        self.n = n  # The number of genes (loci) in the genome. Genome length
-        self.k = k  # Number of other loci interacting with each gene. For each gene 2^(k+1) possible combinations of gene states that affect its fitness contribution
-        self.gene_contribution_weight_matrix = np.random.rand(n, 2**(k+1)) 
+    def __init__(self, args):
+        self.n=args.N_NKlandscape
+        self.k=args.K_NKlandscape
+        # self.n = n  # The number of genes (loci) in the genome. Genome length
+        # self.k = k  # Number of other loci interacting with each gene. For each gene 2^(k+1) possible combinations of gene states that affect its fitness contribution
+        self.gene_contribution_weight_matrix = np.random.rand(self.n, 2**(self.k+1)) 
         args.bench_name = 'nk_landscape'
         
     def get_contributing_gene_values(self, genome, gene_num):
@@ -225,7 +227,7 @@ class DeceptiveLeadingBlocks:
         Global Optimum: When all blocks have 0s given we are working with binaray genome strings.
     """
     
-    def __init__(self, args, block_size=5):
+    def __init__(self, args, block_size=2):
         self.block_size = block_size
         args.bench_name = 'DeceptiveLeadingBlocks'
     
@@ -253,108 +255,150 @@ class DeceptiveLeadingBlocks:
             fitness += self.deceptive_block(block)
         return fitness
     
+    
 # --------------- More advanced Novelty-Search / Open-end benchmarks ---------- #
+
 class Peak:
-    def __init__(self, position, height, width):
-        self.position = np.array(position)
-        self.height = height
-        self.width = width
         
+    def __init__(self, position, height, width):
+        self.position = np.array(position)  # Binary array
+        self.height = height
+        self.width = width  # Controls the steepness of the peak
+
 class MovingPeaksLandscape:
     """
-        Due to its constant shift of landscape it evaluates the resilience of an algorihtm to changes and disruptions
+        Definition
+        -----------
+            Rugged Dynamic Landscape. Some key points are:
+                - Individuals close to any peak have higher fitness. 
+                - Fitness is based on proximity to peaks so the population needs to be diversed.
+                - As a dynamic landscape, the pressure for diversity is needed to increase the likelihood 
+                of having individuals close to peaks when they move.
     
     """
-    def __init__(self, args, m=5, h_min=1.0, h_max=5.0, w_min=1, w_max=5, shift_interval=30):
-        
-        # Landscape attributes
-        self.n = args.N_NKlandscape           # Genome length
-        self.m = m                            # Number of peaks or optima present at any given time.
-        self.shift_interval = shift_interval  # Generations between shifts
-        self.global_optimum = None            # To store current global optimum
-        
-        # Peak Height min/max
+    def __init__(self, args, h_min=90.0, h_max=100.0, w_min=12.0, w_max=13.0):
+        self.args = args
+        self.n = args.dimensions  # Genome length
+        self.m = args.n_peaks  # Number of peaks
         self.h_min = h_min
         self.h_max = h_max
-        
-        # Peak Width min/max
         self.w_min = w_min
         self.w_max = w_max
-        
+        self.shift_interval = args.mpl_shift_interval       # Generations between shifts
+        self.n_shifts = int(self.args.generations / self.args.mpl_shift_interval)
         self.peaks = []
-        self.initialize_peaks()
+        self.pre_compute_shifted_peaks()
         args.bench_name = 'MovingPeaksLandscape'
-
+        
     def initialize_peaks(self):
+        self.peaks = []
+        for _ in range(self.m):
+            position = np.random.randint(2, size=self.n)        # Random binary position
+            height = np.random.uniform(self.h_min, self.h_max)
+            width = np.random.uniform(self.w_min, self.w_max)
+            self.peaks.append(Peak(position, height, width))
+        self.update_global_optimum()
+        
+    def pre_compute_shifted_peaks(self):
         """
             Definition
             -----------
-                Initialize peaks with random positions, heights, and widths.
-                    - position: The central point in the search space where the peak is located.
-                    - height: The maximum fitness value of the peak.
-                    - width: Determines how quickly the fitness value decreases as one moves away from the peak center
+                Precompute the shifting effect on the Peaks in order to use the same Peaks and Landscape for both inbreeding and no inbreeding controls.
         """
-        # Initialize peak positions, heights, widths
-        self.peaks = []
-        for _ in range(self.m):
-            position = np.random.randint(0, self.n)
-            height = np.random.uniform(self.h_min, self.h_max)
-            width = np.random.randint(self.w_min, self.w_max + 1)
-            # self.peaks.append({'position': position, 'height': height, 'width': width})
-            self.peaks.append(Peak(position, height, width))
+        # Init peaks
+        self.initialize_peaks()
+        
+        # Init dictionary to story the peaks at every shift with a deep copy
+        temp_peaks = copy.deepcopy(self.peaks)
+        
+        # Initialize the pre_peaks dictionary to store data for all runs
+        self.pre_peaks = {}
+        
+        for run in range(0, self.args.exp_num_runs):
             
-        self.update_global_optimum()
+            # Deep copy the original peaks to avoid mutating them across runs
+            temp_peaks = copy.deepcopy(self.peaks)
+            self.pre_peaks[run] = {}
+            
+            # Base Case: Shift 0 (original peaks)
+            self.pre_peaks[run][0] = {'peaks': []}
+            for peak in temp_peaks:
+                # It's important to deepcopy each peak if they are mutable
+                self.pre_peaks[run][0]['peaks'].append(copy.deepcopy(peak))
+        
+            # For all shifts, pre-calculate the shifts
+            for shift in range(1, self.n_shifts+1):
+                # Init shift dict and create a deep copy
+                self.pre_peaks[run][shift] = {'peaks': []}
+                shifted_peaks = copy.deepcopy(temp_peaks)
+                
+                for peak in shifted_peaks:
+                    
+                    # Flip a random number of bits to shift the peak
+                    num_bits_to_flip = np.random.randint(1, int(0.3 * self.n) + 1)  # Flip up to N% of bits. TODO: Adjust as hyperparameter for difficulty
+                    flip_indices = np.random.choice(self.n, num_bits_to_flip, replace=False)
+                    peak.position[flip_indices] = 1 - peak.position[flip_indices]
+                    
+                    # Adjust height and width
+                    peak.height += np.random.normal(0, 2.5)
+                    peak.height = np.clip(peak.height, self.h_min, self.h_max)
+                    peak.width += np.random.normal(0, 0.5)
+                    peak.width = np.clip(peak.width, self.w_min, self.w_max)
+                
+                    # Append the updated peaks at any given shift-time.
+                    self.pre_peaks[run][shift]['peaks'].append(copy.deepcopy(peak))
 
-    def shift_peaks(self):
+                temp_peaks = shifted_peaks
+        
+        # Print for debug
+        # for shift in range(self.n_shifts):
+        #     print(f"\nShift {shift}.")
+        #     for i, peaks in enumerate(self.pre_peaks[shift]['peaks']):
+        #         print(f"\tPeak {i+1}. Position: {peaks.position}")
+        
+    def apply_shift_peaks(self, curr_gen):
         """
-            At every shift_interval generations, the landscape undergoes a shift where:
-
-                Peak Positions: Move to new locations within the search space.
-                Peak Heights: Adjusted randomly within the defined range.
-                Peak Widths: Changed to alter the landscape's ruggedness.
+            Definition:
+            ------------
+                Apply the shifts (change in position, width and height) to the N Peaks of the landscape at a given experimental run.
         """
         
-        # Randomly shift peak positions, heights, and widths
-        for peak in self.peaks:
-            
-            # Shift position
-            shift = np.random.randint(-5, 6)
-            peak.position = (peak.position + shift) % self.n 
-            
-            # Adjust height
-            peak.height += np.random.normal(0, 0.5)  # Add Gaussian noise
-            peak.height = np.clip(peak.height, self.h_min, self.h_max)
-            
-            # Adjust width
-            peak.width += np.random.randint(-1, 2)  # Change width by -1, 0, or +1
-            peak.width = np.clip(peak.width, self.w_min, self.w_max)  # Maintain within bounds
-    
-        self.update_global_optimum()
-            
+        # Get current shift
+        curr_shift = int(curr_gen / self.shift_interval) 
+        
+        # Update peaks
+        self.peaks = copy.deepcopy(self.pre_peaks[self.args.current_run][curr_shift]['peaks'])
+        
+        # Update global
+        self.update_global_optimum()            
+
     def update_global_optimum(self):
         """
-            Update the current global optimum based on the highest peak.
+            Definition
+            -----------
+                The global optimum is defined as the highest peak.
         """
         if not self.peaks:
             self.global_optimum = None
             return
         self.global_optimum = max(self.peaks, key=lambda peak: peak.height)
-        
-    def get_current_global_optimum_fitness(self):
-        """
-            Return the fitness of the current global optimum.
-        """
-        if self.global_optimum is None:
-            return None
-        return self.global_optimum.height
 
     def get_fitness(self, genome):
         """
-            To identify the current lobal optimum we need to determine which peak has the highest fitness.
+            Definition
+            -----------
+                Returns the fitness of the given individual as the highest fitness with respect to all peaks.
         """
-        fitness = 0.0
+        # Fitness is the maximum value among all peaks
+        max_fitness = float('-inf')
+        
         for peak in self.peaks:
-            distance = min(abs(peak.position - np.sum(genome)), self.n - abs(peak.position - np.sum(genome)))
-            fitness += peak.height * np.exp(- (distance ** 2) / (2 * peak.width ** 2))
-        return fitness / self.m
+            distance = np.sum(genome != peak.position)  # Hamming distance
+            # Gaussian-like function using Hamming distance
+            fitness = peak.height * np.exp(- (distance ** 2) / (2 * (peak.width ** 2)))
+            if fitness > max_fitness:
+                max_fitness = fitness
+                
+        return max_fitness
+
 
