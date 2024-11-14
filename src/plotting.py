@@ -1117,6 +1117,73 @@ def plot_threshold_vs_max_depth_by_gen_success(args, thresholds, depths):
     plt.savefig(f"{os.getcwd()}/figures/heatmaps_depth_vs_threshold_by_gen_success.png")
     plt.close()
     
+def plot_all_heatmap(args, thresholds, depths):
+      
+    # Flatten both treatments
+    df_inbreeding = util.flatten_results_in_max_depth_diversity('inbreeding', thresholds, depths)
+    df_no_inbreeding = util.flatten_results_in_max_depth_diversity('no_inbreeding', thresholds, depths)
+    
+    # Combine into a single DataFrame
+    df_combined = pd.concat([df_inbreeding, df_no_inbreeding], ignore_index=True)
+    
+    # Aggregate diversity by treatment, max_depth, and inbred_threshold
+    heatmap_data_div = df_combined.groupby(['Treatment', 'Max_Depth', 'Inbred_Threshold'])['Diversity'].mean().reset_index()
+
+    # Pivot the data for heatmap
+    pivot_inbreeding = heatmap_data_div[heatmap_data_div['Treatment'] == 'inbreeding'].pivot_table( index='Inbred_Threshold', columns='Max_Depth', values='Diversity', aggfunc='mean')  # or another aggregation function as needed)
+    pivot_no_inbreeding = heatmap_data_div[heatmap_data_div['Treatment'] == 'no_inbreeding'].pivot_table(index='Inbred_Threshold', columns='Max_Depth', values='Diversity', aggfunc='mean')  # or another aggregation function as needed)
+    
+    overall_min = min(pivot_inbreeding.min().min(), pivot_no_inbreeding.min().min())
+    overall_max = max(pivot_inbreeding.max().max(), pivot_no_inbreeding.max().max())
+    
+    # Get the Generation Success Grouping
+    # Aggregate diversity by treatment, max_depth, and inbred_threshold
+    heatmap_data_gen = df_combined.groupby(['Treatment', 'Max_Depth', 'Inbred_Threshold'])['Generation_Success'].mean().reset_index()
+
+    # Pivot the data for heatmap
+    pivot_inbreeding_gen = heatmap_data_gen[heatmap_data_gen['Treatment'] == 'inbreeding'].pivot_table( index='Inbred_Threshold', columns='Max_Depth', values='Generation_Success', aggfunc='mean')  # or another aggregation function as needed)
+    pivot_no_inbreeding_gen = heatmap_data_gen[heatmap_data_gen['Treatment'] == 'no_inbreeding'].pivot_table(index='Inbred_Threshold', columns='Max_Depth', values='Generation_Success', aggfunc='mean')  # or another aggregation function as needed)
+    
+        
+    # Create a figure with a specified size
+    plt.figure(figsize=(32, 16))
+
+    # Create annotations DataFrame
+    annotations = pivot_no_inbreeding_gen.copy()
+    for i in annotations.index:
+        for j in annotations.columns:
+            val_no_inbreeding = pivot_no_inbreeding_gen.loc[i, j]
+            val_inbreeding = pivot_inbreeding_gen.loc[i, j]
+            annotations.loc[i, j] = f"{val_no_inbreeding:.2f} ({val_inbreeding:.2f})"
+            
+    # Plot heatmap for No Inbreeding Treatment with annotations
+    ax = plt.subplot(111)
+    sns.heatmap(
+        pivot_no_inbreeding,
+        annot=annotations,
+        fmt="",
+        cmap="YlOrRd",
+        vmin=overall_min,
+        vmax=overall_max,
+        cbar=True,
+        ax=ax,
+        linewidths=.5,
+        linecolor='gray',
+        annot_kws={
+            "size": 15,        # Increase font size
+            #"weight": "bold",  # Make text bold
+            "color": "black"   # Change text color to black
+        }  
+    )
+    ax.set_title('Average Final Diversity [HeatMap] and Average Generation of Success [Value] - No Inbreeding (Inbreeding)', fontsize=14)
+    ax.set_xlabel('Maximum Depth of Tree', fontsize=14)
+    ax.set_ylabel('Inbred Threshold', fontsize=14)
+
+    # Adjust layout and save the figure
+    plt.tight_layout()
+    plt.savefig(f"{os.getcwd()}/figures/heatmaps_all.png")
+    plt.close()
+    
 if __name__ == "__main__":
     
     # expression = "(- (+ (* (* x x) (+ 1.0 x)) (+ (- 1.0 1.0) (+ (/ 1.0 1.0) (+ x x)))) (+ 1.0 x))"
@@ -1151,7 +1218,9 @@ if __name__ == "__main__":
     # gen_success_vs_inbreeding_threshold([], thresholds)
     
     # plot_threshold_vs_max_depth_by_gen_success([], thresholds, depths)
-    plot_threshold_vs_max_depth_by_diversity([], thresholds, depths)
+    # plot_threshold_vs_max_depth_by_diversity([], thresholds, depths)
+    
+    plot_all_heatmap([], thresholds, depths)
 
     
     # print("NO Inbreeding")

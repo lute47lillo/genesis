@@ -196,7 +196,7 @@ def multiple_runs_function_gp(args, landscape, inbred_threshold):
 
     return results
 
-def test_multiple_runs_function_gp(args, landscape, inbred_threshold, testing):
+def test_multiple_runs_function_gp(args, landscape, inbred_threshold):
     """
         TODO: Generalize to be for all function experiments and choose within. As of now only work with ackley
     """
@@ -211,7 +211,6 @@ def test_multiple_runs_function_gp(args, landscape, inbred_threshold, testing):
         ga_gp = GeneticAlgorithmGPTesting(
             args=args,
             mut_rate=args.mutation_rate,
-            testing_gp=testing,
             inbred_threshold=inbred_threshold  # Adjust based on inbreeding prevention
         )
         # Run GP-based GA for Given Function

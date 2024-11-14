@@ -73,7 +73,7 @@ class Individual:
 
 class GeneticAlgorithmGPTesting:
     
-    def __init__(self, args, mut_rate, testing_gp, inbred_threshold=None):
+    def __init__(self, args, mut_rate, inbred_threshold=None):
         self.args = args
         self.pop_size = args.pop_size
         self.generations = args.generations
@@ -85,9 +85,6 @@ class GeneticAlgorithmGPTesting:
         self.population = []
         self.best_fitness_list = []
         self.diversity_list = []
-        
-        # Testing Lambda
-        self.testing_gp = testing_gp
     
     # ----------------------- Tree ~ Node functions ------------------ #
     
@@ -172,7 +169,7 @@ class GeneticAlgorithmGPTesting:
         distance = self.compute_trees_distance(ind1.tree, ind2.tree)
         return distance >= inbred_threshold
     
-    def tree_height(self, node):
+    def tree_depth(self, node):
         """
             Definition
             -----------
@@ -187,20 +184,20 @@ class GeneticAlgorithmGPTesting:
         else:
             return 1 + max(self.tree_depth(child) for child in node.children)
         
-    def tree_depth(self, node):
-        """
-            Definition
-            -----------
-                Returns the height of a given individual tree.
-                Example:
-                    - tree1 = Node('+', [Node('x'), Node('1')]) for Node(+) will return 2 -> 1 depth of children + 1 for itself.
-        """
-        if node is None:
-            return 0
-        if node.is_terminal():
-            return 1
-        else:
-            return max(self.tree_depth(child) for child in node.children)
+    # def tree_depth(self, node):
+    #     """
+    #         Definition
+    #         -----------
+    #             Returns the height of a given individual tree.
+    #             Example:
+    #                 - tree1 = Node('+', [Node('x'), Node('1')]) for Node(+) will return 2 -> 1 depth of children + 1 for itself.
+    #     """
+    #     if node is None:
+    #         return 0
+    #     if node.is_terminal():
+    #         return 1
+    #     else:
+    #         return max(self.tree_depth(child) for child in node.children)
     
     def compute_trees_distance(self, node1, node2):
         """
@@ -642,23 +639,23 @@ if __name__ == "__main__":
 
     args.config_plot = term1 + term2 + term3
     print("Running GA with NO Inbreeding Mating...")
-    results_no_inbreeding = exp.test_multiple_runs_function_gp(args, gp_landscape, args.inbred_threshold, True)
+    results_no_inbreeding = exp.test_multiple_runs_function_gp(args, gp_landscape, args.inbred_threshold)
     util.save_accuracy(results_no_inbreeding, f"{args.config_plot}_no_inbreeding.npy")
     
     print("Running GA with Inbreeding Mating...")
-    results_inbreeding = exp.test_multiple_runs_function_gp(args, gp_landscape, None, True)
+    results_inbreeding = exp.test_multiple_runs_function_gp(args, gp_landscape, None)
     util.save_accuracy(results_inbreeding, f"{args.config_plot}_inbreeding.npy")
     
     # Plot the generation of successful runs
-    args.config_plot = term1 + "diversity_last_lambda" + term3
+    args.config_plot = term1 + "diversity_last_lambda/" + term3
     plot.plot_gen_vs_run(args, results_no_inbreeding, results_inbreeding)
     
     # Plot Diversity vs generations runs
-    args.config_plot = term1 + "div_gen_lambda" + term3
+    args.config_plot = term1 + "div_gen_lambda/" + term3
     plot.plot_diversity_generation_over_time(args, results_no_inbreeding, results_inbreeding)
     
     # Plot diversity vs generation of success (convergence)
-    args.config_plot = term1 + "diversity_success_lambda" + term3
+    args.config_plot = term1 + "diversity_success_lambda/" + term3
     plot.plot_time_of_convergence_vs_diversity(args, results_no_inbreeding, results_inbreeding)
     
     # -------------------------------- Experiment: Multiple Runs w/ fixed population and Variable mutation rate --------------------------- #
