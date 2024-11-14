@@ -374,7 +374,7 @@ def flatten_results_depths(treatment_name, depths):
     data_df = []
     for depth in depths:
         # Load dict data
-        file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/nguyen2/meeting/PopSize:300_InThres:4_Mrates:0.0005_Gens:150_TourSize:15_MaxD:{depth}_InitD:3_{treatment_name}.npy"
+        file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/nguyen2/gp_lambda/PopSize:300_InThres:4_Mrates:0.0005_Gens:150_TourSize:15_MaxD:{depth}_InitD:3_{treatment_name}.npy"
         data = np.load(file_path_name, allow_pickle=True)
         data_dict = data.item()
         
@@ -395,7 +395,7 @@ def flatten_results_thresholds(treatment_name, thresholds):
     data_df = []
     for thres in thresholds:
         # Load dict data
-        file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/nguyen2/meeting/PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:9_InitD:3_{treatment_name}.npy"
+        file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/nguyen2/gp_lambda/PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:9_InitD:3_{treatment_name}.npy"
         data = np.load(file_path_name, allow_pickle=True)
         data_dict = data.item()
         
@@ -416,7 +416,7 @@ def flatten_results_in_max_depth_diversity(treatment_name, thresholds, depths):
     for thres in thresholds:
         for depth in depths:
             # Load dict data
-            file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/nguyen2/meeting/PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:{depth}_InitD:3_{treatment_name}.npy"
+            file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/nguyen2/gp_lambda/PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:{depth}_InitD:3_{treatment_name}.npy"
             data = np.load(file_path_name, allow_pickle=True)
             data_dict = data.item()
             for run, metrics in data_dict.items():

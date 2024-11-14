@@ -943,7 +943,7 @@ def gen_success_vs_mas_depth(args, depths):
     l = plt.legend(handles[0:2], labels[0:2], title='Treatment', bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
 
     plt.show()
-    plt.savefig(f"{os.getcwd()}/figures/gen_success_vs_mas_depth.png")
+    plt.savefig(f"{os.getcwd()}/figures/gp_lambda/gen_success_vs_mas_depth.png")
     
 def gen_success_vs_inbreeding_threshold(args, thresholds):
     """
@@ -982,7 +982,7 @@ def gen_success_vs_inbreeding_threshold(args, thresholds):
     l = plt.legend(handles[0:2], labels[0:2], title='Treatment', bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
 
     plt.show()
-    plt.savefig(f"{os.getcwd()}/figures/gen_success_vs_inbreeding_threshold.png")
+    plt.savefig(f"{os.getcwd()}/figures/gp_lambda/gen_success_vs_inbreeding_threshold.png")
     
 def plot_threshold_vs_max_depth_by_diversity(args, thresholds, depths):
       
@@ -1039,7 +1039,7 @@ def plot_threshold_vs_max_depth_by_diversity(args, thresholds, depths):
 
     # Adjust layout and save the figure
     plt.tight_layout()
-    plt.savefig(f"{os.getcwd()}/figures/heatmaps_depth_vs_inbreeding_threshold_by_diversity.png")
+    plt.savefig(f"{os.getcwd()}/figures/gp_lambda/heatmaps_depth_vs_inbreeding_threshold_by_diversity.png")
     plt.close()
     
 def plot_threshold_vs_max_depth_by_gen_success(args, thresholds, depths):
@@ -1114,7 +1114,7 @@ def plot_threshold_vs_max_depth_by_gen_success(args, thresholds, depths):
     # Adjust layout and save the figure
     plt.suptitle('Average Diversity by Max Depth and Inbred Threshold across Treatments', fontsize=16, y=0.98)
     plt.tight_layout()
-    plt.savefig(f"{os.getcwd()}/figures/heatmaps_depth_vs_threshold_by_gen_success.png")
+    plt.savefig(f"{os.getcwd()}/figures/gp_lambda/heatmaps_depth_vs_threshold_by_gen_success.png")
     plt.close()
     
 def plot_all_heatmap(args, thresholds, depths):
@@ -1181,7 +1181,7 @@ def plot_all_heatmap(args, thresholds, depths):
 
     # Adjust layout and save the figure
     plt.tight_layout()
-    plt.savefig(f"{os.getcwd()}/figures/heatmaps_all.png")
+    plt.savefig(f"{os.getcwd()}/figures/gp_lambda/heatmaps_all.png")
     plt.close()
     
 if __name__ == "__main__":
@@ -1210,15 +1210,15 @@ if __name__ == "__main__":
     # plot_diversity_generation_over_time([], data_dict_no, data_dict)
     # # plot_gen_vs_run(15, data_dict_no, data_dict)
     
-    depths = [6, 7, 8, 9, 10]  # Example maximum depths
-    # gen_success_vs_mas_depth([], depths)
+    depths = [6, 7, 8] #,9, 10]  # Example maximum depths
+    # gen_success_vs_mas_depth([], depths) # TODO: They are for an static threshold
     
     # thresholds = [4,5,6,7,8]
-    thresholds = [4, 5, 6, 7, 8]
-    # gen_success_vs_inbreeding_threshold([], thresholds)
+    thresholds = [4, 5, 6, 7, 8, 9, 10]
+    # gen_success_vs_inbreeding_threshold([], thresholds) # TODO: they are for an static depth
     
-    # plot_threshold_vs_max_depth_by_gen_success([], thresholds, depths)
-    # plot_threshold_vs_max_depth_by_diversity([], thresholds, depths)
+    plot_threshold_vs_max_depth_by_gen_success([], thresholds, depths)
+    plot_threshold_vs_max_depth_by_diversity([], thresholds, depths)
     
     plot_all_heatmap([], thresholds, depths)
 
