@@ -172,11 +172,11 @@ class GeneticAlgorithmGPTesting:
         distance = self.compute_trees_distance(ind1.tree, ind2.tree)
         return distance >= inbred_threshold
     
-    def tree_depth(self, node):
+    def tree_height(self, node):
         """
             Definition
             -----------
-                Returns the depth of a given individual node.
+                Returns the height of a given individual tree.
                 Example:
                     - tree1 = Node('+', [Node('x'), Node('1')]) for Node(+) will return 2 -> 1 depth of children + 1 for itself.
         """
@@ -186,6 +186,21 @@ class GeneticAlgorithmGPTesting:
             return 1
         else:
             return 1 + max(self.tree_depth(child) for child in node.children)
+        
+    def tree_depth(self, node):
+        """
+            Definition
+            -----------
+                Returns the height of a given individual tree.
+                Example:
+                    - tree1 = Node('+', [Node('x'), Node('1')]) for Node(+) will return 2 -> 1 depth of children + 1 for itself.
+        """
+        if node is None:
+            return 0
+        if node.is_terminal():
+            return 1
+        else:
+            return max(self.tree_depth(child) for child in node.children)
     
     def compute_trees_distance(self, node1, node2):
         """

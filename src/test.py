@@ -191,7 +191,7 @@ class GeneticProgrammingSystem:
         if node.is_terminal():
             return 1
         else:
-            return 1 + max(self.tree_depth(child) for child in node.children)
+            return max(self.tree_depth(child) for child in node.children)
         
     def crossover(self, parent1, parent2, inbred_threshold, max_depth):
       
@@ -327,120 +327,120 @@ class GeneticProgrammingSystem:
 
 class TestMeasureDiversity(unittest.TestCase):
     
-    # def test_measure_diversity(self):
-    #     # Create sample trees for testing
+    def test_measure_diversity(self):
+        # Create sample trees for testing
         
-    #     # Tree 1: (x + 1)
-    #     tree1 = Node('-', [Node('2'), Node('1')])
+        # Tree 1: (x + 1)
+        tree1 = Node('-', [Node('2'), Node('1')])
         
-    #     # Tree 2: (x + 2)
-    #     tree2 = Node('+', [Node('x'), Node('2')])
+        # Tree 2: (x + 2)
+        tree2 = Node('+', [Node('x'), Node('2')])
         
-    #     # Tree 3: (x * x)
-    #     tree3 = Node('-', [Node('x'), Node('1')])
+        # Tree 3: (x * x)
+        tree3 = Node('-', [Node('x'), Node('1')])
         
-    #     # Tree 4: (3 - x)
-    #     tree4 = Node('/', [Node('3'), Node('x')])
+        # Tree 4: (3 - x)
+        tree4 = Node('/', [Node('3'), Node('x')])
         
-    #     # Tree 5: 
-    #     tree5 = Node('+', [Node('*', [Node('-', [Node('x'), Node('1.0')])]), Node('+', [Node('x'), Node('1.0')])])
+        # Tree 5: 
+        tree5 = Node('+', [Node('*', [Node('-', [Node('x'), Node('1.0')])]), Node('+', [Node('x'), Node('1.0')])])
         
-    #     tree6 = Node('+', [Node('*', [Node('x'), Node('1.0')]), Node('x')])
+        tree6 = Node('+', [Node('*', [Node('x'), Node('1.0')]), Node('x')])
         
-    #     # Create individuals
-    #     individual1 = Individual(tree1)
-    #     individual2 = Individual(tree2)
-    #     individual3 = Individual(tree3)
-    #     individual4 = Individual(tree4)
-        
-    #     # Create population
-    #     population = [individual1, individual2, individual3, individual4]
-        
-    #     # Initialize GP system
-    #     gp_system = GeneticProgrammingSystem(population)
-        
-    #     # Calculate diversity
-    #     diversity = gp_system.measure_diversity()
-        
-    #     nodes = gp_system.get_all_nodes(tree1)
-    #     print(nodes)
-        
-    #     depth = gp_system.tree_depth(tree4)
-    #     print(f"The depth: {depth}")
-        
-    #     random_node = gp_system.select_random_node(tree1)
-    #     print(random_node)
-        
-    #     # Manually compute expected diversity
-    #     # Pairwise distances:
-    #     # Distance between tree1 and tree2
-    #     dist1_2 = gp_system.tree_edit_distance(tree1, tree2)  
-    #     inbred_thres = 2      
-    #     can = gp_system.can_mate(individual1, individual2, inbred_thres)
-    #     if not can:
-    #         print(f"Cant reproduce with distance: {dist1_2} and threshold: {inbred_thres}")
-    #     else:
-    #         print(f"Can reproduce with distance: {dist1_2} and threshold: {inbred_thres}")
-            
-    #     # Distance between tree1 and tree3
-    #     dist1_3 = gp_system.tree_edit_distance(tree1, tree3)
-    #     inbred_thres = 2      
-    #     can = gp_system.can_mate(individual1, individual3, inbred_thres)
-    #     if not can:
-    #         print(f"Cant reproduce with distance: {dist1_3} and threshold: {inbred_thres}")
-    #     else:
-    #         print(f"Can reproduce with distance: {dist1_3} and threshold: {inbred_thres}")
-            
-    #     # Distance between tree1 and tree4
-    #     dist1_4 = gp_system.tree_edit_distance(tree1, tree4)
-    #     # Distance between tree2 and tree3
-    #     dist2_3 = gp_system.tree_edit_distance(tree2, tree3)
-    #     # Distance between tree2 and tree4
-    #     dist2_4 = gp_system.tree_edit_distance(tree2, tree4)
-    #     # Distance between tree3 and tree4
-    #     dist3_4 = gp_system.tree_edit_distance(tree3, tree4)
-        
-    #     total_distance = dist1_2 + dist1_3 + dist1_4 + dist2_3 + dist2_4 + dist3_4
-    #     count = 6  # Total number of pairs
-        
-    #     expected_diversity = total_distance / count
-        
-    #     # Assert that the calculated diversity matches the expected diversity
-    #     self.assertEqual(diversity, expected_diversity)
-        
-    #     # Optional: Print the diversity
-    #     print(f"Calculated Diversity: {diversity}")
-    #     print(f"Expected Diversity: {expected_diversity}")
-        
-    #     # Additionally, assert that the diversity is greater than zero
-    #     self.assertGreater(diversity, 0)
-        
-    def test_crossover_same_arity(self):
-        
-        tree1 = Node('+', [Node('x'), Node('1.0')])
-        tree2 = Node('+', [Node('*', [Node('x'), Node('1.0')]), Node('x')])
-        
-        # Create two parent trees with matching arities
+        # Create individuals
         individual1 = Individual(tree1)
         individual2 = Individual(tree2)
+        individual3 = Individual(tree3)
+        individual4 = Individual(tree4)
         
         # Create population
-        population = [individual1, individual2]
+        population = [individual1, individual2, individual3, individual4]
         
         # Initialize GP system
         gp_system = GeneticProgrammingSystem(population)
         
-        dist1_2 = gp_system.tree_edit_distance(tree1, tree2)
-        print(f"Distance: {dist1_2}")
+        # Calculate diversity
+        diversity = gp_system.measure_diversity()
         
-        offspring1, offspring2 = gp_system.crossover(individual1, individual2, 2, 10)
+        nodes = gp_system.get_all_nodes(tree1)
+        print(nodes)
         
-        print(f"{individual1} + {individual2} = {offspring1}")
-        print(f"{individual1} + {individual2} = {offspring2}")
+        depth = gp_system.tree_depth(tree4)
+        print(f"The depth: {depth}")
+        
+        random_node = gp_system.select_random_node(tree1)
+        print(random_node)
+        
+        # Manually compute expected diversity
+        # Pairwise distances:
+        # Distance between tree1 and tree2
+        dist1_2 = gp_system.tree_edit_distance(tree1, tree2)  
+        inbred_thres = 2      
+        can = gp_system.can_mate(individual1, individual2, inbred_thres)
+        if not can:
+            print(f"Cant reproduce with distance: {dist1_2} and threshold: {inbred_thres}")
+        else:
+            print(f"Can reproduce with distance: {dist1_2} and threshold: {inbred_thres}")
+            
+        # Distance between tree1 and tree3
+        dist1_3 = gp_system.tree_edit_distance(tree1, tree3)
+        inbred_thres = 2      
+        can = gp_system.can_mate(individual1, individual3, inbred_thres)
+        if not can:
+            print(f"Cant reproduce with distance: {dist1_3} and threshold: {inbred_thres}")
+        else:
+            print(f"Can reproduce with distance: {dist1_3} and threshold: {inbred_thres}")
+            
+        # Distance between tree1 and tree4
+        dist1_4 = gp_system.tree_edit_distance(tree1, tree4)
+        # Distance between tree2 and tree3
+        dist2_3 = gp_system.tree_edit_distance(tree2, tree3)
+        # Distance between tree2 and tree4
+        dist2_4 = gp_system.tree_edit_distance(tree2, tree4)
+        # Distance between tree3 and tree4
+        dist3_4 = gp_system.tree_edit_distance(tree3, tree4)
+        
+        total_distance = dist1_2 + dist1_3 + dist1_4 + dist2_3 + dist2_4 + dist3_4
+        count = 6  # Total number of pairs
+        
+        expected_diversity = total_distance / count
+        
+        # Assert that the calculated diversity matches the expected diversity
+        self.assertEqual(diversity, expected_diversity)
+        
+        # Optional: Print the diversity
+        print(f"Calculated Diversity: {diversity}")
+        print(f"Expected Diversity: {expected_diversity}")
+        
+        # Additionally, assert that the diversity is greater than zero
+        self.assertGreater(diversity, 0)
+        
+    # def test_crossover_same_arity(self):
+        
+    #     tree1 = Node('+', [Node('x'), Node('1.0')])
+    #     tree2 = Node('+', [Node('*', [Node('x'), Node('1.0')]), Node('x')])
+        
+    #     # Create two parent trees with matching arities
+    #     individual1 = Individual(tree1)
+    #     individual2 = Individual(tree2)
+        
+    #     # Create population
+    #     population = [individual1, individual2]
+        
+    #     # Initialize GP system
+    #     gp_system = GeneticProgrammingSystem(population)
+        
+    #     dist1_2 = gp_system.tree_edit_distance(tree1, tree2)
+    #     print(f"Distance: {dist1_2}")
+        
+    #     offspring1, offspring2 = gp_system.crossover(individual1, individual2, 2, 10)
+        
+    #     print(f"{individual1} + {individual2} = {offspring1}")
+    #     print(f"{individual1} + {individual2} = {offspring2}")
         
         
-        self.assertIsNotNone(offspring1)
-        self.assertIsNotNone(offspring2)
+    #     self.assertIsNotNone(offspring1)
+    #     self.assertIsNotNone(offspring2)
         
     # def test_mutate_correct_arity(self):
         

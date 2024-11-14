@@ -1004,59 +1004,42 @@ def plot_threshold_vs_max_depth_by_diversity(args, thresholds, depths):
     overall_max = max(pivot_inbreeding.max().max(), pivot_no_inbreeding.max().max())
         
     # Create a figure with a specified size
-    plt.figure(figsize=(20, 12))
+    plt.figure(figsize=(32, 16))
 
-    # Use GridSpec to allocate space for two heatmaps and a shared colorbar
-    gs = gridspec.GridSpec(1, 3, width_ratios=[1, 1, 0.05], wspace=0.3)
-
-    # Plot heatmap for Inbreeding Treatment
-    ax1 = plt.subplot(gs[0])
-    sns.heatmap(
-        pivot_inbreeding,
-        annot=True,
-        fmt=".2f",
-        cmap="YlOrRd",  # Choose a single color map for consistency
-        vmin=overall_min,
-        vmax=overall_max,
-        cbar=False,  # Disable individual colorbars
-        ax=ax1,
-        linewidths=.5,
-        linecolor='gray'
-    )
-    ax1.set_title('Average Diversity - Inbreeding', fontsize=14)
-    ax1.set_xlabel('Maximum Depth of Tree', fontsize=12)
-    ax1.set_ylabel('Inbred Threshold', fontsize=12)
-
-    # Plot heatmap for No Inbreeding Treatment
-    ax2 = plt.subplot(gs[1])
+    # Create annotations DataFrame
+    annotations = pivot_no_inbreeding.copy()
+    for i in annotations.index:
+        for j in annotations.columns:
+            val_no_inbreeding = pivot_no_inbreeding.loc[i, j]
+            val_inbreeding = pivot_inbreeding.loc[i, j]
+            annotations.loc[i, j] = f"{val_no_inbreeding:.2f} ({val_inbreeding:.2f})"
+            
+    # Plot heatmap for No Inbreeding Treatment with annotations
+    ax = plt.subplot(111)
     sns.heatmap(
         pivot_no_inbreeding,
-        annot=True,
-        fmt=".2f",
-        cmap="YlOrRd",  # Use the same color map
+        annot=annotations,
+        fmt="",
+        cmap="YlOrRd",
         vmin=overall_min,
         vmax=overall_max,
-        cbar=False,  # Disable individual colorbars
-        ax=ax2,
+        cbar=True,
+        ax=ax,
         linewidths=.5,
-        linecolor='gray'
+        linecolor='gray',
+        annot_kws={
+            "size": 15,        # Increase font size
+            #"weight": "bold",  # Make text bold
+            "color": "black"   # Change text color to black
+        }  
     )
-    ax2.set_title('Average Diversity - No Inbreeding', fontsize=14)
-    ax2.set_xlabel('Maximum Depth of Tree', fontsize=12)
-    ax2.set_ylabel('Inbred Threshold', fontsize=12)
-
-    # Create a single colorbar for both heatmaps
-    cbar_ax = plt.subplot(gs[2])
-    norm = plt.Normalize(vmin=overall_min, vmax=overall_max)
-    sm = plt.cm.ScalarMappable(cmap="YlOrRd", norm=norm)
-    sm.set_array([])  # Only needed for older versions of Matplotlib
-    cbar = plt.colorbar(sm, cax=cbar_ax)
-    cbar.set_label('Diversity', fontsize=14)
+    ax.set_title('Average Final Diversity - No Inbreeding (Inbreeding in parentheses)', fontsize=14)
+    ax.set_xlabel('Maximum Depth of Tree', fontsize=14)
+    ax.set_ylabel('Inbred Threshold', fontsize=14)
 
     # Adjust layout and save the figure
-    plt.suptitle('Average Diversity by Max Depth and Inbred Threshold across Treatments', fontsize=16, y=0.98)
     plt.tight_layout()
-    plt.savefig(f"{os.getcwd()}/figures/heatmaps_depth_vs_threshold_by_diversity.png")
+    plt.savefig(f"{os.getcwd()}/figures/heatmaps_depth_vs_inbreeding_threshold_by_diversity.png")
     plt.close()
     
 def plot_threshold_vs_max_depth_by_gen_success(args, thresholds, depths):
@@ -1167,8 +1150,8 @@ if __name__ == "__main__":
     thresholds = [4, 5, 6, 7, 8]
     # gen_success_vs_inbreeding_threshold([], thresholds)
     
-    plot_threshold_vs_max_depth_by_gen_success([], thresholds, depths)
-    # plot_threshold_vs_max_depth_by_diversity([], thresholds, depths)
+    # plot_threshold_vs_max_depth_by_gen_success([], thresholds, depths)
+    plot_threshold_vs_max_depth_by_diversity([], thresholds, depths)
 
     
     # print("NO Inbreeding")
