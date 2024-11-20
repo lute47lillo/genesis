@@ -984,11 +984,11 @@ def gen_success_vs_inbreeding_threshold(args, thresholds):
     plt.show()
     plt.savefig(f"{os.getcwd()}/figures/gp_lambda/gen_success_vs_inbreeding_threshold.png")
     
-def plot_threshold_vs_max_depth_by_diversity(args, thresholds, depths):
+def plot_threshold_vs_max_depth_by_diversity(args, bench_name, thresholds, depths, init_depth):
       
     # Flatten both treatments
-    df_inbreeding = util.flatten_results_in_max_depth_diversity('inbreeding', thresholds, depths)
-    df_no_inbreeding = util.flatten_results_in_max_depth_diversity('no_inbreeding', thresholds, depths)
+    df_inbreeding = util.flatten_results_in_max_depth_diversity(bench_name, 'inbreeding', thresholds, depths, init_depth)
+    df_no_inbreeding = util.flatten_results_in_max_depth_diversity(bench_name, 'no_inbreeding', thresholds, depths, init_depth)
     
     # Combine into a single DataFrame
     df_combined = pd.concat([df_inbreeding, df_no_inbreeding], ignore_index=True)
@@ -1007,12 +1007,31 @@ def plot_threshold_vs_max_depth_by_diversity(args, thresholds, depths):
     plt.figure(figsize=(32, 16))
 
     # Create annotations DataFrame
+    no_in_count = 0
+    in_count = 0
+    min_no_in = 150
+    min_in = 150
+    max_no_in = 0
+    max_in = 0
     annotations = pivot_no_inbreeding.copy()
     for i in annotations.index:
         for j in annotations.columns:
             val_no_inbreeding = pivot_no_inbreeding.loc[i, j]
             val_inbreeding = pivot_inbreeding.loc[i, j]
             annotations.loc[i, j] = f"{val_no_inbreeding:.2f} ({val_inbreeding:.2f})"
+            if val_no_inbreeding <= val_inbreeding:
+                no_in_count += 1
+                min_no_in = min(min_no_in, val_no_inbreeding)
+                max_no_in = max(max_no_in, val_no_inbreeding)
+            else:
+                in_count +=1 
+                min_in = min(min_in, val_inbreeding)
+                max_in = max(max_in, val_inbreeding)
+                
+    n_comb = no_in_count+in_count
+    print(f"\nFor a total of {n_comb} combinations.")
+    print(f"NO Inbreeding ({no_in_count}): {(no_in_count/n_comb)*100:.3f}%. Minimum gen: {min_no_in} and Max gen: {max_no_in}.")
+    print(f"Inbreeding ({in_count}): {(in_count/n_comb)*100:.3f}%. Minimum gen: {min_in} and Max gen: {max_in}.")
             
     # Plot heatmap for No Inbreeding Treatment with annotations
     ax = plt.subplot(111)
@@ -1039,14 +1058,14 @@ def plot_threshold_vs_max_depth_by_diversity(args, thresholds, depths):
 
     # Adjust layout and save the figure
     plt.tight_layout()
-    plt.savefig(f"{os.getcwd()}/figures/gp_lambda/heatmaps_depth_vs_inbreeding_threshold_by_diversity.png")
+    plt.savefig(f"{os.getcwd()}/figures/gp_lambda/{bench_name}_heatmaps_depth_vs_inbreeding_threshold_by_diversity_InitD:{init_depth}.png")
     plt.close()
     
-def plot_threshold_vs_max_depth_by_gen_success(args, thresholds, depths):
+def plot_threshold_vs_max_depth_by_gen_success(args, bench_name, thresholds, depths, init_depth):
       
     # Flatten both treatments
-    df_inbreeding = util.flatten_results_in_max_depth_diversity('inbreeding', thresholds, depths)
-    df_no_inbreeding = util.flatten_results_in_max_depth_diversity('no_inbreeding', thresholds, depths)
+    df_inbreeding = util.flatten_results_in_max_depth_diversity(bench_name, 'inbreeding', thresholds, depths, init_depth)
+    df_no_inbreeding = util.flatten_results_in_max_depth_diversity(bench_name, 'no_inbreeding', thresholds, depths, init_depth)
     
     # Combine into a single DataFrame
     df_combined = pd.concat([df_inbreeding, df_no_inbreeding], ignore_index=True)
@@ -1114,14 +1133,14 @@ def plot_threshold_vs_max_depth_by_gen_success(args, thresholds, depths):
     # Adjust layout and save the figure
     plt.suptitle('Average Diversity by Max Depth and Inbred Threshold across Treatments', fontsize=16, y=0.98)
     plt.tight_layout()
-    plt.savefig(f"{os.getcwd()}/figures/gp_lambda/heatmaps_depth_vs_threshold_by_gen_success.png")
+    plt.savefig(f"{os.getcwd()}/figures/gp_lambda/{bench_name}_heatmaps_depth_vs_threshold_by_gen_success_InitD:{init_depth}.png")
     plt.close()
     
-def plot_all_heatmap(args, thresholds, depths):
+def plot_all_heatmap(args, bench_name, thresholds, depths, init_depth):
       
     # Flatten both treatments
-    df_inbreeding = util.flatten_results_in_max_depth_diversity('inbreeding', thresholds, depths)
-    df_no_inbreeding = util.flatten_results_in_max_depth_diversity('no_inbreeding', thresholds, depths)
+    df_inbreeding = util.flatten_results_in_max_depth_diversity(bench_name, 'inbreeding', thresholds, depths, init_depth)
+    df_no_inbreeding = util.flatten_results_in_max_depth_diversity(bench_name, 'no_inbreeding', thresholds, depths, init_depth)
     
     # Combine into a single DataFrame
     df_combined = pd.concat([df_inbreeding, df_no_inbreeding], ignore_index=True)
@@ -1148,13 +1167,38 @@ def plot_all_heatmap(args, thresholds, depths):
     # Create a figure with a specified size
     plt.figure(figsize=(32, 16))
 
-    # Create annotations DataFrame
+    no_in_count = 0
+    in_count = 0
+    min_no_in = 150
+    min_in = 150
+    max_no_in = 0
+    max_in = 0
+    no_success = 0
+    success = 0
     annotations = pivot_no_inbreeding_gen.copy()
     for i in annotations.index:
         for j in annotations.columns:
             val_no_inbreeding = pivot_no_inbreeding_gen.loc[i, j]
             val_inbreeding = pivot_inbreeding_gen.loc[i, j]
             annotations.loc[i, j] = f"{val_no_inbreeding:.2f} ({val_inbreeding:.2f})"
+            if val_no_inbreeding <= val_inbreeding:
+                no_in_count += 1
+                if val_no_inbreeding < 150:
+                    no_success += 1
+                min_no_in = min(min_no_in, val_no_inbreeding)
+                max_no_in = max(max_no_in, val_no_inbreeding)
+            else:
+                in_count +=1 
+                if val_inbreeding < 150:
+                    success += 1
+                min_in = min(min_in, val_inbreeding)
+                max_in = max(max_in, val_inbreeding)
+                
+    n_comb = no_in_count+in_count
+    print(f"\nFor a total of {n_comb} combinations.")
+    print(f"NO Inbreeding ({no_in_count}): {(no_in_count/n_comb)*100:.3f}%. Minimum gen: {min_no_in} and Max gen: {max_no_in}.")
+    print(f"Inbreeding ({in_count}): {(in_count/n_comb)*100:.3f}%. Minimum gen: {min_in} and Max gen: {max_in}.")
+            
             
     # Plot heatmap for No Inbreeding Treatment with annotations
     ax = plt.subplot(111)
@@ -1181,7 +1225,7 @@ def plot_all_heatmap(args, thresholds, depths):
 
     # Adjust layout and save the figure
     plt.tight_layout()
-    plt.savefig(f"{os.getcwd()}/figures/gp_lambda/heatmaps_all.png")
+    plt.savefig(f"{os.getcwd()}/figures/gp_lambda/{bench_name}_heatmaps_all_InitD:{init_depth}.png")
     plt.close()
     
 if __name__ == "__main__":
@@ -1210,17 +1254,18 @@ if __name__ == "__main__":
     # plot_diversity_generation_over_time([], data_dict_no, data_dict)
     # # plot_gen_vs_run(15, data_dict_no, data_dict)
     
-    depths = [6, 7, 8] #,9, 10]  # Example maximum depths
+    depths = [6, 7, 8, 9, 10]  # Example maximum depths
     # gen_success_vs_mas_depth([], depths) # TODO: They are for an static threshold
     
-    # thresholds = [4,5,6,7,8]
-    thresholds = [4, 5, 6, 7, 8, 9, 10]
+    # thresholds = [4,5,6,7] # for InitD:2
+    thresholds = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14] # InitD:3
+    # thresholds = [4, 5, 6, 7, 8, 9, 10] # InitD:3 nguyen3 for now
     # gen_success_vs_inbreeding_threshold([], thresholds) # TODO: they are for an static depth
     
-    plot_threshold_vs_max_depth_by_gen_success([], thresholds, depths)
-    plot_threshold_vs_max_depth_by_diversity([], thresholds, depths)
+    # plot_threshold_vs_max_depth_by_gen_success([], "nguyen2", thresholds, depths, 3)
+    # plot_threshold_vs_max_depth_by_diversity([], "nguyen3", thresholds, depths, 3)
     
-    plot_all_heatmap([], thresholds, depths)
+    plot_all_heatmap([], "nguyen2", thresholds, depths, 3)
 
     
     # print("NO Inbreeding")

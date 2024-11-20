@@ -415,32 +415,37 @@ class TestMeasureDiversity(unittest.TestCase):
         # Additionally, assert that the diversity is greater than zero
         self.assertGreater(diversity, 0)
         
-    # def test_crossover_same_arity(self):
+    def test_crossover_same_arity(self):
         
-    #     tree1 = Node('+', [Node('x'), Node('1.0')])
-    #     tree2 = Node('+', [Node('*', [Node('x'), Node('1.0')]), Node('x')])
+        tree1 = Node('+', [Node('x'), Node('x')]) # x + x = 2x
+        tree2 = Node('+', [Node('*', [Node('x'), Node('1.0')]), Node('x')]) # x + x = 2x
         
-    #     # Create two parent trees with matching arities
-    #     individual1 = Individual(tree1)
-    #     individual2 = Individual(tree2)
+        # Semantically equivalent, but syntactic distance of 3. 
+        # The childs they produce are:
+        # Individual((* x 1.0))  -> x
+        # Individual((+ (+ x x) x)) -> x + 2x = 3x
         
-    #     # Create population
-    #     population = [individual1, individual2]
+        # Create two parent trees with matching arities
+        individual1 = Individual(tree1)
+        individual2 = Individual(tree2)
         
-    #     # Initialize GP system
-    #     gp_system = GeneticProgrammingSystem(population)
+        # Create population
+        population = [individual1, individual2]
         
-    #     dist1_2 = gp_system.tree_edit_distance(tree1, tree2)
-    #     print(f"Distance: {dist1_2}")
+        # Initialize GP system
+        gp_system = GeneticProgrammingSystem(population)
         
-    #     offspring1, offspring2 = gp_system.crossover(individual1, individual2, 2, 10)
+        dist1_2 = gp_system.tree_edit_distance(tree1, tree2)
+        print(f"Distance: {dist1_2}")
         
-    #     print(f"{individual1} + {individual2} = {offspring1}")
-    #     print(f"{individual1} + {individual2} = {offspring2}")
+        offspring1, offspring2 = gp_system.crossover(individual1, individual2, 2, 10)
+        
+        print(f"{individual1} + {individual2} = {offspring1}")
+        print(f"{individual1} + {individual2} = {offspring2}")
         
         
-    #     self.assertIsNotNone(offspring1)
-    #     self.assertIsNotNone(offspring2)
+        self.assertIsNotNone(offspring1)
+        self.assertIsNotNone(offspring2)
         
     # def test_mutate_correct_arity(self):
         

@@ -15,6 +15,7 @@ class Node:
     def __init__(self, value, children=None):
         self.value = value  # Function or terminal
         self.children = children if children is not None else []
+        self.id = id if id is not None else np.random.randint(1e9)
 
     def is_terminal(self):
         return len(self.children) == 0
@@ -32,6 +33,7 @@ class Individual:
         self.max_depth = self.args.max_depth # TODO
         self.initial_depth = self.args.initial_depth
         self.tree = tree if tree is not None else self.random_tree(depth=self.initial_depth) # Initial depth of 6 as in paper
+        
         # self.fitness = None
         self.id = id if id is not None else np.random.randint(1e9)
         self.ancestors = ancestors if ancestors is not None else set()
@@ -184,13 +186,28 @@ class GeneticAlgorithmGPTesting:
         else:
             return 1 + max(self.tree_depth(child) for child in node.children)
         
+    # def tree_depth(self, node):
+    #     """
+    #         Definition
+    #         -----------
+    #             Returns the height of a given individual tree.
+    #             Example:
+    #                 - tree1 = Node('+', [Node('x'), Node('1')]) for Node(+) will return 2 -> 1 depth of children + 1 for itself.
+    #     """
+    #     if node is None:
+    #         return 0
+    #     if node.is_terminal():
+    #         return 1
+    #     else:
+    #         return max(self.tree_depth(child) for child in node.children)
+    
     def compute_trees_distance(self, node1, node2):
         """
             Definition
             -----------
                 Computes the distance between 2 different trees through recursion.
                 Example:
-                          # Tree 1: (x - 1) -> tree1 = Node('-', [Node('x'), Node('1')])
+                          # Tree 1: (x + 1) -> tree1 = Node('-', [Node('x'), Node('1')])
                           # Tree 2: (x + 2) -> tree2 = Node('+', [Node('x'), Node('2')])
                           have distance of 2. 
         """
@@ -250,7 +267,7 @@ class GeneticAlgorithmGPTesting:
             -----------
                 Crossover of 2 parents in the population that produces 2 different offspring.
                 Given tree1 = Node('+', [Node('x'), Node('1.0')])
-                        tree2 = Node('+', [Node('*', [Node('x'), Node('1.0')]), Node('x')])
+                      tree2 = Node('+', [Node('*', [Node('x'), Node('1.0')]), Node('x')])
                 Example 1:
                 
                     Chosen Parent_node1: (+ x 1.0) and Node1:   'x' from tree1
