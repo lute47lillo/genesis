@@ -7,7 +7,8 @@ import plotting as plot
 import gp_math
 
 """            
-        MAIN GP file, WIP once all different iterations and tests have been resolved.
+        - Add the NGUYEN benchmark functions from "Effective Adaptive Mutation Rates for Program Synthesis" Paper
+        and from "Better GP benchmarks: community survey results and proposals" paper.
 """
 
 class Node:
@@ -25,16 +26,19 @@ class Node:
             return f"({self.value} {' '.join(str(child) for child in self.children)})"
 
 class Individual:
-    def __init__(self, args, tree=None, id=None, ancestors=None, generation=0):
+    def __init__(self, args, fitness_function=None, tree=None, id=None, ancestors=None, generation=0):
         self.args = args
         self.bounds = self.args.bounds
         self.max_depth = self.args.max_depth # TODO
         self.initial_depth = self.args.initial_depth
         self.tree = tree if tree is not None else self.random_tree(depth=self.initial_depth) # Initial depth of 6 as in paper
-        self.fitness = None
+        # self.fitness = None
         self.id = id if id is not None else np.random.randint(1e9)
         self.ancestors = ancestors if ancestors is not None else set()
         self.generation = generation  # Track the generation of the individual
+        
+        # Init fitness for individual in creation and self.success
+        self.fitness, self.success = fitness_function(self.tree)
         
     def get_function_arity(self, function):
         arity_dict = {
@@ -67,7 +71,7 @@ class Individual:
     def __str__(self):
         return str(self.tree)
 
-class GeneticAlgorithmGP:
+class GeneticAlgorithmGPTesting:
     
     def __init__(self, args, mut_rate, inbred_threshold=None):
         self.args = args
@@ -169,7 +173,7 @@ class GeneticAlgorithmGP:
         """
             Definition
             -----------
-                Returns the depth of a given individual node.
+                Returns the height of a given individual tree.
                 Example:
                     - tree1 = Node('+', [Node('x'), Node('1')]) for Node(+) will return 2 -> 1 depth of children + 1 for itself.
         """
@@ -179,14 +183,14 @@ class GeneticAlgorithmGP:
             return 1
         else:
             return 1 + max(self.tree_depth(child) for child in node.children)
-    
+        
     def compute_trees_distance(self, node1, node2):
         """
             Definition
             -----------
                 Computes the distance between 2 different trees through recursion.
                 Example:
-                          # Tree 1: (x + 1) -> tree1 = Node('-', [Node('x'), Node('1')])
+                          # Tree 1: (x - 1) -> tree1 = Node('-', [Node('x'), Node('1')])
                           # Tree 2: (x + 2) -> tree2 = Node('+', [Node('x'), Node('2')])
                           have distance of 2. 
         """
@@ -214,14 +218,21 @@ class GeneticAlgorithmGP:
     def initialize_population(self):
         self.population = []
         for _ in range(self.pop_size):
-            individual = Individual(self.args)
+            individual = Individual(self.args, fitness_function=self.fitness_function)
             self.population.append(individual)
     
-    def calculate_fitness(self, fitness_function, curr_gen):
+    def calculate_fitness(self, curr_gen):
         for individual in self.population:
-            individual.fitness, success = fitness_function(individual.tree)
-            if success:
+            individual.fitness, individual.success = self.fitness_function(individual.tree)
+            if individual.success:
                 print(f"Successful individual found in generation {curr_gen}")
+                print(f"Function: {individual.tree}")
+                self.poulation_success = True
+                
+    def check_succcess_new_pop(self, curr_gen, next_population):
+        for individual in next_population:
+            if individual.success:
+                print(f"Successful individual found in new population in generation {curr_gen}")
                 print(f"Function: {individual.tree}")
                 self.poulation_success = True
             
@@ -273,7 +284,6 @@ class GeneticAlgorithmGP:
             parent_node2, node2 = self.select_random_node_with_parent(child2)
 
             if node1 is None or node2 is None:
-                # print(f"Attempt {attempt+1}: One of the selected nodes is None. Retrying...")
                 continue  # Try again
 
             # TODO: Currenlty enforcnig that the parents need to have the same arity. 
@@ -282,7 +292,6 @@ class GeneticAlgorithmGP:
             arity1 = parent1.get_function_arity(node1.value)
             arity2 = parent2.get_function_arity(node2.value)
             if arity1 != arity2:
-                # print(f"Attempt {attempt+1}: Arities do not match (arity1={arity1}, arity2={arity2}). Retrying...")
                 continue  # Arities don't match, select another pair
 
             # Swap entire subtrees
@@ -307,36 +316,35 @@ class GeneticAlgorithmGP:
                     index = parent_node2.children.index(node2)
                     parent_node2.children[index] = copy.deepcopy(node1)
                 except ValueError:
-                    # print(f"Attempt {attempt}: node2 not found in parent_node2's children. Retrying...")
                     continue  # node2 not found, try again
 
             # Check for depth constraints
             depth_child1 = self.tree_depth(child1)
             depth_child2 = self.tree_depth(child2)
             if depth_child1 > self.max_depth or depth_child2 > self.max_depth:
-                # print(f"Attempt {attempt}: Offspring exceed max depth ({self.max_depth}). Retrying...")
+                
                 # Revert the swap by reinitializing the trees
                 child1 = copy.deepcopy(parent1.tree)
                 child2 = copy.deepcopy(parent2.tree)
                 continue  # Try again
 
             # Successful crossover
-            # print(f"Attempt {attempt}: Crossover successful.")
             break
         else:
             # Failed to perform a valid crossover within max_attempts
-            # print("Crossover failed after maximum attempts.")
             return None, None
 
         # Create new individuals
         offspring1 = Individual(
             self.args,
+            fitness_function=self.fitness_function,
             tree=child1,
             ancestors=parent1.ancestors.union(parent2.ancestors, {parent1.id, parent2.id}),
             generation=parent1.generation + 1
         )
         offspring2 = Individual(
             self.args,
+            fitness_function=self.fitness_function,
             tree=child2,
             ancestors=parent1.ancestors.union(parent2.ancestors, {parent1.id, parent2.id}),
             generation=parent1.generation + 1
@@ -375,7 +383,7 @@ class GeneticAlgorithmGP:
         # Update individual
         individual.tree = mutated_tree
 
-    def measure_diversity(self):
+    def measure_diversity(self, population):
         """
             Definition
             -----------
@@ -388,9 +396,9 @@ class GeneticAlgorithmGP:
         """
         total_distance = 0
         count = 0
-        for i in range(len(self.population)):
-            for j in range(i + 1, len(self.population)):
-                distance = self.compute_trees_distance(self.population[i].tree, self.population[j].tree)
+        for i in range(len(population)):
+            for j in range(i + 1, len(population)):
+                distance = self.compute_trees_distance(population[i].tree, population[j].tree)
                 total_distance += distance
                 count += 1
         if count == 0:
@@ -401,19 +409,23 @@ class GeneticAlgorithmGP:
     # ----------------- Main execution loop ------------------------- #
     
     def run(self, fitness_function):
+        # Assign fitness function to in class variable
+        self.fitness_function = fitness_function
+        
+        # Init population
         self.initialize_population()
-    
+        
         for gen in range(self.generations):
 
             # Calculate fitness
-            self.calculate_fitness(fitness_function, gen)
+            self.calculate_fitness(gen)
             
             # Update best fitness list
             best_individual = max(self.population, key=lambda ind: ind.fitness)
             self.best_fitness_list.append(best_individual.fitness)
     
             # Measure diversity
-            diversity = self.measure_diversity()
+            diversity = self.measure_diversity(self.population)
             self.diversity_list.append(diversity)
             
             # Early Stopping condition if successful individual has been found
@@ -429,8 +441,8 @@ class GeneticAlgorithmGP:
             
             # Lambda (parent+children)
             lambda_pop = self.pop_size * 2
-            i = 0
-            while len(next_population) < self.pop_size:
+            
+            while i < lambda_pop: 
                 parent1 = selected[i % len(selected)]
                 parent2 = selected[(i + 1) % len(selected)]
                 offspring = self.crossover(parent1, parent2)
@@ -440,16 +452,47 @@ class GeneticAlgorithmGP:
                     self.mutate(offspring[1])
                     next_population.extend(offspring)
                 else:
-                    # Introduce new random individuals to maintain population size
-                    new_individual = Individual(self.args)
-                    next_population.append(new_individual)
-                    if len(next_population) < self.pop_size:
-                        new_individual = Individual(self.args)
+                    # Append parents if Inbreeding is allowed
+                    if self.inbred_threshold is None: 
+                        next_population.append(copy.deepcopy(parent1))
+                        next_population.append(copy.deepcopy(parent2))
+                    else:
+                        # Introduce new random individuals to maintain population size if inbreeding is not allowed
+                        new_individual = Individual(self.args, fitness_function=self.fitness_function)
+                    
                         next_population.append(new_individual)
+                                                
+                        if len(next_population) < self.pop_size:
+                            new_individual = Individual(self.args, fitness_function=self.fitness_function)
+                            next_population.append(new_individual)
+        
                 i += 2
-    
-            self.population = next_population[:self.pop_size]
-    
+
+            # Check if individual of next population is already successful. No need to recombination as it will always have largest fitness
+            self.check_succcess_new_pop(gen+1, next_population)
+            
+            if self.poulation_success == True:
+                
+                # Update best fitness list
+                best_individual = max(next_population, key=lambda ind: ind.fitness)
+                self.best_fitness_list.append(best_individual.fitness)
+
+                # Measure diversity
+                diversity = self.measure_diversity(next_population)
+                self.diversity_list.append(diversity)
+                
+                # Returns 2 + gens because technically we are just shortcutting the crossover of this current generation. So, +1 for 0th-indexed offset, and +1 for skipping some steps.
+                # This added values will have been returned in the next gen loop iteration.
+                return self.best_fitness_list, self.diversity_list, gen + 2
+            
+            # Combine the population (mu+lambda)
+            combined_population = next_population[:lambda_pop] + self.population     
+            combined_population.sort(key=lambda ind: ind.fitness, reverse=True)
+
+            # Update the population
+            self.population = combined_population[:self.pop_size]
+            self.pop_size = len(self.population)
+        
             # Print progress
             if (gen + 1) % 10 == 0:
                 print(f"Generation {gen + 1}: Best Fitness = {best_individual.fitness:.4f}, Diversity = {diversity:.4f}")
@@ -575,29 +618,35 @@ if __name__ == "__main__":
 
     # -------------------------------- Experiment: Multiple Runs w/ fixed population and fixed mutation rate --------------------------- #
     
-    args.config_plot = f"genetic_programming/{args.benchmark}/meeting/PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
+    term1 = f"genetic_programming/{args.benchmark}/"
+    term2 = "gp_lambda/"
+    term3 = f"PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
 
+    args.config_plot = term1 + term2 + term3
     print("Running GA with NO Inbreeding Mating...")
-    results_no_inbreeding = exp.multiple_runs_function_gp(args, gp_landscape, args.inbred_threshold)
+    results_no_inbreeding = exp.test_multiple_runs_function_gp(args, gp_landscape, args.inbred_threshold)
     util.save_accuracy(results_no_inbreeding, f"{args.config_plot}_no_inbreeding.npy")
     
-    print("Running GA with Inbreeding Mating...")
-    results_inbreeding = exp.multiple_runs_function_gp(args, gp_landscape, None)
-    util.save_accuracy(results_inbreeding, f"{args.config_plot}_inbreeding.npy")
+    # print("Running GA with Inbreeding Mating...")
+    # results_inbreeding = exp.test_multiple_runs_function_gp(args, gp_landscape, None)
+    # util.save_accuracy(results_inbreeding, f"{args.config_plot}_inbreeding.npy")
     
-    # Plot the generation of successful runs
-    plot.plot_gen_vs_run(args, results_no_inbreeding, results_inbreeding)
-    plot.plot_diversity_generation_over_time(args, results_no_inbreeding, results_inbreeding)
-    plot.plot_time_of_convergence_vs_diversity(args, results_no_inbreeding, results_inbreeding)
+    # # Plot the generation of successful runs
+    # args.config_plot = term1 + "diversity_last_lambda/" + term3
+    # plot.plot_gen_vs_run(args, results_no_inbreeding, results_inbreeding)
     
-    # Plot with bootstraping only if all runs are same length of generations
-    # gs_list, fit_list, div_list, label_list = plot.collect_bootstrapping_data(args, results_no_inbreeding, results_inbreeding)
-    # plot.plot_multiple_runs_GP_functions(args, gs_list, fit_list, div_list, label_list)
+    # # Plot Diversity vs generations runs
+    # args.config_plot = term1 + "div_gen_lambda/" + term3
+    # plot.plot_diversity_generation_over_time(args, results_no_inbreeding, results_inbreeding)
+    
+    # # Plot diversity vs generation of success (convergence)
+    # args.config_plot = term1 + "diversity_success_lambda/" + term3
+    # plot.plot_time_of_convergence_vs_diversity(args, results_no_inbreeding, results_inbreeding)
     
     # -------------------------------- Experiment: Multiple Runs w/ fixed population and Variable mutation rate --------------------------- #
     
-    mutation_rates = [0.05, 0.01, 0.005, 0.001, 0.0005]
-    args.config_plot = f"genetic_programming/{args.benchmark}/mut_rates/Mrates:{mutation_rates}_PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
+    # mutation_rates = [0.05, 0.01, 0.005, 0.001, 0.0005]
+    # args.config_plot = f"genetic_programming/{args.benchmark}/mut_rates/Mrates:{mutation_rates}_PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
 
     # print("Running GA with NO Inbreeding Mating...")
     # results_no_inbreeding = exp.multiple_mrates_function_gp(args, mutation_rates, gp_landscape, args.inbred_threshold)

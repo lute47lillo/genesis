@@ -1,14 +1,12 @@
 import argparse
-import networkx as nx
 import numpy as np
 import torch
 import os
 import pandas as pd
 import benchmark_factory as bf
 from sympy import symbols, sympify, simplify, expand
-from sympy.core import Function
 import sympy
-
+import random
 
 def set_seed(seed):
     torch.manual_seed(seed)
@@ -26,52 +24,31 @@ def set_args():
     argparser.add_argument('--benchmark', type=str, help='Optimization function to run', default="rastrigin")
     argparser.add_argument('--bench_name', type=str, help='Problem landscape name (ie: MovingPeaksLandscape)', default="none")
     argparser.add_argument('--config_plot', type=str, help='plot info details', default="none")
-    argparser.add_argument('--dimensions', type=int, help='GA dimensions', default=10) 
+    argparser.add_argument('--current_run', type=int, help='Current experimental run if multiple runs', default=0)
+    
+    # Experimental Hyperparameters
+    argparser.add_argument('--generations', type=int, help='Nº of generations to run the GA.', default=100)
+    argparser.add_argument('--pop_size', type=int, help='Population Size (could be used as fixed parameter in many settings)', default=100)
+    argparser.add_argument('--mutation_rate', type=float, help='Mutation Rate (could be used as fixed parameter in many settings)', default=0.01)
+    argparser.add_argument('--inbred_threshold', type=int, help='Inbreeding Threshold. Below threshold is considered inbreeding. \
+                            Minimum genetic (tree-edit) distance required to allow mating', default=5)
+    argparser.add_argument('--tournament_size', type=int, help='Nº of individuals to take part in the Tournament selection', default=3)
+    argparser.add_argument('--exp_num_runs', type=int, help='Nº of experimental runs. (Fixed hyperparameters)', default=5)
     
     # Genetic Programming variables
     argparser.add_argument('--max_depth', type=int, help='GP Tree maximum depth', default=15)
     argparser.add_argument('--initial_depth', type=int, help='GP Tree maximum depth', default=6)
     
-    # NK-Landscape arguments
-    argparser.add_argument('--generations', type=int, help='Nº of generations to run the GA. (Used interchangeably with args.dimensions in this case)', default=100)
-    argparser.add_argument('--N_NKlandscape', type=int, help='Genome Length (N) value', default=100)
-    argparser.add_argument('--K_NKlandscape', type=int, help='Nº of interactions per loci (K) value', default=14)
-    argparser.add_argument('--pop_size', type=int, help='Population Size (could be used as fixed parameter in many settings)', default=100)
-    argparser.add_argument('--mutation_rate', type=float, help='Mutation Rate (could be used as fixed parameter in many settings)', default=0.01)
-    argparser.add_argument('--inbred_threshold', type=int, help='Inbreeding Threshold. Below threshold is considered inbreeding. \
-                            Minimum genetic (Hamming) distance required to allow mating', default=5)
-    argparser.add_argument('--tournament_size', type=int, help='Nº of individuals to take part in the Tournament selection', default=3)
-    argparser.add_argument('--exp_num_runs', type=int, help='Nº of experimental runs. (Fixed hyperparameters)', default=5)
-
+    # Parse all arguments
     args = argparser.parse_args()
     
     # Set the seed for reproducibility
+    args.seed = random.randint(0, 999999)
     set_seed(args.seed)
     
     return args
 
-# ---------------- NK Landscape visualization helper functions --------------------- #
-
-def build_lineage_graph(lineage_data):
-    G = nx.DiGraph()
-    for data in lineage_data:
-        ind_id = data['id']
-        generation = data['generation']
-        ancestors = data['ancestors']
-        # Add node for the individual
-        G.add_node(ind_id, generation=generation)
-        # Add edges from ancestors to the individual
-        for ancestor_id in ancestors:
-            G.add_edge(ancestor_id, ind_id)
-    return G
-
-def get_lineage_frequency(lineage_data):
-    df = pd.DataFrame(lineage_data)
-    # Explode the ancestors set into individual ancestor IDs
-    df = df.explode('ancestors')
-    # Group by generation and ancestor ID
-    frequency = df.groupby(['generation', 'ancestors']).size().reset_index(name='count')
-    return frequency
+# ---------------- Write/Read helper functions --------------------- #
 
 def save_accuracy(array, file_path_temp):
     file_path = f"{os.getcwd()}/saved_data/" + file_path_temp
@@ -80,75 +57,35 @@ def save_accuracy(array, file_path_temp):
         np.save(f, array)
     print(f"\nAccuracy data saved to {file_path}")
 
-
 # ---------------- Genetic Programming helper functions --------------------- #
 
 def get_function_bounds(benchmark):
     
-    if benchmark == 'ackley':
-        bounds = (-32.768, 32.768)
-    elif benchmark == 'rastrigin':
-        bounds = (-5.12, 5.12)
-    elif benchmark == 'rosenbrock':
-        bounds = (-2.048, 2.048)
-    elif benchmark == 'schwefel':
-        bounds = (-500, 500)
-    elif benchmark == 'griewank':
-        bounds = (-600, 600)   
-    elif benchmark == 'sphere':
-        bounds = (-5.12, 5.12)
-    elif benchmark == 'nguyen1':
+    if benchmark == 'nguyen1' or benchmark == 'nguyen2' or benchmark == 'nguyen3' or benchmark == 'nguyen4' or benchmark == 'nguyen5' or benchmark == 'nguyen6':
         bounds = (-4.0, 4.0)
-    elif benchmark == 'nguyen2':
-        bounds = (-4.0, 4.0)
-    elif benchmark == 'nguyen3':
-        bounds = (-4.0, 4.0)
-    elif benchmark == 'nguyen4':
-        bounds = (-4.0, 4.0)
+    elif benchmark == 'nguyen7' or benchmark == 'nguyen8':
+        bounds = (0.0, 8.0)
     
     return bounds
 
-def select_benchmark(args):
+def select_gp_benchmark(args):
     """
         Definition
         -----------
-            Select the benchmark function of Optimization class.
+            Select the benchmark for Genetic Programming experiments.
     """
-    benchmarks = {"ackley": bf.ackley_function, "rosenbrock":bf.rosenbrock_function,
-                  "rastrigin": bf.rastrigin_function, "schwefel": bf.schwefel_function,
-                  "griewank" :bf.griewank_function, "sphere": bf.sphere_function}
+    benchmarks = {"nguyen1": bf.nguyen1, "nguyen2": bf.nguyen2,
+                  "nguyen3": bf.nguyen3, "nguyen4": bf.nguyen4,
+                  "nguyen5": bf.nguyen5, "nguyen6": bf.nguyen6,
+                  "nguyen7": bf.nguyen7, "nguyen8": bf.nguyen8}
     
     # Get function
-    landscape_fn = benchmarks.get(args.benchmark)
+    gp_bench_fn = benchmarks.get(args.benchmark)
     
     # Set the specific bounds
     args.bounds = get_function_bounds(args.benchmark)
     
-    return landscape_fn
-
-def get_function_arity(function):
-    arity_dict = {
-        '+': 2,
-        '-': 2,
-        '*': 2,
-        '/': 2,
-        'sin': 1,
-        'cos': 1,
-        'log': 1
-    }
-    return arity_dict.get(function, 0)
-
-def set_config_parameters(benchmark):
-    
-    # Experiment Parameters
-    pop_sizes = [25, 50, 100, 200]
-    dimensions = 10
-    bounds = get_function_bounds(benchmark)
-    generations = 200
-    mutation_rate = 0.2
-    allowed_distance = 1.0
-    
-    return pop_sizes, dimensions, bounds, generations, mutation_rate, allowed_distance
+    return gp_bench_fn
 
 # --------------------------- Genetic Programming visualization ------------------------------- #
 
@@ -320,4 +257,117 @@ def create_padded_df(data, metric, run_ids):
         df[run_id].iloc[:len(values)] = values
     
     return df
+
+def pad_sublist(sublist, target_length):
+    """
+    Pads the sublist to the target_length by repeating the last element.
     
+    Parameters:
+    - sublist (list): The original sublist.
+    - target_length (int): The desired length after padding.
+    
+    Returns:
+    - list: The padded sublist.
+    """
+    current_length = len(sublist)
+    if current_length < target_length:
+        padding = [sublist[-1]] * (target_length - current_length)
+        return sublist + padding
+    else:
+        return sublist
+    
+# Flatten the Data
+def flatten_results_depths(treatment_name, depths):
+    data_df = []
+    for depth in depths:
+        # Load dict data
+        file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/nguyen2/gp_lambda/PopSize:300_InThres:4_Mrates:0.0005_Gens:150_TourSize:15_MaxD:{depth}_InitD:3_{treatment_name}.npy"
+        data = np.load(file_path_name, allow_pickle=True)
+        data_dict = data.item()
+        
+        # Iterate over and create DataFram
+        for run, metrics in data_dict.items():
+            # diversity = metrics['diversity']# TODO: For another plto
+            generation_success = metrics['generation_success']
+            data_df.append({
+                'Treatment': treatment_name,
+                'Depth': depth,
+                'Run': run,
+                'Generation_Success': generation_success
+            })
+    return pd.DataFrame(data_df)
+
+# Flatten the Data
+def flatten_results_thresholds(treatment_name, thresholds):
+    data_df = []
+    for thres in thresholds:
+        # Load dict data
+        file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/nguyen2/gp_lambda/PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:9_InitD:3_{treatment_name}.npy"
+        data = np.load(file_path_name, allow_pickle=True)
+        data_dict = data.item()
+        
+        # Iterate over and create DataFram
+        for run, metrics in data_dict.items():
+            # diversity = metrics['diversity']# TODO: For another plto
+            generation_success = metrics['generation_success']
+            data_df.append({
+                'Treatment': treatment_name,
+                'Thresholds': thres,
+                'Run': run,
+                'Generation_Success': generation_success
+            })
+    return pd.DataFrame(data_df)
+
+def flatten_results_in_max_depth_diversity(bench_name, treatment_name, thresholds, depths, init_depth):
+    data_df = []
+    for thres in thresholds:
+        for depth in depths:
+            # Load dict data
+            file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/{bench_name}/gp_lambda/PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:{depth}_InitD:{init_depth}_{treatment_name}.npy"
+            data = np.load(file_path_name, allow_pickle=True)
+            data_dict = data.item()
+            for run, metrics in data_dict.items():
+                # TODO: If Wanted al values needs to padd:
+                # padded_diversity = [pad_sublist(sublist, target_length) for sublist in metrics['diversity']]
+                # metrics['diversity'] = padded_diversity
+                diversity = metrics['diversity'][-1]
+                generation_success = metrics['generation_success']
+        
+                # Update
+                data_df.append({
+                    'Treatment': treatment_name,
+                    'Max_Depth': depth,
+                    'Inbred_Threshold': thres,
+                    'Run': run,
+                    'Generation_Success': generation_success,
+                    'Diversity': diversity
+                })
+    return pd.DataFrame(data_df)
+
+# Padding Function
+def pad_sublist(sublist, target_length):
+    current_length = len(sublist)
+    if current_length < target_length:
+        padding = [sublist[-1]] * (target_length - current_length)
+        return sublist + padding
+    else:
+        return sublist
+
+# Determine Global Maximum Depth
+def get_global_max_depth(*results_dicts):
+    max_depth = 0
+    for results in results_dicts:
+        for run in results:
+            current_depth = len(results[run]['diversity'])
+            if current_depth > max_depth:
+                max_depth = current_depth
+    return max_depth
+
+# Pad 'diversity' Lists
+def pad_diversity_lists(results_dict, target_length):
+    for run in results_dict:
+        original_length = len(results_dict[run]['diversity'])
+        padded_diversity = [pad_sublist(sublist, target_length) for sublist in results_dict[run]['diversity']]
+        results_dict[run]['diversity'] = padded_diversity
+        print(f"Run {run}: Padded Diversity Lengths = {[len(s) for s in results_dict[run]['diversity']]}")
+    return results_dict
