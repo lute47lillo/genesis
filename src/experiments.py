@@ -2,6 +2,7 @@ from ga_rugged import GeneticAlgorithmRugged
 from ga_optimization import GeneticAlgorithmOpt
 from genetic_programming import GeneticAlgorithmGP
 from gp_testing import GeneticAlgorithmGPTesting
+from gp_bloat import GeneticAlgorithmGPBloat
 import plotting as plot
 import util as util
 import random
@@ -224,6 +225,48 @@ def test_multiple_runs_function_gp(args, landscape, inbred_threshold):
         
         print(f"Population Size {args.pop_size} & Mutation Rate: {args.mutation_rate}: Best Fitness {best_fitness_list[-1]:.4f} ~ Best Diversity {diversity_list[-1]:.4f}")
 
+    return results
+
+import numpy as np
+def test_multiple_runs_function_bloat(args, landscape, inbred_threshold):
+    """
+        TODO: Generalize to be for all function experiments and choose within. As of now only work with ackley
+    """
+    
+    # Initialize GP-based GA for Any given function
+    results = {}
+    for run in range(args.exp_num_runs):
+        
+        # Reset the seed for every run
+        util.set_seed(random.randint(0, 999999))
+       
+        print(f"Running experiment nº: {run}")
+        ga_gp = GeneticAlgorithmGPBloat(
+            args=args,
+            mut_rate=args.mutation_rate,
+            inbred_threshold=inbred_threshold  # Adjust based on inbreeding prevention
+        )
+        # Run GP-based GA for Given Function
+        best_fitness_list, diversity_list, average_size_list, average_depth_list, population_intron_ratio_list, average_intron_ratio_list, gen_success = ga_gp.run(landscape)
+        
+        results[run] = {
+                'best_fitness': best_fitness_list,
+                'diversity': diversity_list, 
+                'generation_success': gen_success,
+                'avg_tree_size': average_size_list,
+                'avg_tree_depth': average_depth_list,
+                'population_intron_ratio': population_intron_ratio_list,
+                'average_intron_ratio': average_intron_ratio_list
+            }
+        
+        print(f"Population Size {args.pop_size} & Mutation Rate: {args.mutation_rate}. "
+                f"Generation {gen_success}: Best Fitness = {best_fitness_list[-1]:.4f}, "
+                f"Diversity = {diversity_list[-1]:.4f}, "
+                f"Avg Size = {average_size_list[-1]:.2f}, "
+                f"Avg Depth = {average_depth_list[-1]:.2f}, "
+                f"Population Intron Ratio = {population_intron_ratio_list[-1]:.4f}, "
+                f"Avg Intron Ratio per Individual = {average_intron_ratio_list[-1]:.4f}")
+        
     return results
 
 def multiple_mrates_function_gp(args, mutation_rates, landscape, inbred_threshold):

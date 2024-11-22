@@ -495,7 +495,6 @@ if __name__ == "__main__":
     results_inbreeding = exp.multiple_runs_experiment(args, landscape, None)
     
     # # # Plot experiments
-    gs_list, fit_list, div_list, label_list = plot.collect_bootstrapping_data(args, results_no_inbreeding, results_inbreeding)
     plot.plot_multiple_runs_MPL_global_optima(args, gs_list, fit_list, div_list, label_list)
     
     # ------------------------- Mutation Rate Experiments ------------------------ #

@@ -5,11 +5,10 @@ import util
 import experiments as exp
 import plotting as plot
 import gp_math
+import os
+import matplotlib.pyplot as plt
 
-"""            
-        - Add the NGUYEN benchmark functions from "Effective Adaptive Mutation Rates for Program Synthesis" Paper
-        and from "Better GP benchmarks: community survey results and proposals" paper.
-"""
+
 
 class Node:
     def __init__(self, value, children=None):
@@ -71,7 +70,7 @@ class Individual:
     def __str__(self):
         return str(self.tree)
 
-class GeneticAlgorithmGPTesting:
+class GeneticAlgorithmGPBloat:
     
     def __init__(self, args, mut_rate, inbred_threshold=None):
         self.args = args
@@ -154,6 +153,19 @@ class GeneticAlgorithmGPTesting:
             nodes.extend(self.get_all_nodes_with_parent(child, node))
         return nodes
     
+    def count_nodes(self, node):
+        """
+            Definition
+            -----------
+                Count the number of nodes (functions and terminals) in a program tree.
+        """
+        if node is None:
+            return 0
+        count = 1  # Count the current node
+        for child in node.children:
+            count += self.count_nodes(child)
+        return count
+    
     def can_mate(self, ind1, ind2, inbred_threshold):
         """
             Definition
@@ -184,6 +196,26 @@ class GeneticAlgorithmGPTesting:
         else:
             return 1 + max(self.tree_depth(child) for child in node.children)
         
+    def average_node_arity(self, node):
+        """
+        Calculates the average arity (number of children) of nodes in a tree.
+        """
+        total_nodes, total_children = self._sum_node_arities(node)
+        if total_nodes == 0:
+            return 0
+        return total_children / total_nodes
+
+    def _sum_node_arities(self, node):
+        if node is None:
+            return 0, 0
+        total_nodes = 1
+        total_children = len(node.children)
+        for child in node.children:
+            nodes, children = self._sum_node_arities(child)
+            total_nodes += nodes
+            total_children += children
+        return total_nodes, total_children
+
     def compute_trees_distance(self, node1, node2):
         """
             Definition
@@ -406,14 +438,96 @@ class GeneticAlgorithmGPTesting:
         diversity = total_distance / count
         return diversity
     
+    def compute_introns_lists(self):
+        
+        # Measure intron metrics
+        x_values = [x for x, _ in self.landscape.data]  # Assuming self.data contains your dataset
+        intron_metrics = self.measure_introns(self.population, x_values)
+        self.population_intron_ratio_list.append(intron_metrics['population_intron_ratio'])
+        self.average_intron_ratio_list.append(intron_metrics['average_intron_ratio'])
+    
+    def compute_population_size_depth(self, is_success=False):
+        
+        # Get Tree sizes for entire population (nº nodes)
+        tree_sizes = [self.count_nodes(ind.tree) for ind in self.population]
+        average_size = sum(tree_sizes) / len(tree_sizes)
+        self.average_size_list.append(average_size)
+        
+        # Get Tree depths for entire population
+        tree_depths = [self.tree_depth(ind.tree) for ind in self.population]
+        average_depth = sum(tree_depths) / len(tree_depths)
+        self.average_depth_list.append(average_depth)  
+        
+        if is_success == True:
+            # Measure intron metrics
+            self.compute_introns_lists()   
+                    
+   
+    def measure_introns(self, population, x_values):
+        """
+        Measures intron metrics in the population.
+        
+        Parameters:
+        -----------
+        population : list
+            The list of Individual objects in the population.
+        x_values : list
+            The input values to evaluate the trees.
+        
+        Returns:
+        --------
+        dict
+            A dictionary containing total and average intron metrics.
+        """
+        population_total_intron_nodes = 0
+        population_total_nodes = 0
+        individual_intron_ratios = []
+        
+        for individual in population:
+            # Detect introns and their sizes
+            introns = self.landscape.detect_redundant_subtrees(individual.tree, x_values)
+            total_intron_nodes = sum(intron_size for _, intron_size in introns)
+            
+            # Total nodes in the individual's tree
+            total_nodes = self.count_nodes(individual.tree)
+            
+            # Intron ratio for the individual
+            intron_ratio = total_intron_nodes / total_nodes if total_nodes > 0 else 0
+            
+            # Update population totals
+            population_total_intron_nodes += total_intron_nodes
+            population_total_nodes += total_nodes
+            individual_intron_ratios.append(intron_ratio)
+        
+        # Population-level metrics
+        population_intron_ratio = population_total_intron_nodes / population_total_nodes if population_total_nodes > 0 else 0
+        average_intron_ratio = sum(individual_intron_ratios) / len(individual_intron_ratios) if individual_intron_ratios else 0
+        
+        return {
+            'population_total_intron_nodes': population_total_intron_nodes,
+            'population_total_nodes': population_total_nodes,
+            'population_intron_ratio': population_intron_ratio,
+            'average_intron_ratio': average_intron_ratio
+        }
+    
     # ----------------- Main execution loop ------------------------- #
     
-    def run(self, fitness_function):
+    def run(self, landscape):
+        
         # Assign fitness function to in class variable
-        self.fitness_function = fitness_function
+        self.landscape = landscape
+        self.fitness_function = self.landscape.symbolic_fitness_function
         
         # Init population
         self.initialize_population()
+        
+        # Initialize lists to store bloat metrics
+        self.average_size_list = []
+        self.average_depth_list = []
+        
+        # Initialize lists to store intron statistical metrics
+        self.population_intron_ratio_list = []
+        self.average_intron_ratio_list = []
         
         for gen in range(self.generations):
 
@@ -428,9 +542,14 @@ class GeneticAlgorithmGPTesting:
             diversity = self.measure_diversity(self.population)
             self.diversity_list.append(diversity)
             
+            # Measure Size and Depth statistics
+            self.compute_population_size_depth(self.poulation_success)
+            self.compute_introns_lists()
+            
             # Early Stopping condition if successful individual has been found
             if self.poulation_success == True:
-                return self.best_fitness_list, self.diversity_list, gen + 1
+                
+                return self.best_fitness_list, self.diversity_list, self.average_size_list, self.average_depth_list, self.population_intron_ratio_list, self.average_intron_ratio_list, gen + 1
     
             # Selection
             selected = self.tournament_selection()
@@ -481,9 +600,12 @@ class GeneticAlgorithmGPTesting:
                 diversity = self.measure_diversity(next_population)
                 self.diversity_list.append(diversity)
                 
+                # Measure Size and Depth statistics
+                self.compute_population_size_depth(self.poulation_success)
+                
                 # Returns 2 + gens because technically we are just shortcutting the crossover of this current generation. So, +1 for 0th-indexed offset, and +1 for skipping some steps.
                 # This added values will have been returned in the next gen loop iteration.
-                return self.best_fitness_list, self.diversity_list, gen + 2
+                return self.best_fitness_list, self.diversity_list, self.average_size_list, self.average_depth_list, self.population_intron_ratio_list, self.average_intron_ratio_list, gen + 2
             
             # Combine the population (mu+lambda)
             combined_population = next_population[:lambda_pop] + self.population     
@@ -495,9 +617,24 @@ class GeneticAlgorithmGPTesting:
         
             # Print progress
             if (gen + 1) % 10 == 0:
-                print(f"Generation {gen + 1}: Best Fitness = {best_individual.fitness:.4f}, Diversity = {diversity:.4f}")
+                # print(f"Generation {gen + 1}: Best Fitness = {best_individual.fitness:.4f}, Diversity = {diversity:.4f}")
+                print(f"Generation {gen + 1}: Best Fitness = {best_individual.fitness:.4f}, "
+                      f"Diversity = {diversity:.4f}, "
+                      f"Avg Size = {np.mean(self.average_size_list):.2f}, "
+                      f"Avg Depth = {np.mean(self.average_depth_list):.2f}, "
+                      f"Population Intron Ratio = {self.population_intron_ratio_list[gen]:.4f}, "
+                      f"Avg Intron Ratio per Individual = {self.average_intron_ratio_list[gen]:.4f}")
+                      
+                      
+                    #   f"Population Intron Ratio = {np.mean(self.population_intron_ratio_list):.4f}, "
+                    #   f"Avg Intron Ratio per Individual = {np.mean(self.average_intron_ratio_list):.4f}")
+                
+        
+        # Comput population intros at failure.
+        self.compute_introns_lists()
+        
     
-        return self.best_fitness_list, self.diversity_list, gen+1
+        return self.best_fitness_list, self.diversity_list, self.average_size_list, self.average_depth_list, self.population_intron_ratio_list, self.average_intron_ratio_list, gen+1
     
 class GPLandscape:
     
@@ -507,6 +644,70 @@ class GPLandscape:
         self.target_function = util.select_gp_benchmark(args)
         self.bounds = args.bounds
         self.data = self.generate_data() # Generate all data points
+        
+    # ---------------------- Introns detection. EXPERIMENTAL ------------- #
+    
+    def detect_redundant_subtrees(self, node, x_values, replacement_values=['x', '1.0']):
+        """
+        Detects redundant subtrees (introns) in a tree by checking if replacing the subtree
+        with multiple terminal values results in the same output for all x_values.
+        
+        Parameters:
+        -----------
+        node : Node
+            The root node of the subtree to check.
+        x_values : list
+            The input values to evaluate the tree.
+        replacement_values : list
+            List of terminal values to replace the subtree with for testing redundancy.
+        
+        Returns:
+        --------
+        list of tuples
+            Each tuple contains (intron_node, intron_size).
+        """
+        if node.is_terminal():
+            return []
+        
+        redundant_nodes = []
+        
+        # Evaluate original subtree outputs
+        original_outputs = [self.evaluate_tree(node, x) for x in x_values]
+        
+        # Flag to track if the node is redundant for all replacements
+        is_redundant = True
+        
+        for replacement in replacement_values:
+            # Store original node state
+            original_value = node.value
+            original_children = node.children.copy()
+            
+            # Replace subtree with terminal
+            node.value = replacement
+            node.children = []
+            
+            # Evaluate replaced subtree outputs
+            replaced_outputs = [self.evaluate_tree(node, x) for x in x_values]
+            
+            # Restore the original node state
+            node.value = original_value
+            node.children = original_children
+            
+            # Compare outputs
+            if not all(o1 == o2 for o1, o2 in zip(original_outputs, replaced_outputs)):
+                is_redundant = False
+                break  # No need to test other replacements if outputs differ
+        
+        if is_redundant:
+            # Calculate the size of the intron subtree
+            intron_size = self.count_nodes(node)
+            redundant_nodes.append((node, intron_size))
+        
+        # Recursively check child nodes
+        for child in node.children:
+            redundant_nodes.extend(self.detect_redundant_subtrees(child, x_values, replacement_values))
+        
+        return redundant_nodes
     
     def count_nodes(self, node):
         """
@@ -619,42 +820,33 @@ if __name__ == "__main__":
     # -------------------------------- Experiment: Multiple Runs w/ fixed population and fixed mutation rate --------------------------- #
     
     term1 = f"genetic_programming/{args.benchmark}/"
-    term2 = "gp_lambda/"
+    term2 = "bloat/"
     term3 = f"PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
 
     args.config_plot = term1 + term2 + term3
     print("Running GA with NO Inbreeding Mating...")
-    results_no_inbreeding = exp.test_multiple_runs_function_gp(args, gp_landscape, args.inbred_threshold)
+    results_no_inbreeding = exp.test_multiple_runs_function_bloat(args, gp_landscape, args.inbred_threshold)
     util.save_accuracy(results_no_inbreeding, f"{args.config_plot}_no_inbreeding.npy")
     
-    # print("Running GA with Inbreeding Mating...")
-    # results_inbreeding = exp.test_multiple_runs_function_gp(args, gp_landscape, None)
-    # util.save_accuracy(results_inbreeding, f"{args.config_plot}_inbreeding.npy")
+    print("Running GA with Inbreeding Mating...")
+    results_inbreeding = exp.test_multiple_runs_function_bloat(args, gp_landscape, None)
+    util.save_accuracy(results_inbreeding, f"{args.config_plot}_inbreeding.npy")
     
-    # # Plot the generation of successful runs
-    # args.config_plot = term1 + "diversity_last_lambda/" + term3
-    # plot.plot_gen_vs_run(args, results_no_inbreeding, results_inbreeding)
+    # Plot the generation of successful runs
+    args.config_plot = term1 + "bloat/" + term3
+    plot.plot_gen_vs_run(args, results_no_inbreeding, results_inbreeding)
     
-    # # Plot Diversity vs generations runs
-    # args.config_plot = term1 + "div_gen_lambda/" + term3
-    # plot.plot_diversity_generation_over_time(args, results_no_inbreeding, results_inbreeding)
+    # Plot Diversity vs generations runs
+    args.config_plot = term1 + "bloat/" + term3
+    plot.plot_diversity_generation_over_time(args, results_no_inbreeding, results_inbreeding)
     
-    # # Plot diversity vs generation of success (convergence)
-    # args.config_plot = term1 + "diversity_success_lambda/" + term3
-    # plot.plot_time_of_convergence_vs_diversity(args, results_no_inbreeding, results_inbreeding)
+    # Plot diversity vs generation of success (convergence)
+    args.config_plot = term1 + "bloat/" + term3
+    plot.plot_time_of_convergence_vs_diversity(args, results_no_inbreeding, results_inbreeding)
     
-    # -------------------------------- Experiment: Multiple Runs w/ fixed population and Variable mutation rate --------------------------- #
+    # Plot diversity vs generation of success (convergence)
+    args.config_plot = term1 + "bloat/" + term3
+    plot.plot_bloat_depth_or_size(args, results_no_inbreeding, results_inbreeding, "avg_tree_depth")
     
-    # mutation_rates = [0.05, 0.01, 0.005, 0.001, 0.0005]
-    # args.config_plot = f"genetic_programming/{args.benchmark}/mut_rates/Mrates:{mutation_rates}_PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
-
-    # print("Running GA with NO Inbreeding Mating...")
-    # results_no_inbreeding = exp.multiple_mrates_function_gp(args, mutation_rates, gp_landscape, args.inbred_threshold)
-    # util.save_accuracy(results_no_inbreeding, f"{args.config_plot}_no_inbreeding.npy")
-    # plot.plot_generation_successes(results_no_inbreeding, mutation_rates, f"{args.config_plot}_no_inbreeding.png")
     
-    # print("Running GA with Inbreeding Mating...")
-    # results_inbreeding = exp.multiple_mrates_function_gp(args, mutation_rates, gp_landscape, None)
-    # util.save_accuracy(results_inbreeding, f"{args.config_plot}_inbreeding.npy")
-    # plot.plot_generation_successes(results_inbreeding, mutation_rates, f"{args.config_plot}_inbreeding.png")
     
