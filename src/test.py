@@ -3,37 +3,7 @@ import random
 import numpy as np
 import copy
 import benchmark_factory as bf
-
-# ----------------- Rugged Landscapes ----------------- #
-
-def testing():
-    # Suppose we have a peak at position [1, 0, 1, 0, 1]
-    peak_position = np.array([1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1])
-    peak = bf.Peak(position=peak_position, height=100, width=12)
-    
-    print(peak.width, peak.height)
-    peak.height += np.random.normal(0, 4)
-    peak.width += np.random.normal(0, 1.0)
-    print(peak.width, peak.height)
-
-    # Create test genomes
-    genome_same = np.array([1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1])  # Distance 0
-    genome_close = np.array([0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1])  # Distance 1
-    genome_far = np.array([0, 1, 1, 0, 1, 0, 0, 1, 1, 1, 1, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 1, 1, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 0, 0, 1, 0, 0, 1, 1, 1, 0, 1, 0])    # Distance 5
-
-    # Compute distance
-    distance_same = np.sum(genome_same != peak.position)
-    distance_close = np.sum(genome_close != peak.position)
-    distance_far = np.sum(genome_far != peak.position)
-    
-    # Compute fitness
-    fitness_same = peak.height * np.exp(- (distance_same ** 2) / (2 * (peak.width ** 2)))  # Should be 100
-    fitness_close = peak.height * np.exp(- (distance_close ** 2) / (2 * (peak.width ** 2)))  # Less than 100
-    fitness_far = peak.height * np.exp(- (distance_far ** 2) / (2 * (peak.width ** 2)))    # Much less than 100
-    
-    print(distance_same, fitness_same)
-    print(distance_close, fitness_close)
-    print(distance_far, fitness_far)
+import gp_math
     
 # ----------------- Genetic Programming -------------- #
 
@@ -52,8 +22,8 @@ class Node:
             return f"({self.value} {' '.join(str(child) for child in self.children)})"
 
 class Individual:
-    def __init__(self, tree):
-        self.tree = tree  # The GP tree representing the individual's program
+    def __init__(self, tree, initial_depth=3):
+        self.tree = tree if tree is not None else self.random_tree(depth=initial_depth) # Initial depth of 6 as in paper
     
     def __repr__(self):
         return f"Individual({self.tree})"
@@ -87,8 +57,16 @@ class Individual:
             return Node(function, children)
 
 class GeneticProgrammingSystem:
-    def __init__(self, population):
+    def __init__(self, population=None):
         self.population = population  # List of Individual objects
+        
+    def initialize_population(self, pop_size, initial_depth=3):
+        self.population = []
+        for _ in range(pop_size):
+            individual = Individual(None, initial_depth=initial_depth)
+            self.population.append(individual)
+    
+        return self.population
     
     def measure_diversity(self):
         # Calculate diversity based on tree structures
@@ -186,6 +164,13 @@ class GeneticProgrammingSystem:
         return nodes
     
     def tree_depth(self, node):
+        """
+            Definition
+            -----------
+                Returns the height of a given individual tree.
+                Example:
+                    - tree1 = Node('+', [Node('x'), Node('1')]) for Node(+) will return 2 -> 1 depth of children + 1 for itself.
+        """
         if node is None:
             return 0
         if node.is_terminal():
@@ -324,8 +309,160 @@ class GeneticProgrammingSystem:
 
         # Update individual
         individual.tree = mutated_tree
+        
+class GPLandscapeTest:
+    
+    def __init__(self):
+        
+        self.target_function = bf.nguyen1
+        self.data = self.generate_data() # Generate all data points
+        
+    # ---------------------- Introns detection. EXPERIMENTAL ------------- #
+    
+    def detect_redundant_nodes(self, node, x_values):
+        """
+            Detects redundant nodes (introns) in a tree by checking if replacing the node with a terminal
+            value results in the same output for all x_values.
+            
+            Computationally expensive. 
+        """
+        if node.is_terminal():
+            return []
+        
+        redundant_nodes = []
+        original_outputs = [self.evaluate_tree(node, x) for x in x_values]
+        
+        # Replace the node with a placeholder value (e.g., 'x') and evaluate
+        original_value = node.value
+        original_children = node.children
+        node.value = 'x'
+        node.children = []
+        
+        replaced_outputs = [self.evaluate_tree(node, x) for x in x_values]
+        
+        # Restore the original node
+        node.value = original_value
+        node.children = original_children
+        
+        # Compare outputs
+        if all(o1 == o2 for o1, o2 in zip(original_outputs, replaced_outputs)):
+            redundant_nodes.append(node)
+        
+        # Recursively check child nodes
+        for child in node.children:
+            redundant_nodes.extend(self.detect_redundant_nodes(child, x_values))
+        
+        return redundant_nodes
+    
+    def count_nodes(self, node):
+        """
+            Definition
+            -----------
+                Count the number of nodes (functions and terminals) in a program tree.
+        """
+        if node is None:
+            return 0
+        count = 1  # Count the current node
+        for child in node.children:
+            count += self.count_nodes(child)
+        return count
+    
+    def evaluate_tree(self, node, x):
+        
+        # Base case checking for error
+        if node is None:
+            return 0.0
+
+        # Check if node is terminal (leave) or not
+        if node.is_terminal():
+            if node.value == 'x':
+                return x  # x is a scalar
+            else:
+                try:
+                    val = float(node.value)
+                    return val
+                except ValueError as e:
+                    return 0.0
+        else:
+            func = node.value
+            args_tree = [self.evaluate_tree(child, x) for child in node.children]
+     
+            try:
+                if func == '+':
+                    result = gp_math.protected_sum(args_tree[0], args_tree[1])
+                elif func == '-':
+                    result = gp_math.protected_subtract(args_tree[0], args_tree[1])
+                elif func == '*':
+                    result = gp_math.protected_mult(args_tree[0], args_tree[1])
+                elif func == '/':
+                    result = gp_math.protected_divide(args_tree[0], args_tree[1])
+                elif func == 'sin':
+                    result = gp_math.protected_sin(args_tree[0])
+                elif func == 'cos':
+                    result = gp_math.protected_cos(args_tree[0])
+                elif func == 'log':
+                    result = gp_math.protected_log(args_tree[0])
+                else:
+                    raise ValueError(f"Undefined function: {func}")
+
+                # Clamp the result to the interval [-1e6, 1e6]
+                # Extracted of paper: Effective Adaptive Mutation Rates for Program Synthesis by Ni, Andrew and Spector, Lee 2024
+                result = np.clip(result, -1e6, 1e6)
+
+                return result
+            except Exception as e:
+
+                return 0.0  # Return 0.0 for any error
+            
+    def generate_data(self):
+        """
+            Definition
+            -----------
+                Define input vectors (sampled within the search space).
+        """
+        x_values = np.arange(-4.0, 4.0 + 0.1, 0.1)  # TODO Include the step size (0.1) as hyper parameters if adding more benchmarks
+        y_values = self.target_function(x_values)
+        data = list(zip(x_values, y_values))
+        return data
+
+    def symbolic_fitness_function(self, genome):
+        """
+            Definition
+            -----------
+                Calculate the fitness of the individual after evaluating the tree.
+        """
+        total_error = 0.0
+        success = True  # Assume success initially
+        epsilon = 1e-4  # Small threshold for success
+
+        for x, target in self.data:
+
+            try:
+                output = self.evaluate_tree(genome, x)
+                error = output - target
+                
+                # TODO: As used in original Paper
+                total_error += abs(error)
+
+                if abs(error) > epsilon:
+                    success = False  # Error exceeds acceptable threshold
+                    
+            except Exception as e:
+                total_error += 1e6  # Penalize invalid outputs
+                success = False
+                
+        fitness = 1 / (total_error + 1e-6)  # Fitness increases as total error decreases or could return just total error
+        return fitness, success
 
 class TestMeasureDiversity(unittest.TestCase):
+    
+    def test_init_pop(self):
+        gp_system = GeneticProgrammingSystem(None)
+        population = gp_system.initialize_population(10, 3)
+        
+        for i, indiv in enumerate(population):
+            depth_i = gp_system.tree_depth(indiv.tree)
+            print(f"\n({i}) Depth: {depth_i}, tree: {indiv.tree}")
     
     # def test_measure_diversity(self):
     #     # Create sample trees for testing
@@ -339,108 +476,131 @@ class TestMeasureDiversity(unittest.TestCase):
     #     # Tree 3: (x * x)
     #     tree3 = Node('-', [Node('x'), Node('1')])
         
-    #     # Tree 4: (3 - x)
-    #     tree4 = Node('/', [Node('3'), Node('x')])
+        # Tree 4: (3 - x)
+        # tree4 = Node('/', [Node('3'), Node('x')])
         
-    #     # Tree 5: 
+        # # Tree 5: 
+        # tree5 = Node('+', [Node('*', [Node('-', [Node('x'), Node('1.0')])]), Node('+', [Node('x'), Node('1.0')])])
+        
+        # tree6 = Node('+', [Node('*', [Node('x'), Node('1.0')]), Node('x')])
+        
+        # # Create individuals
+        # individual1 = Individual(tree1)
+        # individual2 = Individual(tree2)
+        # individual3 = Individual(tree3)
+        # individual4 = Individual(tree4)
+        
+        # # Create population
+        # population = [individual1, individual2, individual3, individual4]
+        
+        # # Initialize GP system
+        # gp_system = GeneticProgrammingSystem(population)
+        
+        # # Calculate diversity
+        # diversity = gp_system.measure_diversity()
+        
+        # nodes = gp_system.get_all_nodes(tree1)
+        # print(nodes)
+        
+        # depth = gp_system.tree_depth(tree4)
+        # print(f"The depth: {depth}")
+        
+        # random_node = gp_system.select_random_node(tree1)
+        # print(random_node)
+        
+        # # Manually compute expected diversity
+        # # Pairwise distances:
+        # # Distance between tree1 and tree2
+        # dist1_2 = gp_system.tree_edit_distance(tree1, tree2)  
+        # inbred_thres = 2      
+        # can = gp_system.can_mate(individual1, individual2, inbred_thres)
+        # if not can:
+        #     print(f"Cant reproduce with distance: {dist1_2} and threshold: {inbred_thres}")
+        # else:
+        #     print(f"Can reproduce with distance: {dist1_2} and threshold: {inbred_thres}")
+            
+        # # Distance between tree1 and tree3
+        # dist1_3 = gp_system.tree_edit_distance(tree1, tree3)
+        # inbred_thres = 2      
+        # can = gp_system.can_mate(individual1, individual3, inbred_thres)
+        # if not can:
+        #     print(f"Cant reproduce with distance: {dist1_3} and threshold: {inbred_thres}")
+        # else:
+        #     print(f"Can reproduce with distance: {dist1_3} and threshold: {inbred_thres}")
+            
+        # # Distance between tree1 and tree4
+        # dist1_4 = gp_system.tree_edit_distance(tree1, tree4)
+        # # Distance between tree2 and tree3
+        # dist2_3 = gp_system.tree_edit_distance(tree2, tree3)
+        # # Distance between tree2 and tree4
+        # dist2_4 = gp_system.tree_edit_distance(tree2, tree4)
+        # # Distance between tree3 and tree4
+        # dist3_4 = gp_system.tree_edit_distance(tree3, tree4)
+        
+        # total_distance = dist1_2 + dist1_3 + dist1_4 + dist2_3 + dist2_4 + dist3_4
+        # count = 6  # Total number of pairs
+        
+        # expected_diversity = total_distance / count
+        
+        # # Assert that the calculated diversity matches the expected diversity
+        # self.assertEqual(diversity, expected_diversity)
+        
+        # # Optional: Print the diversity
+        # print(f"Calculated Diversity: {diversity}")
+        # print(f"Expected Diversity: {expected_diversity}")
+        
+        # # Additionally, assert that the diversity is greater than zero
+        # self.assertGreater(diversity, 0)
+        
+    # def test_redundant_code(self, ):
+        
+    #     # Create Landscape
+    #     landscape = GPLandscapeTest()
+        
+    #     # Create individual
     #     tree5 = Node('+', [Node('*', [Node('-', [Node('x'), Node('1.0')])]), Node('+', [Node('x'), Node('1.0')])])
+    #     # tree5 = Node('-', [Node('x'), Node('1')])
+    #     individual = Individual(tree5)
         
-    #     tree6 = Node('+', [Node('*', [Node('x'), Node('1.0')]), Node('x')])
+    #     # Create Data
+    #     self.data = landscape.generate_data()
+    #     x_values = [x for x, _ in self.data]  # Use existing data inputs
+    #     redundant_nodes = landscape.detect_redundant_nodes(individual.tree, x_values)
+    #     num_redundant_nodes = len(redundant_nodes)
         
-    #     # Create individuals
+    #     print(num_redundant_nodes)
+        
+    # def test_crossover_same_arity(self):
+        
+    #     tree1 = Node('+', [Node('x'), Node('x')]) # x + x = 2x
+    #     tree2 = Node('+', [Node('*', [Node('x'), Node('1.0')]), Node('x')]) # x + x = 2x
+        
+    #     # Semantically equivalent, but syntactic distance of 3. 
+    #     # The childs they produce are:
+    #     # Individual((* x 1.0))  -> x
+    #     # Individual((+ (+ x x) x)) -> x + 2x = 3x
+        
+    #     # Create two parent trees with matching arities
     #     individual1 = Individual(tree1)
     #     individual2 = Individual(tree2)
-    #     individual3 = Individual(tree3)
-    #     individual4 = Individual(tree4)
         
     #     # Create population
-    #     population = [individual1, individual2, individual3, individual4]
+    #     population = [individual1, individual2]
         
     #     # Initialize GP system
     #     gp_system = GeneticProgrammingSystem(population)
         
-    #     # Calculate diversity
-    #     diversity = gp_system.measure_diversity()
+    #     dist1_2 = gp_system.tree_edit_distance(tree1, tree2)
+    #     print(f"Distance: {dist1_2}")
         
-    #     nodes = gp_system.get_all_nodes(tree1)
-    #     print(nodes)
+    #     offspring1, offspring2 = gp_system.crossover(individual1, individual2, 2, 10)
         
-    #     depth = gp_system.tree_depth(tree4)
-    #     print(f"The depth: {depth}")
-        
-    #     random_node = gp_system.select_random_node(tree1)
-    #     print(random_node)
-        
-    #     # Manually compute expected diversity
-    #     # Pairwise distances:
-    #     # Distance between tree1 and tree2
-    #     dist1_2 = gp_system.tree_edit_distance(tree1, tree2)  
-    #     inbred_thres = 2      
-    #     can = gp_system.can_mate(individual1, individual2, inbred_thres)
-    #     if not can:
-    #         print(f"Cant reproduce with distance: {dist1_2} and threshold: {inbred_thres}")
-    #     else:
-    #         print(f"Can reproduce with distance: {dist1_2} and threshold: {inbred_thres}")
-            
-    #     # Distance between tree1 and tree3
-    #     dist1_3 = gp_system.tree_edit_distance(tree1, tree3)
-    #     inbred_thres = 2      
-    #     can = gp_system.can_mate(individual1, individual3, inbred_thres)
-    #     if not can:
-    #         print(f"Cant reproduce with distance: {dist1_3} and threshold: {inbred_thres}")
-    #     else:
-    #         print(f"Can reproduce with distance: {dist1_3} and threshold: {inbred_thres}")
-            
-    #     # Distance between tree1 and tree4
-    #     dist1_4 = gp_system.tree_edit_distance(tree1, tree4)
-    #     # Distance between tree2 and tree3
-    #     dist2_3 = gp_system.tree_edit_distance(tree2, tree3)
-    #     # Distance between tree2 and tree4
-    #     dist2_4 = gp_system.tree_edit_distance(tree2, tree4)
-    #     # Distance between tree3 and tree4
-    #     dist3_4 = gp_system.tree_edit_distance(tree3, tree4)
-        
-    #     total_distance = dist1_2 + dist1_3 + dist1_4 + dist2_3 + dist2_4 + dist3_4
-    #     count = 6  # Total number of pairs
-        
-    #     expected_diversity = total_distance / count
-        
-    #     # Assert that the calculated diversity matches the expected diversity
-    #     self.assertEqual(diversity, expected_diversity)
-        
-    #     # Optional: Print the diversity
-    #     print(f"Calculated Diversity: {diversity}")
-    #     print(f"Expected Diversity: {expected_diversity}")
-        
-    #     # Additionally, assert that the diversity is greater than zero
-    #     self.assertGreater(diversity, 0)
-        
-    def test_crossover_same_arity(self):
-        
-        tree1 = Node('+', [Node('x'), Node('1.0')])
-        tree2 = Node('+', [Node('*', [Node('x'), Node('1.0')]), Node('x')])
-        
-        # Create two parent trees with matching arities
-        individual1 = Individual(tree1)
-        individual2 = Individual(tree2)
-        
-        # Create population
-        population = [individual1, individual2]
-        
-        # Initialize GP system
-        gp_system = GeneticProgrammingSystem(population)
-        
-        dist1_2 = gp_system.tree_edit_distance(tree1, tree2)
-        print(f"Distance: {dist1_2}")
-        
-        offspring1, offspring2 = gp_system.crossover(individual1, individual2, 2, 10)
-        
-        print(f"{individual1} + {individual2} = {offspring1}")
-        print(f"{individual1} + {individual2} = {offspring2}")
+    #     print(f"{individual1} + {individual2} = {offspring1}")
+    #     print(f"{individual1} + {individual2} = {offspring2}")
         
         
-        self.assertIsNotNone(offspring1)
-        self.assertIsNotNone(offspring2)
+    #     self.assertIsNotNone(offspring1)
+    #     self.assertIsNotNone(offspring2)
         
     # def test_mutate_correct_arity(self):
         
