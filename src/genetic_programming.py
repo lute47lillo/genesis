@@ -7,8 +7,7 @@ import plotting as plot
 import gp_math
 
 """            
-        - Add the NGUYEN benchmark functions from "Effective Adaptive Mutation Rates for Program Synthesis" Paper
-        and from "Better GP benchmarks: community survey results and proposals" paper.
+        MAIN GP file, WIP once all different iterations and tests have been resolved.
 """
 
 class Node:
