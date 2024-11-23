@@ -7,6 +7,11 @@ import numpy as np
 treatments = ["inbreeding", "no_inbreeding"]
 
 def get_gp_statistics(bench_name, depths, thresholds, treatment_name, init_depth=3):
+    """
+        Definition
+        -----------
+            Compute the total number of successful runs per treatment for a given set-up of hyperparameters.
+    """
         
     success = 0
     no_suc = 0

@@ -9,11 +9,11 @@ import os
 import matplotlib.pyplot as plt
 
 
-
 class Node:
-    def __init__(self, value, children=None):
+    def __init__(self, value, tree_id, children=None):
         self.value = value  # Function or terminal
         self.children = children if children is not None else []
+        self.tree_id = tree_id if tree_id is not None else None
 
     def is_terminal(self):
         return len(self.children) == 0
@@ -25,19 +25,30 @@ class Node:
             return f"({self.value} {' '.join(str(child) for child in self.children)})"
 
 class Individual:
-    def __init__(self, args, fitness_function=None, tree=None, id=None, ancestors=None, generation=0):
+    def __init__(self, args, fitness_function=None, tree=None, id=None, ancestors=None, parents=None, generation=0):
         self.args = args
         self.bounds = self.args.bounds
         self.max_depth = self.args.max_depth # TODO
         self.initial_depth = self.args.initial_depth
-        self.tree = tree if tree is not None else self.random_tree(depth=self.initial_depth) # Initial depth of 6 as in paper
-        # self.fitness = None
         self.id = id if id is not None else np.random.randint(1e9)
+        self.parents = parents if parents is not None else []
+        self.tree = tree if tree is not None else self.random_tree(depth=self.initial_depth) # Initial depth of 6 as in paper
         self.ancestors = ancestors if ancestors is not None else set()
         self.generation = generation  # Track the generation of the individual
         
         # Init fitness for individual in creation and self.success
         self.fitness, self.success = fitness_function(self.tree)
+        
+        # Initial generation individual
+        if not self.parents:
+            self.ancestors.add(self.id)
+            
+        # Update ancestors with depth limitation
+        ancestry_max_depth = 10  # Set the desired ancestry depth. Edit for computational issues
+        for parent in self.parents:
+            if parent.generation >= self.generation - ancestry_max_depth:
+                self.ancestors.update(parent.ancestors)
+                self.ancestors.add(parent.id)
         
     def get_function_arity(self, function):
         arity_dict = {
@@ -57,15 +68,15 @@ class Individual:
             # Return a terminal node
             terminal = np.random.choice(['x', '1.0'])
             if terminal == '1.0':
-                return Node(1.0)
+                return Node(1.0, tree_id=self.id)
             else:
-                return Node('x')
+                return Node('x', tree_id=self.id)
         else:
             # Return a function node with appropriate arity
             function = np.random.choice(['+', '-', '*', '/', 'sin', 'cos', 'log'])
             arity = self.get_function_arity(function)
             children = [self.random_tree(depth - 1) for _ in range(arity)]
-            return Node(function, children)
+            return Node(function, self.id, children)
     
     def __str__(self):
         return str(self.tree)
@@ -84,6 +95,91 @@ class GeneticAlgorithmGPBloat:
         self.population = []
         self.best_fitness_list = []
         self.diversity_list = []
+        
+    # ---------------------- Ancestry -------------------------------- #
+    
+    def compute_kinship_population(self):
+        """
+            Definition
+            -----------
+                Compute the kinship coefficient of the all individuals in the population with respect to the rest of the population.
+        """
+        
+        population_kinship = []
+        
+        # Iterate over population
+        for i in range(self.pop_size):
+            i_kinship = 0
+            for j in range(self.pop_size):
+                if i != j: # Don't compare with yourself
+                    ij_ratio = self.kinship_coefficient(self.population[i], self.population[j])
+                
+                    # Storing in array, and checking how much different.
+                    # TODO
+                    # Storing kinship and paris of trees in a dictionary, and comparing their syntactic and semantic differences.
+                    # TODO
+                    # Add all and normalize by number of individuals to check how much one population is 
+                    i_kinship += ij_ratio
+                    
+            i_kinship = i_kinship / (self.pop_size - 1) # Not counting yourself
+            population_kinship.append(i_kinship)
+            
+        # Compute kinship for population
+        avg_pop_kinship = np.mean(population_kinship)
+        closest_i = np.argmax(population_kinship)
+        furthest_i = np.argmin(population_kinship)
+        
+        # Retrieve individuals
+        tree_clossest = self.population[closest_i]
+        tree_furthest = self.population[furthest_i]
+        
+        print(f"\nThe population has an average kinship coefficient (K_avg) of {avg_pop_kinship}.")
+        print(f"The most related individual is {tree_clossest.tree} with K of: {max(population_kinship)} and {len(tree_clossest.ancestors)} total different ancestors.")
+        print(f"The least related individual is {tree_furthest.tree} with K of: {min(population_kinship)} and {len(tree_furthest.ancestors)} total different ancestors.\n")
+       
+        return avg_pop_kinship, tree_clossest, tree_furthest
+    
+    def compute_successful_individual_kinship(self, suc_indiv):
+        """
+            Definition
+            -----------
+                Compute the kinship coefficient of the successful individual with respect to the rest of the population.
+        """
+        
+        succ_kinship = 0
+        for individual in self.population:
+            ij_kinship = self.kinship_coefficient(suc_indiv, individual)
+            succ_kinship += ij_kinship
+            
+        succ_kinship = (succ_kinship - 1) / (self.pop_size - 1) # Not counting yourself and -1 for the comparison between yourself
+        print(f"\nThe successful individual is {suc_indiv.tree} with K of: {succ_kinship} and {len(suc_indiv.ancestors)} total different ancestors.\n")
+        
+    def kinship_coefficient(self, ind1, ind2):
+        """
+            Definition
+            -----------
+                TODO: this could go to util file.
+                The kinship coefficient (f) between two individuals is how close 2 individuals in a population are related to each other.
+                
+            Parameters
+            -----------
+                - ind1 and ind2 (Individual): The individuals of a population to compare their kinship coefficient.
+                
+            Return
+            -----------
+                - ratio_ancestry (float): How related two individuals are. The closer to 1, the more related they are.
+        """
+        
+        shared_ancestors = ind1.ancestors.intersection(ind2.ancestors)
+        total_ancestors = ind1.ancestors.union(ind2.ancestors)
+
+        # No ancestors, unrelated
+        if not total_ancestors:
+            return 0.0  
+
+        # Ratio of shared ancestors to total ancestors.
+        ratio_ancestry = len(shared_ancestors) / len(total_ancestors)
+        return ratio_ancestry
     
     # ----------------------- Tree ~ Node functions ------------------ #
     
@@ -259,7 +355,11 @@ class GeneticAlgorithmGPBloat:
             if individual.success:
                 print(f"Successful individual found in generation {curr_gen}")
                 print(f"Function: {individual.tree}")
+                self.compute_successful_individual_kinship(individual, self.population)
                 self.poulation_success = True
+                return individual
+        
+        return None
                 
     def check_succcess_new_pop(self, curr_gen, next_population):
         for individual in next_population:
@@ -267,7 +367,11 @@ class GeneticAlgorithmGPBloat:
                 print(f"Successful individual found in new population in generation {curr_gen}")
                 print(f"Function: {individual.tree}")
                 self.poulation_success = True
+                individual.success = True
+                return individual
             
+        return None
+                    
     def tournament_selection(self, k=3):
         selected = []
         for _ in range(self.pop_size):
@@ -371,6 +475,7 @@ class GeneticAlgorithmGPBloat:
             self.args,
             fitness_function=self.fitness_function,
             tree=child1,
+            parents=[parent1, parent2],
             ancestors=parent1.ancestors.union(parent2.ancestors, {parent1.id, parent2.id}),
             generation=parent1.generation + 1
         )
@@ -378,6 +483,7 @@ class GeneticAlgorithmGPBloat:
             self.args,
             fitness_function=self.fitness_function,
             tree=child2,
+            parents=[parent1, parent2],
             ancestors=parent1.ancestors.union(parent2.ancestors, {parent1.id, parent2.id}),
             generation=parent1.generation + 1
         )
@@ -532,7 +638,7 @@ class GeneticAlgorithmGPBloat:
         for gen in range(self.generations):
 
             # Calculate fitness
-            self.calculate_fitness(gen)
+            successful_individual = self.calculate_fitness(gen)
             
             # Update best fitness list
             best_individual = max(self.population, key=lambda ind: ind.fitness)
@@ -548,7 +654,7 @@ class GeneticAlgorithmGPBloat:
             
             # Early Stopping condition if successful individual has been found
             if self.poulation_success == True:
-                
+                self.compute_kinship_population()
                 return self.best_fitness_list, self.diversity_list, self.average_size_list, self.average_depth_list, self.population_intron_ratio_list, self.average_intron_ratio_list, gen + 1
     
             # Selection
@@ -588,24 +694,7 @@ class GeneticAlgorithmGPBloat:
                 i += 2
 
             # Check if individual of next population is already successful. No need to recombination as it will always have largest fitness
-            self.check_succcess_new_pop(gen+1, next_population)
-            
-            if self.poulation_success == True:
-                
-                # Update best fitness list
-                best_individual = max(next_population, key=lambda ind: ind.fitness)
-                self.best_fitness_list.append(best_individual.fitness)
-
-                # Measure diversity
-                diversity = self.measure_diversity(next_population)
-                self.diversity_list.append(diversity)
-                
-                # Measure Size and Depth statistics
-                self.compute_population_size_depth(self.poulation_success)
-                
-                # Returns 2 + gens because technically we are just shortcutting the crossover of this current generation. So, +1 for 0th-indexed offset, and +1 for skipping some steps.
-                # This added values will have been returned in the next gen loop iteration.
-                return self.best_fitness_list, self.diversity_list, self.average_size_list, self.average_depth_list, self.population_intron_ratio_list, self.average_intron_ratio_list, gen + 2
+            successful_individual = self.check_succcess_new_pop(gen+1, next_population)
             
             # Combine the population (mu+lambda)
             combined_population = next_population[:lambda_pop] + self.population     
@@ -614,6 +703,27 @@ class GeneticAlgorithmGPBloat:
             # Update the population
             self.population = combined_population[:self.pop_size]
             self.pop_size = len(self.population)
+            
+            if self.poulation_success == True:
+                
+                # Update best fitness list
+                best_individual = max(self.population, key=lambda ind: ind.fitness)
+                self.best_fitness_list.append(best_individual.fitness)
+
+                # Measure diversity
+                diversity = self.measure_diversity(self.population)
+                self.diversity_list.append(diversity)
+                
+                # Measure Size and Depth statistics
+                self.compute_population_size_depth(self.poulation_success)
+                
+                # Compute kinship
+                self.compute_successful_individual_kinship(successful_individual)
+                self.compute_kinship_population()
+                
+                # Returns 2 + gens because technically we are just shortcutting the crossover of this current generation. So, +1 for 0th-indexed offset, and +1 for skipping some steps.
+                # This added values will have been returned in the next gen loop iteration.
+                return self.best_fitness_list, self.diversity_list, self.average_size_list, self.average_depth_list, self.population_intron_ratio_list, self.average_intron_ratio_list, gen + 2
         
             # Print progress
             if (gen + 1) % 10 == 0:
@@ -632,6 +742,7 @@ class GeneticAlgorithmGPBloat:
         
         # Comput population intros at failure.
         self.compute_introns_lists()
+        self.compute_kinship_population()
         
     
         return self.best_fitness_list, self.diversity_list, self.average_size_list, self.average_depth_list, self.population_intron_ratio_list, self.average_intron_ratio_list, gen+1

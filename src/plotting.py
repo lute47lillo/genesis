@@ -834,7 +834,8 @@ if __name__ == "__main__":
     
     # thresholds = [4,5,6,7] # for InitD:2
     thresholds = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14] # InitD:3
-    # thresholds = [4, 5, 6, 7, 8, 9, 10] # InitD:3 nguyen3 for now
+    
+    
     # gen_success_vs_inbreeding_threshold([], thresholds) # TODO: they are for an static depth
     
     # plot_threshold_vs_max_depth_by_gen_success([], "nguyen2", thresholds, depths, 3)
