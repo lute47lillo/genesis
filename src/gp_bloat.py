@@ -1,85 +1,22 @@
+"""
+    Author: Lute Lillo
+    
+    Definition
+    ------------
+        Genetic Programming Algorithm (mu + lambda) class. 
+            - Initializes Population
+            - Evolves Algorithm through mutation and crossover
+            - Tracks metrics
+"""
+
 import numpy as np
 import copy
 import random
 import util
 import experiments as exp
 import plotting as plot
-import gp_math
-import os
-import matplotlib.pyplot as plt
-
-
-class Node:
-    def __init__(self, value, tree_id, children=None):
-        self.value = value  # Function or terminal
-        self.children = children if children is not None else []
-        self.tree_id = tree_id if tree_id is not None else None
-
-    def is_terminal(self):
-        return len(self.children) == 0
-
-    def __str__(self):
-        if self.is_terminal():
-            return str(self.value)
-        else:
-            return f"({self.value} {' '.join(str(child) for child in self.children)})"
-
-class Individual:
-    def __init__(self, args, fitness_function=None, tree=None, id=None, ancestors=None, parents=None, generation=0):
-        self.args = args
-        self.bounds = self.args.bounds
-        self.max_depth = self.args.max_depth # TODO
-        self.initial_depth = self.args.initial_depth
-        self.id = id if id is not None else np.random.randint(1e9)
-        self.parents = parents if parents is not None else []
-        self.tree = tree if tree is not None else self.random_tree(depth=self.initial_depth) # Initial depth of 6 as in paper
-        self.ancestors = ancestors if ancestors is not None else set()
-        self.generation = generation  # Track the generation of the individual
-        
-        # Init fitness for individual in creation and self.success
-        self.fitness, self.success = fitness_function(self.tree)
-        
-        # Initial generation individual
-        if not self.parents:
-            self.ancestors.add(self.id)
-            
-        # Update ancestors with depth limitation
-        ancestry_max_depth = 10  # Set the desired ancestry depth. Edit for computational issues
-        for parent in self.parents:
-            if parent.generation >= self.generation - ancestry_max_depth:
-                self.ancestors.update(parent.ancestors)
-                self.ancestors.add(parent.id)
-        
-    def get_function_arity(self, function):
-        arity_dict = {
-            '+': 2,
-            '-': 2,
-            '*': 2,
-            '/': 2,
-            'sin': 1,
-            'cos': 1,
-            'log': 1
-        }
-        return arity_dict.get(function, 0)
-    
-    def random_tree(self, depth):
-    
-        if depth == 0:
-            # Return a terminal node
-            terminal = np.random.choice(['x', '1.0'])
-            if terminal == '1.0':
-                return Node(1.0, tree_id=self.id)
-            else:
-                return Node('x', tree_id=self.id)
-        else:
-            # Return a function node with appropriate arity
-            function = np.random.choice(['+', '-', '*', '/', 'sin', 'cos', 'log'])
-            arity = self.get_function_arity(function)
-            children = [self.random_tree(depth - 1) for _ in range(arity)]
-            return Node(function, self.id, children)
-    
-    def __str__(self):
-        return str(self.tree)
+import gp_landscape
+from gp_node import Individual
 
 class GeneticAlgorithmGPBloat:
     
@@ -96,7 +33,59 @@ class GeneticAlgorithmGPBloat:
         self.best_fitness_list = []
         self.diversity_list = []
         
-    # ---------------------- Ancestry -------------------------------- #
+    # -------------------- Intron computations ----------------------- #
+    
+    def compute_introns_lists(self):
+        
+        # Measure intron metrics
+        intron_metrics = self.landscape.measure_introns(self.population)
+        self.pop_ratio_intron_list.append(intron_metrics['population_intron_ratio'])
+        self.avg_ratio_intron_list.append(intron_metrics['average_intron_ratio'])
+        self.pop_total_intron_list.append(intron_metrics['population_total_intron_nodes'])
+        self.pop_total_nodes_list.append(intron_metrics['population_total_nodes'])
+    
+    def compute_population_size_depth(self, is_success=False):
+        
+        # Get Tree sizes for entire population (nº nodes)
+        tree_sizes = [self.count_nodes(ind.tree) for ind in self.population]
+        average_size = sum(tree_sizes) / len(tree_sizes)
+        self.average_size_list.append(average_size)
+        
+        # Get Tree depths for entire population
+        tree_depths = [self.tree_depth(ind.tree) for ind in self.population]
+        average_depth = sum(tree_depths) / len(tree_depths)
+        self.average_depth_list.append(average_depth)  
+        
+        if is_success == True:
+            # Measure intron metrics
+            self.compute_introns_lists() 
+            
+    # ---------------------- Diversity computations -------------------------------#
+    
+    def measure_diversity(self, population):
+        """
+            Definition
+            -----------
+                Calculate diversity based on tree structures as the given average pairwise tree edit distance
+                
+                Example:  # Tree 1: (x + 1) -> tree1 = Node('+', [Node('x'), Node('1')])
+                          # Tree 2: (x + 2) -> tree2 = Node('+', [Node('x'), Node('2')])
+                          have distance of 1. 
+                          
+        """
+        total_distance = 0
+        count = 0
+        for i in range(len(population)):
+            for j in range(i + 1, len(population)):
+                distance = self.compute_trees_distance(population[i].tree, population[j].tree)
+                total_distance += distance
+                count += 1
+        if count == 0:
+            return 0
+        diversity = total_distance / count
+        return diversity  
+        
+    # ---------------------- Ancestry computations -------------------------------- #
     
     def compute_kinship_population(self):
         """
@@ -181,7 +170,7 @@ class GeneticAlgorithmGPBloat:
         ratio_ancestry = len(shared_ancestors) / len(total_ancestors)
         return ratio_ancestry
     
-    # ----------------------- Tree ~ Node functions ------------------ #
+    # ----------------------- Individial Tree ~ Node computations ------------------ #
     
     def select_random_node(self, tree):
         """
@@ -355,7 +344,7 @@ class GeneticAlgorithmGPBloat:
             if individual.success:
                 print(f"Successful individual found in generation {curr_gen}")
                 print(f"Function: {individual.tree}")
-                self.compute_successful_individual_kinship(individual, self.population)
+                self.compute_successful_individual_kinship(individual)
                 self.poulation_success = True
                 return individual
         
@@ -520,101 +509,6 @@ class GeneticAlgorithmGPBloat:
 
         # Update individual
         individual.tree = mutated_tree
-
-    def measure_diversity(self, population):
-        """
-            Definition
-            -----------
-                Calculate diversity based on tree structures as the given average pairwise tree edit distance
-                
-                Example:  # Tree 1: (x + 1) -> tree1 = Node('+', [Node('x'), Node('1')])
-                          # Tree 2: (x + 2) -> tree2 = Node('+', [Node('x'), Node('2')])
-                          have distance of 1. 
-                          
-        """
-        total_distance = 0
-        count = 0
-        for i in range(len(population)):
-            for j in range(i + 1, len(population)):
-                distance = self.compute_trees_distance(population[i].tree, population[j].tree)
-                total_distance += distance
-                count += 1
-        if count == 0:
-            return 0
-        diversity = total_distance / count
-        return diversity
-    
-    def compute_introns_lists(self):
-        
-        # Measure intron metrics
-        x_values = [x for x, _ in self.landscape.data]  # Assuming self.data contains your dataset
-        intron_metrics = self.measure_introns(self.population, x_values)
-        self.population_intron_ratio_list.append(intron_metrics['population_intron_ratio'])
-        self.average_intron_ratio_list.append(intron_metrics['average_intron_ratio'])
-    
-    def compute_population_size_depth(self, is_success=False):
-        
-        # Get Tree sizes for entire population (nº nodes)
-        tree_sizes = [self.count_nodes(ind.tree) for ind in self.population]
-        average_size = sum(tree_sizes) / len(tree_sizes)
-        self.average_size_list.append(average_size)
-        
-        # Get Tree depths for entire population
-        tree_depths = [self.tree_depth(ind.tree) for ind in self.population]
-        average_depth = sum(tree_depths) / len(tree_depths)
-        self.average_depth_list.append(average_depth)  
-        
-        if is_success == True:
-            # Measure intron metrics
-            self.compute_introns_lists()   
-                    
-   
-    def measure_introns(self, population, x_values):
-        """
-        Measures intron metrics in the population.
-        
-        Parameters:
-        -----------
-        population : list
-            The list of Individual objects in the population.
-        x_values : list
-            The input values to evaluate the trees.
-        
-        Returns:
-        --------
-        dict
-            A dictionary containing total and average intron metrics.
-        """
-        population_total_intron_nodes = 0
-        population_total_nodes = 0
-        individual_intron_ratios = []
-        
-        for individual in population:
-            # Detect introns and their sizes
-            introns = self.landscape.detect_redundant_subtrees(individual.tree, x_values)
-            total_intron_nodes = sum(intron_size for _, intron_size in introns)
-            
-            # Total nodes in the individual's tree
-            total_nodes = self.count_nodes(individual.tree)
-            
-            # Intron ratio for the individual
-            intron_ratio = total_intron_nodes / total_nodes if total_nodes > 0 else 0
-            
-            # Update population totals
-            population_total_intron_nodes += total_intron_nodes
-            population_total_nodes += total_nodes
-            individual_intron_ratios.append(intron_ratio)
-        
-        # Population-level metrics
-        population_intron_ratio = population_total_intron_nodes / population_total_nodes if population_total_nodes > 0 else 0
-        average_intron_ratio = sum(individual_intron_ratios) / len(individual_intron_ratios) if individual_intron_ratios else 0
-        
-        return {
-            'population_total_intron_nodes': population_total_intron_nodes,
-            'population_total_nodes': population_total_nodes,
-            'population_intron_ratio': population_intron_ratio,
-            'average_intron_ratio': average_intron_ratio
-        }
     
     # ----------------- Main execution loop ------------------------- #
     
@@ -632,8 +526,10 @@ class GeneticAlgorithmGPBloat:
         self.average_depth_list = []
         
         # Initialize lists to store intron statistical metrics
-        self.population_intron_ratio_list = []
-        self.average_intron_ratio_list = []
+        self.pop_ratio_intron_list = []
+        self.avg_ratio_intron_list = []
+        self.pop_total_intron_list = []
+        self.pop_total_nodes_list = []
         
         for gen in range(self.generations):
 
@@ -655,7 +551,8 @@ class GeneticAlgorithmGPBloat:
             # Early Stopping condition if successful individual has been found
             if self.poulation_success == True:
                 self.compute_kinship_population()
-                return self.best_fitness_list, self.diversity_list, self.average_size_list, self.average_depth_list, self.population_intron_ratio_list, self.average_intron_ratio_list, gen + 1
+                intron_lists = util.pack_intron_lists(self.pop_ratio_intron_list, self.avg_ratio_intron_list, self.pop_total_intron_list, self.pop_total_nodes_list)
+                return self.best_fitness_list, self.diversity_list, self.average_size_list, self.average_depth_list, intron_lists, gen + 1
     
             # Selection
             selected = self.tournament_selection()
@@ -720,10 +617,11 @@ class GeneticAlgorithmGPBloat:
                 # Compute kinship
                 self.compute_successful_individual_kinship(successful_individual)
                 self.compute_kinship_population()
-                
+                intron_lists = util.pack_intron_lists(self.pop_ratio_intron_list, self.avg_ratio_intron_list, self.pop_total_intron_list, self.pop_total_nodes_list)
+
                 # Returns 2 + gens because technically we are just shortcutting the crossover of this current generation. So, +1 for 0th-indexed offset, and +1 for skipping some steps.
                 # This added values will have been returned in the next gen loop iteration.
-                return self.best_fitness_list, self.diversity_list, self.average_size_list, self.average_depth_list, self.population_intron_ratio_list, self.average_intron_ratio_list, gen + 2
+                return self.best_fitness_list, self.diversity_list, self.average_size_list, self.average_depth_list, intron_lists, gen + 2
         
             # Print progress
             if (gen + 1) % 10 == 0:
@@ -732,193 +630,16 @@ class GeneticAlgorithmGPBloat:
                       f"Diversity = {diversity:.4f}, "
                       f"Avg Size = {np.mean(self.average_size_list):.2f}, "
                       f"Avg Depth = {np.mean(self.average_depth_list):.2f}, "
-                      f"Population Intron Ratio = {self.population_intron_ratio_list[gen]:.4f}, "
-                      f"Avg Intron Ratio per Individual = {self.average_intron_ratio_list[gen]:.4f}")
-                      
-                      
-                    #   f"Population Intron Ratio = {np.mean(self.population_intron_ratio_list):.4f}, "
-                    #   f"Avg Intron Ratio per Individual = {np.mean(self.average_intron_ratio_list):.4f}")
+                      f"Population Intron Ratio = {self.pop_ratio_intron_list[gen]:.4f}, "
+                      f"Avg Intron Ratio per Individual = {self.avg_ratio_intron_list[gen]:.4f}, "
+                      f"Population Total Intron Nodes = {self.pop_total_intron_list[gen]:.4f}", 
+                      f"Population Total Nodes = {self.pop_total_nodes_list[gen]:.4f}")
                 
-        
         # Comput population intros at failure.
         self.compute_introns_lists()
         self.compute_kinship_population()
         
-    
-        return self.best_fitness_list, self.diversity_list, self.average_size_list, self.average_depth_list, self.population_intron_ratio_list, self.average_intron_ratio_list, gen+1
-    
-class GPLandscape:
-    
-    def __init__(self, args):
-        
-        self.args = args
-        self.target_function = util.select_gp_benchmark(args)
-        self.bounds = args.bounds
-        self.data = self.generate_data() # Generate all data points
-        
-    # ---------------------- Introns detection. EXPERIMENTAL ------------- #
-    
-    def detect_redundant_subtrees(self, node, x_values, replacement_values=['x', '1.0']):
-        """
-        Detects redundant subtrees (introns) in a tree by checking if replacing the subtree
-        with multiple terminal values results in the same output for all x_values.
-        
-        Parameters:
-        -----------
-        node : Node
-            The root node of the subtree to check.
-        x_values : list
-            The input values to evaluate the tree.
-        replacement_values : list
-            List of terminal values to replace the subtree with for testing redundancy.
-        
-        Returns:
-        --------
-        list of tuples
-            Each tuple contains (intron_node, intron_size).
-        """
-        if node.is_terminal():
-            return []
-        
-        redundant_nodes = []
-        
-        # Evaluate original subtree outputs
-        original_outputs = [self.evaluate_tree(node, x) for x in x_values]
-        
-        # Flag to track if the node is redundant for all replacements
-        is_redundant = True
-        
-        for replacement in replacement_values:
-            # Store original node state
-            original_value = node.value
-            original_children = node.children.copy()
-            
-            # Replace subtree with terminal
-            node.value = replacement
-            node.children = []
-            
-            # Evaluate replaced subtree outputs
-            replaced_outputs = [self.evaluate_tree(node, x) for x in x_values]
-            
-            # Restore the original node state
-            node.value = original_value
-            node.children = original_children
-            
-            # Compare outputs
-            if not all(o1 == o2 for o1, o2 in zip(original_outputs, replaced_outputs)):
-                is_redundant = False
-                break  # No need to test other replacements if outputs differ
-        
-        if is_redundant:
-            # Calculate the size of the intron subtree
-            intron_size = self.count_nodes(node)
-            redundant_nodes.append((node, intron_size))
-        
-        # Recursively check child nodes
-        for child in node.children:
-            redundant_nodes.extend(self.detect_redundant_subtrees(child, x_values, replacement_values))
-        
-        return redundant_nodes
-    
-    def count_nodes(self, node):
-        """
-            Definition
-            -----------
-                Count the number of nodes (functions and terminals) in a program tree.
-        """
-        if node is None:
-            return 0
-        count = 1  # Count the current node
-        for child in node.children:
-            count += self.count_nodes(child)
-        return count
-    
-    def evaluate_tree(self, node, x):
-        
-        # Base case checking for error
-        if node is None:
-            return 0.0
-
-        # Check if node is terminal (leave) or not
-        if node.is_terminal():
-            if node.value == 'x':
-                return x  # x is a scalar
-            else:
-                try:
-                    val = float(node.value)
-                    return val
-                except ValueError as e:
-                    return 0.0
-        else:
-            func = node.value
-            args_tree = [self.evaluate_tree(child, x) for child in node.children]
-     
-            try:
-                if func == '+':
-                    result = gp_math.protected_sum(args_tree[0], args_tree[1])
-                elif func == '-':
-                    result = gp_math.protected_subtract(args_tree[0], args_tree[1])
-                elif func == '*':
-                    result = gp_math.protected_mult(args_tree[0], args_tree[1])
-                elif func == '/':
-                    result = gp_math.protected_divide(args_tree[0], args_tree[1])
-                elif func == 'sin':
-                    result = gp_math.protected_sin(args_tree[0])
-                elif func == 'cos':
-                    result = gp_math.protected_cos(args_tree[0])
-                elif func == 'log':
-                    result = gp_math.protected_log(args_tree[0])
-                else:
-                    raise ValueError(f"Undefined function: {func}")
-
-                # Clamp the result to the interval [-1e6, 1e6]
-                # Extracted of paper: Effective Adaptive Mutation Rates for Program Synthesis by Ni, Andrew and Spector, Lee 2024
-                result = np.clip(result, -1e6, 1e6)
-
-                return result
-            except Exception as e:
-
-                return 0.0  # Return 0.0 for any error
-        
-    def generate_data(self):
-        """
-            Definition
-            -----------
-                Define input vectors (sampled within the search space).
-        """
-        x_values = np.arange(self.bounds[0], self.bounds[1] + 0.1, 0.1)  # TODO Include the step size (0.1) as hyper parameters if adding more benchmarks
-        y_values = self.target_function(x_values)
-        data = list(zip(x_values, y_values))
-        return data
-
-    def symbolic_fitness_function(self, genome):
-        """
-            Definition
-            -----------
-                Calculate the fitness of the individual after evaluating the tree.
-        """
-        total_error = 0.0
-        success = True  # Assume success initially
-        epsilon = 1e-4  # Small threshold for success
-
-        for x, target in self.data:
-
-            try:
-                output = self.evaluate_tree(genome, x)
-                error = output - target
-                
-                # TODO: As used in original Paper
-                total_error += abs(error)
-
-                if abs(error) > epsilon:
-                    success = False  # Error exceeds acceptable threshold
-                    
-            except Exception as e:
-                total_error += 1e6  # Penalize invalid outputs
-                success = False
-                
-        fitness = 1 / (total_error + 1e-6)  # Fitness increases as total error decreases or could return just total error
-        return fitness, success
+        return self.best_fitness_list, self.diversity_list, self.average_size_list, self.average_depth_list, self.pop_ratio_intron_list, self.avg_ratio_intron_list, gen+1
         
 if __name__ == "__main__":
     
@@ -926,7 +647,7 @@ if __name__ == "__main__":
     args = util.set_args()
     
     # Create Landscape
-    gp_landscape = GPLandscape(args)
+    landscape = gp_landscape.GPLandscape(args)
 
     # -------------------------------- Experiment: Multiple Runs w/ fixed population and fixed mutation rate --------------------------- #
     
@@ -936,11 +657,11 @@ if __name__ == "__main__":
 
     args.config_plot = term1 + term2 + term3
     print("Running GA with NO Inbreeding Mating...")
-    results_no_inbreeding = exp.test_multiple_runs_function_bloat(args, gp_landscape, args.inbred_threshold)
+    results_no_inbreeding = exp.test_multiple_runs_function_bloat(args, landscape, args.inbred_threshold)
     util.save_accuracy(results_no_inbreeding, f"{args.config_plot}_no_inbreeding.npy")
     
     print("Running GA with Inbreeding Mating...")
-    results_inbreeding = exp.test_multiple_runs_function_bloat(args, gp_landscape, None)
+    results_inbreeding = exp.test_multiple_runs_function_bloat(args, landscape, None)
     util.save_accuracy(results_inbreeding, f"{args.config_plot}_inbreeding.npy")
     
     # Plot the generation of successful runs

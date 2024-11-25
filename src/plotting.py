@@ -841,6 +841,6 @@ if __name__ == "__main__":
     # plot_threshold_vs_max_depth_by_gen_success([], "nguyen2", thresholds, depths, 3)
     # plot_threshold_vs_max_depth_by_diversity([], "nguyen3", thresholds, depths, 3)
     
-    plot_all_heatmap([], "nguyen3", thresholds, depths, 3)
+    plot_all_heatmap([], "nguyen4", thresholds, depths, 3)
 
     
