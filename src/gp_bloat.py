@@ -33,6 +33,14 @@ class GeneticAlgorithmGPBloat:
         self.best_fitness_list = []
         self.diversity_list = []
         
+    def collect_all_stats(self):
+        intron_lists = util.pack_intron_lists(self.pop_ratio_intron_list, self.avg_ratio_intron_list, self.pop_total_intron_list, self.pop_total_nodes_list)
+        kinship_lists = util.pack_kinship_lists(self.avg_pop_kinship_list, self.clossest_tree_list, self.furthest_tree_list)
+        measures_lists = util.pack_measures_lists(self.average_size_list, self.average_depth_list)
+        metrics_lists = util.pack_metrics_lists(self.best_fitness_list, self.diversity_list)
+        
+        return metrics_lists, measures_lists, intron_lists, kinship_lists
+        
     # -------------------- Intron computations ----------------------- #
     
     def compute_introns_lists(self):
@@ -83,8 +91,10 @@ class GeneticAlgorithmGPBloat:
         if count == 0:
             return 0
         diversity = total_distance / count
-        return diversity  
         
+        # Track diversity value
+        self.diversity_list.append(diversity)
+
     # ---------------------- Ancestry computations -------------------------------- #
     
     def compute_kinship_population(self):
@@ -122,11 +132,14 @@ class GeneticAlgorithmGPBloat:
         tree_clossest = self.population[closest_i]
         tree_furthest = self.population[furthest_i]
         
-        print(f"\nThe population has an average kinship coefficient (K_avg) of {avg_pop_kinship}.")
-        print(f"The most related individual is {tree_clossest.tree} with K of: {max(population_kinship)} and {len(tree_clossest.ancestors)} total different ancestors.")
-        print(f"The least related individual is {tree_furthest.tree} with K of: {min(population_kinship)} and {len(tree_furthest.ancestors)} total different ancestors.\n")
-       
-        return avg_pop_kinship, tree_clossest, tree_furthest
+        # Track statistics
+        self.furthest_tree_list.append((tree_furthest.ancestors, min(population_kinship)))
+        self.clossest_tree_list.append((tree_clossest.ancestors, max(population_kinship)))
+        self.avg_pop_kinship_list.append(avg_pop_kinship) # Could compute the average ancestors
+        
+        # print(f"The population has an average kinship coefficient (K_AVG) of {avg_pop_kinship}.")
+        # print(f"The most related individual is {tree_clossest.tree} with K of: {max(population_kinship)} and {len(tree_clossest.ancestors)} total different ancestors.")
+        # print(f"The least related individual is {tree_furthest.tree} with K of: {min(population_kinship)} and {len(tree_furthest.ancestors)} total different ancestors.\n")
     
     def compute_successful_individual_kinship(self, suc_indiv):
         """
@@ -140,7 +153,10 @@ class GeneticAlgorithmGPBloat:
             ij_kinship = self.kinship_coefficient(suc_indiv, individual)
             succ_kinship += ij_kinship
             
+        # Update Succesful individual to be tracked.
         succ_kinship = (succ_kinship - 1) / (self.pop_size - 1) # Not counting yourself and -1 for the comparison between yourself
+        suc_indiv.succ_kinship = succ_kinship
+        
         print(f"\nThe successful individual is {suc_indiv.tree} with K of: {succ_kinship} and {len(suc_indiv.ancestors)} total different ancestors.\n")
         
     def kinship_coefficient(self, ind1, ind2):
@@ -531,6 +547,11 @@ class GeneticAlgorithmGPBloat:
         self.pop_total_intron_list = []
         self.pop_total_nodes_list = []
         
+        # Initialize lists to store kinship statistical metrics
+        self.avg_pop_kinship_list = []
+        self.clossest_tree_list = [] # most related tree wrt population
+        self.furthest_tree_list = [] # least related tree wrt population
+        
         for gen in range(self.generations):
 
             # Calculate fitness
@@ -541,20 +562,19 @@ class GeneticAlgorithmGPBloat:
             self.best_fitness_list.append(best_individual.fitness)
     
             # Measure diversity
-            diversity = self.measure_diversity(self.population)
-            self.diversity_list.append(diversity)
+            self.measure_diversity(self.population)
             
-            # Measure Size and Depth statistics
+            # Measure Size, Depth  and Intron statistics
             self.compute_population_size_depth(self.poulation_success)
             self.compute_introns_lists()
+            self.compute_kinship_population()
             
             # Early Stopping condition if successful individual has been found
             if self.poulation_success == True:
-                self.compute_kinship_population()
-                intron_lists = util.pack_intron_lists(self.pop_ratio_intron_list, self.avg_ratio_intron_list, self.pop_total_intron_list, self.pop_total_nodes_list)
-                return self.best_fitness_list, self.diversity_list, self.average_size_list, self.average_depth_list, intron_lists, gen + 1
+                metrics_lists, measures_lists, intron_lists, kinship_lists = self.collect_all_stats()
+                return metrics_lists, measures_lists, intron_lists, kinship_lists, gen + 1
     
-            # Selection
+            # Tournament Selection
             selected = self.tournament_selection()
     
             # Crossover and Mutation
@@ -608,8 +628,7 @@ class GeneticAlgorithmGPBloat:
                 self.best_fitness_list.append(best_individual.fitness)
 
                 # Measure diversity
-                diversity = self.measure_diversity(self.population)
-                self.diversity_list.append(diversity)
+                self.measure_diversity(self.population)
                 
                 # Measure Size and Depth statistics
                 self.compute_population_size_depth(self.poulation_success)
@@ -617,29 +636,37 @@ class GeneticAlgorithmGPBloat:
                 # Compute kinship
                 self.compute_successful_individual_kinship(successful_individual)
                 self.compute_kinship_population()
-                intron_lists = util.pack_intron_lists(self.pop_ratio_intron_list, self.avg_ratio_intron_list, self.pop_total_intron_list, self.pop_total_nodes_list)
+                
+                # Collect all
+                metrics_lists, measures_lists, intron_lists, kinship_lists = self.collect_all_stats()
 
-                # Returns 2 + gens because technically we are just shortcutting the crossover of this current generation. So, +1 for 0th-indexed offset, and +1 for skipping some steps.
+                # Returns 2 + gens because technically we are just shortcutting the crossover of this current generation. 
+                # So, +1 for 0th-indexed offset, and +1 for skipping some steps.
                 # This added values will have been returned in the next gen loop iteration.
-                return self.best_fitness_list, self.diversity_list, self.average_size_list, self.average_depth_list, intron_lists, gen + 2
+                return metrics_lists, measures_lists, intron_lists, kinship_lists, gen + 2
         
             # Print progress
             if (gen + 1) % 10 == 0:
-                # print(f"Generation {gen + 1}: Best Fitness = {best_individual.fitness:.4f}, Diversity = {diversity:.4f}")
-                print(f"Generation {gen + 1}: Best Fitness = {best_individual.fitness:.4f}, "
-                      f"Diversity = {diversity:.4f}, "
-                      f"Avg Size = {np.mean(self.average_size_list):.2f}, "
-                      f"Avg Depth = {np.mean(self.average_depth_list):.2f}, "
-                      f"Population Intron Ratio = {self.pop_ratio_intron_list[gen]:.4f}, "
-                      f"Avg Intron Ratio per Individual = {self.avg_ratio_intron_list[gen]:.4f}, "
-                      f"Population Total Intron Nodes = {self.pop_total_intron_list[gen]:.4f}", 
-                      f"Population Total Nodes = {self.pop_total_nodes_list[gen]:.4f}")
+                print(f"Generation {gen + 1}: Best Fitness = {best_individual.fitness:.3f}\n"
+                      f"Diversity = {self.diversity_list[gen]:.3f}\n"
+                      f"Avg Size = {self.average_size_list[gen]:.3f}\n"
+                      f"Avg Depth = {self.average_depth_list[gen]:.3f}\n"
+                      f"Population Intron Ratio = {self.pop_ratio_intron_list[gen]:.3f}\n"
+                      f"Avg Intron Ratio per Individual = {self.avg_ratio_intron_list[gen]:.3f}\n"
+                      f"Population Total Intron Nodes = {self.pop_total_intron_list[gen]:.3f}\n" 
+                      f"Population Total Nodes = {self.pop_total_nodes_list[gen]:.3f}\n"
+                      f"Avg Population Tree Kinship = {self.avg_pop_kinship_list[gen]:.3f}\n"
+                      f"Most Related Tree Kinship = {self.clossest_tree_list[gen][1]:.3f} with {len(self.clossest_tree_list[gen][0])} ancestors\n"
+                      f"Least Related Tree Kinship = {self.furthest_tree_list[gen][1]:.3f} with {len(self.furthest_tree_list[gen][0])} ancestors.")
                 
         # Comput population intros at failure.
         self.compute_introns_lists()
         self.compute_kinship_population()
         
-        return self.best_fitness_list, self.diversity_list, self.average_size_list, self.average_depth_list, self.pop_ratio_intron_list, self.avg_ratio_intron_list, gen+1
+        # Collect all if failed run
+        metrics_lists, measures_lists, intron_lists, kinship_lists = self.collect_all_stats()
+        
+        return metrics_lists, measures_lists, intron_lists, kinship_lists, gen+1
         
 if __name__ == "__main__":
     

@@ -35,6 +35,7 @@ class Individual:
         self.tree = tree if tree is not None else self.random_tree(depth=self.initial_depth) # Initial depth of 6 as in paper
         self.ancestors = ancestors if ancestors is not None else set()
         self.generation = generation  # Track the generation of the individual
+        self.succ_kinship = None
         
         # Init fitness for individual in creation and self.success
         self.fitness, self.success = fitness_function(self.tree)

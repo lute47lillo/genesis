@@ -92,7 +92,19 @@ def select_gp_benchmark(args):
 def pack_intron_lists(pop_ration_in, avg_ratio_in, pop_total_in, pop_total_nodes):
     intron_lists = (pop_ration_in, avg_ratio_in, pop_total_in, pop_total_nodes)
     return intron_lists
-        
+
+def pack_kinship_lists(avg_kinship, t_close, t_far):
+    kinship_lists = (avg_kinship, t_close, t_far)
+    return kinship_lists
+
+def pack_measures_lists(average_size_list, average_depth_list):
+    measures_lists = (average_size_list, average_depth_list)
+    return measures_lists
+
+def pack_metrics_lists(best_fitness_list, diversity_list):
+    metrics_lists = (best_fitness_list, diversity_list)
+    return metrics_lists
+    
 # -------------- Plotting helper functions --------------- #
         
 def create_padded_df(data, metric, run_ids):
