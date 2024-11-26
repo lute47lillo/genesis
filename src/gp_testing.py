@@ -387,7 +387,7 @@ class GeneticAlgorithmGPTesting:
         """
             Definition
             -----------
-                Calculate diversity based on tree structures as the given average pairwise tree edit distance
+                Calculate diversity based on tree structures.
                 
                 Example:  # Tree 1: (x + 1) -> tree1 = Node('+', [Node('x'), Node('1')])
                           # Tree 2: (x + 2) -> tree2 = Node('+', [Node('x'), Node('2')])
@@ -627,21 +627,21 @@ if __name__ == "__main__":
     results_no_inbreeding = exp.test_multiple_runs_function_gp(args, gp_landscape, args.inbred_threshold)
     util.save_accuracy(results_no_inbreeding, f"{args.config_plot}_no_inbreeding.npy")
     
-    print("Running GA with Inbreeding Mating...")
-    results_inbreeding = exp.test_multiple_runs_function_gp(args, gp_landscape, None)
-    util.save_accuracy(results_inbreeding, f"{args.config_plot}_inbreeding.npy")
+    # print("Running GA with Inbreeding Mating...")
+    # results_inbreeding = exp.test_multiple_runs_function_gp(args, gp_landscape, None)
+    # util.save_accuracy(results_inbreeding, f"{args.config_plot}_inbreeding.npy")
     
-    # Plot the generation of successful runs
-    args.config_plot = term1 + "diversity_last_lambda/" + term3
-    plot.plot_gen_vs_run(args, results_no_inbreeding, results_inbreeding)
+    # # Plot the generation of successful runs
+    # args.config_plot = term1 + "diversity_last_lambda/" + term3
+    # plot.plot_gen_vs_run(args, results_no_inbreeding, results_inbreeding)
     
-    # Plot Diversity vs generations runs
-    args.config_plot = term1 + "div_gen_lambda/" + term3
-    plot.plot_diversity_generation_over_time(args, results_no_inbreeding, results_inbreeding)
+    # # Plot Diversity vs generations runs
+    # args.config_plot = term1 + "div_gen_lambda/" + term3
+    # plot.plot_diversity_generation_over_time(args, results_no_inbreeding, results_inbreeding)
     
-    # Plot diversity vs generation of success (convergence)
-    args.config_plot = term1 + "diversity_success_lambda/" + term3
-    plot.plot_time_of_convergence_vs_diversity(args, results_no_inbreeding, results_inbreeding)
+    # # Plot diversity vs generation of success (convergence)
+    # args.config_plot = term1 + "diversity_success_lambda/" + term3
+    # plot.plot_time_of_convergence_vs_diversity(args, results_no_inbreeding, results_inbreeding)
     
     # -------------------------------- Experiment: Multiple Runs w/ fixed population and Variable mutation rate --------------------------- #
     

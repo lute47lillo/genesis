@@ -40,11 +40,13 @@ def get_gp_statistics(bench_name, depths, thresholds, treatment_name, init_depth
 if __name__ == "__main__":
     
     thresholds = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
-    # thresholds = [4, 5, 6, 7]
+    thresholds = [5, 6, 7, 8, 9, 10, 11, 12, 13]
     depths = [6, 7, 8, 9, 10] 
-    succes1, no_suc1 = get_gp_statistics("nguyen1", depths, thresholds, "inbreeding", 3)
-    succes2, no_suc2 = get_gp_statistics("nguyen1", depths, thresholds, "no_inbreeding", 3)
+    depths = [6, 7, 8, 9] 
+    succes1, no_suc1 = get_gp_statistics("nguyen5", depths, thresholds, "inbreeding", 3)
+    succes2, no_suc2 = get_gp_statistics("nguyen5", depths, thresholds, "no_inbreeding", 3)
     
-    print("For a total of 750 experimental runs")
-    print(f"Inbreeding success: {succes1}. Success rate: {(succes1/750)*100:.2f}%")
-    print(f"NO Inbreeding success: {succes2}. Success rate: {(succes2/750)*100:.2f}%")
+    n_combs = len(depths)*len(thresholds)*15
+    print(f"For a total of {n_combs} experimental runs")
+    print(f"NO Inbreeding success: {succes2}. Success rate: {(succes2/n_combs)*100:.2f}%")
+    print(f"Inbreeding success: {succes1}. Success rate: {(succes1/n_combs)*100:.2f}%")

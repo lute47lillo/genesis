@@ -208,15 +208,6 @@ def flatten_results_in_max_depth_diversity(bench_name, treatment_name, threshold
                 })
     return pd.DataFrame(data_df)
 
-# Padding Function
-def pad_sublist(sublist, target_length):
-    current_length = len(sublist)
-    if current_length < target_length:
-        padding = [sublist[-1]] * (target_length - current_length)
-        return sublist + padding
-    else:
-        return sublist
-
 # Determine Global Maximum Depth
 def get_global_max_depth(*results_dicts):
     max_depth = 0
@@ -235,3 +226,21 @@ def pad_diversity_lists(results_dict, target_length):
         results_dict[run]['diversity'] = padded_diversity
         print(f"Run {run}: Padded Diversity Lengths = {[len(s) for s in results_dict[run]['diversity']]}")
     return results_dict
+
+# Create DF for all attributes for the given dictionary treatment
+def pad_dict_and_create_df(results, attributes, global_max_length, n_runs):
+    
+    data = {}
+    for attr in attributes:
+        attr_list = [results[run][attr] for run in range(n_runs)]
+        
+        # Pad up to max length of any run for 1:1 comparison
+        attr_padded = [pad_sublist(sublist, global_max_length) for sublist in attr_list]
+        for run in range(n_runs):
+            results[run][attr] = attr_padded[run]
+            
+        data[attr] = results[0][attr]
+        
+    df = pd.DataFrame(data)
+    
+    return df

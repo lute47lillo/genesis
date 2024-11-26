@@ -810,9 +810,178 @@ def plot_any_attr_vs_gen(args, results_no_inbreeding, results_inbreeding, config
     plt.savefig(f"{os.getcwd()}/figures/{config_plot}_{attribute}.png")
     plt.close()
     
+from scipy import stats
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+def compute_correlations(results_no_inbreeding, results_inbreeding, attributes, config_plot="test", temp_runs=15, temp_gens=150, attribute_1="avg_tree_size", attribute_2="avg_tree_depth"):
+    """
+        Definition
+        -----------
+           TODO: Need to automatize for all attribute pairs and both treatments
+           TODO: Need to compute the mean and CI of the runs, as 1 is not enough.
+    
+    """
+
+    n_runs = temp_runs
+    
+    # Pick attribute at random to get whats the run that had the most generations out of all.
+    max_length_attr = util.get_global_max_depth(results_inbreeding)
+    max_length_no_attr = util.get_global_max_depth(results_no_inbreeding)
+    global_max_length = max(max_length_attr, max_length_no_attr)
+    
+    # Create DF for all attributes for the given dictionary treatment
+    df_inbreeding    = util.pad_dict_and_create_df(results_inbreeding, attributes, global_max_length, n_runs)
+    df_no_inbreeding = util.pad_dict_and_create_df(results_no_inbreeding, attributes, global_max_length, n_runs)
+
+    # Get diversity
+    attr_1 = [results_no_inbreeding[run][attribute_1] for run in range(n_runs)]
+    attr_2 = [results_no_inbreeding[run][attribute_2] for run in range(n_runs)]
+    
+    # Find maximum length list and padd the rest to be final diversity at point of convergence
+    max_length_attr_1 = max(len(sublist) for sublist in attr_1)
+    max_length_attr_2 = max(len(sublist) for sublist in attr_2)
+    global_max_length = max(max_length_attr_1, max_length_attr_2)
+    
+    # Pad all sublists in diversity_inbreeding
+    attr_1_padded = [util.pad_sublist(sublist, global_max_length) for sublist in attr_1]
+
+    # Pad all sublists in diversity_no_inbreeding
+    attr_2_padded = [util.pad_sublist(sublist, global_max_length) for sublist in attr_2]
+    
+    for run in range(n_runs):
+        original_length = len(results_no_inbreeding[run][attribute_1])
+        results_no_inbreeding[run][attribute_1] = attr_1_padded[run]
+        # print(f"Run {run} Inbreeding: Original Length = {original_length}, Padded Length = {len(results_inbreeding[run][attribute])}.")
+
+    # Update results_no_inbreeding with padded diversity lists
+    for run in range(n_runs):
+        original_length = len(results_no_inbreeding[run][attribute_2])
+        results_no_inbreeding[run][attribute_2] = attr_2_padded[run]
+        
+    # Create a DataFrame
+    df = pd.DataFrame({
+        attribute_1: results_no_inbreeding[0][attribute_1],
+        attribute_2: results_no_inbreeding[0][attribute_2]
+    })
+
+    # Compute Pearson correlation
+    pearson_corr, pearson_p = stats.pearsonr(df[attribute_1], df[attribute_2])
+    print(f"Pearson Correlation: {pearson_corr:.4f} (p-value: {pearson_p:.4f})")
+
+    # Compute Spearman's correlation
+    spearman_corr, spearman_p = stats.spearmanr(df[attribute_1], df[attribute_2])
+    print(f"Spearman Correlation: {spearman_corr:.4f} (p-value: {spearman_p:.4f})")
+
+    # Compute Kendall's Tau
+    kendall_corr, kendall_p = stats.kendalltau(df[attribute_1], df[attribute_2])
+    print(f"Kendall's Tau: {kendall_corr:.4f} (p-value: {kendall_p:.4f})")
+
+
+    # Using Seaborn for enhanced visualization
+    # TODO: I could plot only 2 attributes against each other, but I can probably plot two treatments here (inbreeding vs no inbreeding)
+    sns.set_theme(style="whitegrid")
+
+    plt.figure(figsize=(8, 6))
+    sns.regplot(x=attribute_1, y=attribute_2, data=df, ci=None, scatter_kws={'s': 50, 'alpha':0.7})
+
+    plt.title('Scatter Plot with Regression Line')
+    plt.xlabel(attribute_1)
+    plt.ylabel(attribute_2)
+    plt.tight_layout()
+    plt.savefig(f"{os.getcwd()}/figures/{config_plot}_Scatter_plot_{attribute_1}_vs_{attribute_2}.png")
+    plt.close()
+    
+def plot_correlation_heatmap(df_no_inbreeding, df_inbreeding, attributes, config_plot):
+    """
+    Plots the correlation heatmaps of two DataFrames side by side with a shared color scale.
+
+    Parameters:
+    - df_no_inbreeding (pd.DataFrame): DataFrame without inbreeding.
+    - df_inbreeding (pd.DataFrame): DataFrame with inbreeding.
+    - attributes (list): List of attributes to include in the correlation.
+    - config_plot (str): Configuration identifier for saving the plot.
+    """
+    
+    # Ensure only the specified attributes are used
+    df_no_inbreeding = df_no_inbreeding[attributes]
+    df_inbreeding = df_inbreeding[attributes]
+    
+    # Compute correlation matrices
+    corr_no_inbreeding = df_no_inbreeding.corr(method='pearson')
+    corr_inbreeding = df_inbreeding.corr(method='pearson')
+    
+    # Determine the overall min and max for the color scale
+    # This ensures both heatmaps use the same scale
+    combined_corr = pd.concat([corr_no_inbreeding.stack(), corr_inbreeding.stack()])
+    vmin = combined_corr.min()
+    vmax = combined_corr.max()
+    
+    # Set up the matplotlib figure with two subplots side by side
+    fig, axes = plt.subplots(ncols=2, figsize=(16, 6))
+    
+    # Define the colormap
+    cmap = 'coolwarm'
+    
+    # Plot the first heatmap: No Inbreeding
+    sns.heatmap(
+        corr_no_inbreeding, 
+        annot=True, 
+        cmap=cmap, 
+        vmin=vmin, 
+        vmax=vmax, 
+        ax=axes[0],
+        cbar=False,  # We'll add a single colorbar later
+        square=True,
+        linewidths=.5,
+        fmt=".2f"
+    )
+    axes[0].set_title('Correlation Matrix - No Inbreeding')
+    
+    # Plot the second heatmap: Inbreeding
+    sns.heatmap(
+        corr_inbreeding, 
+        annot=True, 
+        cmap=cmap, 
+        vmin=vmin, 
+        vmax=vmax, 
+        ax=axes[1],
+        cbar=False,  # We'll add a single colorbar later
+        square=True,
+        linewidths=.5,
+        fmt=".2f"
+    )
+    axes[1].set_title('Correlation Matrix - Inbreeding')
+    
+    # Add a single colorbar to the right of both heatmaps
+    # Create a new axis for the colorbar
+    cbar_ax = fig.add_axes([0.92, 0.15, 0.02, 0.7])  # [left, bottom, width, height]
+    norm = plt.Normalize(vmin=vmin, vmax=vmax)
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])
+    cbar = fig.colorbar(sm, cax=cbar_ax)
+    cbar.set_label('Pearson Correlation Coefficient', rotation=270, labelpad=15)
+    
+    # Set a main title for the entire figure
+    # fig.suptitle('Comparison of Correlation Matrices', fontsize=16, y=0.95)
+    
+    # Ensure the 'figures' directory exists
+    figures_dir = os.path.join(os.getcwd(), "figures")
+    os.makedirs(figures_dir, exist_ok=True)
+    
+    # Save the combined figure
+    save_path = os.path.join(figures_dir, f"{config_plot}_CorrelationHeatmap_Comparison.png")
+    plt.savefig(save_path, bbox_inches='tight')
+    plt.close()
+    
 if __name__ == "__main__":
     
-  
+    attributes = ['best_fitness', 'diversity', 'avg_tree_size',
+                  'avg_tree_depth', 'pop_intron_ratio', 'avg_intron_ratio', 'pop_total_introns',
+                  'pop_total_nodes', 'avg_kinship']
+    
+    # TODO: 't_close', 't_far' since they represent a single kinship value. Is just for reference. Think how to maybe use it
+    
     # ----- BLOAT STUDY: Read files ------ #  
     
     print("\nNO Inbreeding")
@@ -825,23 +994,34 @@ if __name__ == "__main__":
     data = np.load(file_path_name, allow_pickle=True)
     results_inbreeding = data.item()
 
-    plot_any_attr_vs_gen(None, results_no_inbreeding, results_inbreeding, temp_runs=5, attribute="pop_total_nodes")
+    # plot_any_attr_vs_gen(None, results_no_inbreeding, results_inbreeding, temp_runs=5, attribute="pop_total_nodes")
+    # compute_correlations(results_no_inbreeding, results_inbreeding, attributes, config_plot="test", temp_runs=5, temp_gens=150, attribute_1="avg_tree_size", attribute_2="pop_total_introns")
     
+    # Pick attribute at random to get whats the run that had the most generations out of all.
+    max_length_attr = util.get_global_max_depth(results_inbreeding)
+    max_length_no_attr = util.get_global_max_depth(results_no_inbreeding)
+    global_max_length = max(max_length_attr, max_length_no_attr)
+    
+    # Create DF for all attributes for the given dictionary treatment
+    df_inbreeding    = util.pad_dict_and_create_df(results_inbreeding, attributes, global_max_length, 5)
+    df_no_inbreeding = util.pad_dict_and_create_df(results_no_inbreeding, attributes, global_max_length, 5)
+    
+    plot_correlation_heatmap(df_no_inbreeding, df_inbreeding, attributes, config_plot="test")
     
     # --------- Heatmaps and statistics ----------- #
-    # depths = [6, 7, 8, 9, 10]  # Example maximum depths
-    # # gen_success_vs_mas_depth([], depths) # TODO: They are for an static threshold
+    # depths = [6, 7, 8, 9]#, 10]  # Example maximum depths
+    # gen_success_vs_mas_depth([], depths) # TODO: They are for an static threshold
     
-    # # thresholds = [4,5,6,7] # for InitD:2
-    # thresholds = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14] # InitD:3
+    # thresholds = [5,6,7,8,9] # for InitD:2
+    # thresholds = [5, 6, 7, 8, 9, 10, 11, 12, 13]#, 14] # InitD:3
     
     
-    # # gen_success_vs_inbreeding_threshold([], thresholds) # TODO: they are for an static depth
+    # gen_success_vs_inbreeding_threshold([], thresholds) # TODO: they are for an static depth
     
-    # # plot_threshold_vs_max_depth_by_gen_success([], "nguyen2", thresholds, depths, 3)
-    # # plot_threshold_vs_max_depth_by_diversity([], "nguyen3", thresholds, depths, 3)
+    # plot_threshold_vs_max_depth_by_gen_success([], "nguyen2", thresholds, depths, 3)
+    # plot_threshold_vs_max_depth_by_diversity([], "nguyen3", thresholds, depths, 3)
     
-    # plot_all_heatmap([], "nguyen4", thresholds, depths, 3)
+    # plot_all_heatmap([], "nguyen5", thresholds, depths, 3)
     
     # ------------ Legacy experimental -------------- #
     # generations = range(1, len(self.average_size_list) + 1)

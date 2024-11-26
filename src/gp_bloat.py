@@ -703,9 +703,5 @@ if __name__ == "__main__":
     args.config_plot = term1 + "bloat/" + term3
     plot.plot_time_of_convergence_vs_diversity(args, results_no_inbreeding, results_inbreeding)
     
-    # Plot diversity vs generation of success (convergence)
-    args.config_plot = term1 + "bloat/" + term3
-    plot.plot_bloat_depth_or_size(args, results_no_inbreeding, results_inbreeding, "avg_tree_depth")
-    
     
     
