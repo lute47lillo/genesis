@@ -233,14 +233,33 @@ def pad_dict_and_create_df(results, attributes, global_max_length, n_runs):
     data = {}
     for attr in attributes:
         attr_list = [results[run][attr] for run in range(n_runs)]
+        # print(len(attr_list))
         
         # Pad up to max length of any run for 1:1 comparison
         attr_padded = [pad_sublist(sublist, global_max_length) for sublist in attr_list]
         for run in range(n_runs):
             results[run][attr] = attr_padded[run]
-            
-        data[attr] = results[0][attr]
+        
+        # Initialize a list to collect data from all runs for this attribute
+        attr_data = []
+        
+        # Iterate through each run
+        for run in results:
+            # Extract the first 150 elements for the current attribute
+            # Convert to NumPy array for efficient computation
+            attr_values = np.array(results[run][attr][:150])
+            attr_data.append(attr_values)
+        
+        # Stack the data vertically to create a 2D NumPy array (runs x elements)
+        stacked_data = np.vstack(attr_data)  # Shape: (15, 150)
+        
+        # Compute the mean across the runs (axis=0)
+        mean_values = np.mean(stacked_data, axis=0)  # Shape: (150,)
+        
+        # Store the averaged data in the 'data' dictionary
+        data[attr] = mean_values
         
     df = pd.DataFrame(data)
     
     return df
+

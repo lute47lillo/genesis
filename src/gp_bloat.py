@@ -34,8 +34,15 @@ class GeneticAlgorithmGPBloat:
         self.diversity_list = []
         
     def collect_all_stats(self):
+        
+        # Compute population intros at failure.
+        self.compute_population_size_depth()
+        self.compute_introns_lists()
+        # self.compute_kinship_population()
+        
+        # Then collect them
         intron_lists = util.pack_intron_lists(self.pop_ratio_intron_list, self.avg_ratio_intron_list, self.pop_total_intron_list, self.pop_total_nodes_list)
-        kinship_lists = util.pack_kinship_lists(self.avg_pop_kinship_list, self.clossest_tree_list, self.furthest_tree_list)
+        kinship_lists = [] #util.pack_kinship_lists(self.avg_pop_kinship_list, self.clossest_tree_list, self.furthest_tree_list)
         measures_lists = util.pack_measures_lists(self.average_size_list, self.average_depth_list)
         metrics_lists = util.pack_metrics_lists(self.best_fitness_list, self.diversity_list)
         
@@ -52,7 +59,7 @@ class GeneticAlgorithmGPBloat:
         self.pop_total_intron_list.append(intron_metrics['population_total_intron_nodes'])
         self.pop_total_nodes_list.append(intron_metrics['population_total_nodes'])
     
-    def compute_population_size_depth(self, is_success=False):
+    def compute_population_size_depth(self):
         
         # Get Tree sizes for entire population (nº nodes)
         tree_sizes = [self.count_nodes(ind.tree) for ind in self.population]
@@ -63,10 +70,6 @@ class GeneticAlgorithmGPBloat:
         tree_depths = [self.tree_depth(ind.tree) for ind in self.population]
         average_depth = sum(tree_depths) / len(tree_depths)
         self.average_depth_list.append(average_depth)  
-        
-        if is_success == True:
-            # Measure intron metrics
-            self.compute_introns_lists() 
             
     # ---------------------- Diversity computations -------------------------------#
     
@@ -360,22 +363,8 @@ class GeneticAlgorithmGPBloat:
             if individual.success:
                 print(f"Successful individual found in generation {curr_gen}")
                 print(f"Function: {individual.tree}")
-                self.compute_successful_individual_kinship(individual)
+                # self.compute_successful_individual_kinship(individual)
                 self.poulation_success = True
-                return individual
-        
-        return None
-                
-    def check_succcess_new_pop(self, curr_gen, next_population):
-        for individual in next_population:
-            if individual.success:
-                print(f"Successful individual found in new population in generation {curr_gen}")
-                print(f"Function: {individual.tree}")
-                self.poulation_success = True
-                individual.success = True
-                return individual
-            
-        return None
                     
     def tournament_selection(self, k=3):
         selected = []
@@ -496,6 +485,11 @@ class GeneticAlgorithmGPBloat:
         return offspring1, offspring2
     
     def mutate(self, individual):
+        """
+            Definition
+            -----------
+                Applies Random Subtree mutation to an individual.
+        """
         
         # Clone individual to avoid modifying original
         mutated_tree = copy.deepcopy(individual.tree)
@@ -555,7 +549,7 @@ class GeneticAlgorithmGPBloat:
         for gen in range(self.generations):
 
             # Calculate fitness
-            successful_individual = self.calculate_fitness(gen)
+            self.calculate_fitness(gen)
             
             # Update best fitness list
             best_individual = max(self.population, key=lambda ind: ind.fitness)
@@ -564,13 +558,15 @@ class GeneticAlgorithmGPBloat:
             # Measure diversity
             self.measure_diversity(self.population)
             
-            # Measure Size, Depth  and Intron statistics
-            self.compute_population_size_depth(self.poulation_success)
-            self.compute_introns_lists()
-            self.compute_kinship_population()
+            # # Measure Size, Depth  and Intron statistics
+            # self.compute_population_size_depth(self.poulation_success)
+            # self.compute_introns_lists()
+            # self.compute_kinship_population()
             
             # Early Stopping condition if successful individual has been found
             if self.poulation_success == True:
+                  
+                # Collect all metrics
                 metrics_lists, measures_lists, intron_lists, kinship_lists = self.collect_all_stats()
                 return metrics_lists, measures_lists, intron_lists, kinship_lists, gen + 1
     
@@ -609,9 +605,6 @@ class GeneticAlgorithmGPBloat:
                             next_population.append(new_individual)
         
                 i += 2
-
-            # Check if individual of next population is already successful. No need to recombination as it will always have largest fitness
-            successful_individual = self.check_succcess_new_pop(gen+1, next_population)
             
             # Combine the population (mu+lambda)
             combined_population = next_population[:lambda_pop] + self.population     
@@ -630,13 +623,6 @@ class GeneticAlgorithmGPBloat:
                 # Measure diversity
                 self.measure_diversity(self.population)
                 
-                # Measure Size and Depth statistics
-                self.compute_population_size_depth(self.poulation_success)
-                
-                # Compute kinship
-                self.compute_successful_individual_kinship(successful_individual)
-                self.compute_kinship_population()
-                
                 # Collect all
                 metrics_lists, measures_lists, intron_lists, kinship_lists = self.collect_all_stats()
 
@@ -647,21 +633,23 @@ class GeneticAlgorithmGPBloat:
         
             # Print progress
             if (gen + 1) % 10 == 0:
+                
+                # Measure Size, Depth  and Intron statistics
+                self.compute_population_size_depth()
+                self.compute_introns_lists()
+                # self.compute_kinship_population()
+                
                 print(f"Generation {gen + 1}: Best Fitness = {best_individual.fitness:.3f}\n"
                       f"Diversity = {self.diversity_list[gen]:.3f}\n"
-                      f"Avg Size = {self.average_size_list[gen]:.3f}\n"
-                      f"Avg Depth = {self.average_depth_list[gen]:.3f}\n"
-                      f"Population Intron Ratio = {self.pop_ratio_intron_list[gen]:.3f}\n"
-                      f"Avg Intron Ratio per Individual = {self.avg_ratio_intron_list[gen]:.3f}\n"
-                      f"Population Total Intron Nodes = {self.pop_total_intron_list[gen]:.3f}\n" 
-                      f"Population Total Nodes = {self.pop_total_nodes_list[gen]:.3f}\n"
-                      f"Avg Population Tree Kinship = {self.avg_pop_kinship_list[gen]:.3f}\n"
-                      f"Most Related Tree Kinship = {self.clossest_tree_list[gen][1]:.3f} with {len(self.clossest_tree_list[gen][0])} ancestors\n"
-                      f"Least Related Tree Kinship = {self.furthest_tree_list[gen][1]:.3f} with {len(self.furthest_tree_list[gen][0])} ancestors.")
-                
-        # Comput population intros at failure.
-        self.compute_introns_lists()
-        self.compute_kinship_population()
+                      f"Avg Size = {self.average_size_list[-1]:.3f}\n"
+                      f"Avg Depth = {self.average_depth_list[-1]:.3f}\n"
+                      f"Population Intron Ratio = {self.pop_ratio_intron_list[-1]:.3f}\n"
+                      f"Avg Intron Ratio per Individual = {self.avg_ratio_intron_list[-1]:.3f}\n"
+                      f"Population Total Intron Nodes = {self.pop_total_intron_list[-1]:.3f}\n" 
+                      f"Population Total Nodes = {self.pop_total_nodes_list[-1]:.3f}\n")
+                    #   f"Avg Population Tree Kinship = {self.avg_pop_kinship_list[-1]:.3f}\n"
+                    #   f"Most Related Tree Kinship = {self.clossest_tree_list[-1][1]:.3f} with {len(self.clossest_tree_list[-1][0])} ancestors\n"
+                    #   f"Least Related Tree Kinship = {self.furthest_tree_list[-1][1]:.3f} with {len(self.furthest_tree_list[-1][0])} ancestors.")
         
         # Collect all if failed run
         metrics_lists, measures_lists, intron_lists, kinship_lists = self.collect_all_stats()
@@ -680,28 +668,28 @@ if __name__ == "__main__":
     
     term1 = f"genetic_programming/{args.benchmark}/"
     term2 = "bloat/"
-    term3 = f"PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
-
+    term3 = f"OnlyPopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
     args.config_plot = term1 + term2 + term3
-    print("Running GA with NO Inbreeding Mating...")
-    results_no_inbreeding = exp.test_multiple_runs_function_bloat(args, landscape, args.inbred_threshold)
-    util.save_accuracy(results_no_inbreeding, f"{args.config_plot}_no_inbreeding.npy")
+    
+    # print("Running GA with NO Inbreeding Mating...")
+    # results_no_inbreeding = exp.test_multiple_runs_function_bloat(args, landscape, args.inbred_threshold)
+    # util.save_accuracy(results_no_inbreeding, f"{args.config_plot}_no_inbreeding.npy")
     
     print("Running GA with Inbreeding Mating...")
     results_inbreeding = exp.test_multiple_runs_function_bloat(args, landscape, None)
     util.save_accuracy(results_inbreeding, f"{args.config_plot}_inbreeding.npy")
     
-    # Plot the generation of successful runs
-    args.config_plot = term1 + "bloat/" + term3
-    plot.plot_gen_vs_run(args, results_no_inbreeding, results_inbreeding)
+    # # Plot the generation of successful runs
+    # args.config_plot = term1 + "bloat/" + term3
+    # plot.plot_gen_vs_run(args, results_no_inbreeding, results_inbreeding)
     
-    # Plot Diversity vs generations runs
-    args.config_plot = term1 + "bloat/" + term3
-    plot.plot_diversity_generation_over_time(args, results_no_inbreeding, results_inbreeding)
+    # # Plot Diversity vs generations runs
+    # args.config_plot = term1 + "bloat/" + term3
+    # plot.plot_diversity_generation_over_time(args, results_no_inbreeding, results_inbreeding)
     
-    # Plot diversity vs generation of success (convergence)
-    args.config_plot = term1 + "bloat/" + term3
-    plot.plot_time_of_convergence_vs_diversity(args, results_no_inbreeding, results_inbreeding)
+    # # Plot diversity vs generation of success (convergence)
+    # args.config_plot = term1 + "bloat/" + term3
+    # plot.plot_time_of_convergence_vs_diversity(args, results_no_inbreeding, results_inbreeding)
     
     
     

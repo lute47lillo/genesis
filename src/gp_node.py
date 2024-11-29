@@ -40,16 +40,16 @@ class Individual:
         # Init fitness for individual in creation and self.success
         self.fitness, self.success = fitness_function(self.tree)
         
-        # Initial generation individual
-        if not self.parents:
-            self.ancestors.add(self.id)
+        # # Initial generation individual
+        # if not self.parents:
+        #     self.ancestors.add(self.id)
             
-        # Update ancestors with depth limitation
-        ancestry_max_depth = 10  # Set the desired ancestry depth. Edit for computational issues
-        for parent in self.parents:
-            if parent.generation >= self.generation - ancestry_max_depth:
-                self.ancestors.update(parent.ancestors)
-                self.ancestors.add(parent.id)
+        # # Update ancestors with depth limitation
+        # ancestry_max_depth = 10  # Set the desired ancestry depth. Edit for computational issues
+        # for parent in self.parents:
+        #     if parent.generation >= self.generation - ancestry_max_depth:
+        #         self.ancestors.update(parent.ancestors)
+        #         self.ancestors.add(parent.id)
         
     def get_function_arity(self, function):
         arity_dict = {
