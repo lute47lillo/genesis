@@ -93,13 +93,13 @@ def get_gen_avg_inbreed(bench_name, depths, thresholds, treatment_name):
         # Normalize over all thresholds        
         gen_avgs_depths = gen_avgs_depths / (len(thresholds) * 15) # divide by all runs
         
-        print(f"\nDepth: {depth}. Avg generation success: {gen_avgs_depths}. Range: {min_gens} ~ {max_gens}.")
+        # print(f"\nDepth: {depth}. Avg generation success: {gen_avgs_depths}. Range: {min_gens} ~ {max_gens}.")
         # Normalize over all threshold iterations.
         min_gens = min_gens / len(thresholds)
         max_gens = max_gens / len(thresholds)
 
         # print(f"\nDepth: {depth}. Avg generation success: {gen_avgs_depths}. Range: {min_gens} ~ {max_gens}.")
-        # exit()
+ 
         
         thresholds_gens[depth] = gen_avgs_depths
         min_max_gens[depth] = (min_gens, max_gens)
@@ -164,13 +164,55 @@ def get_gen_no_inbred(bench_name, depths, thresholds, treatment_name):
         
     return threshold_depths, min_max_gens, min_max_gens_depth
                 
+def check_dynamic(srs, depths):
+    thresholds = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, "Dynamic", "Dynamic2"]
+    for bench_name in srs:
+        print(f"\n{bench_name}")
+        results = {}
+        for thres in thresholds:
+            results[thres] = {}
+            avg_per_thres = 0
+            solved_per_thres = 0
+
+            for depth in depths:
+                results[thres][depth] = {
+                    'gens': [],
+                    'solved': int
+                }
+                file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/{bench_name}/gp_lambda/PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:{depth}_InitD:3_no_inbreeding.npy"
+                data = np.load(file_path_name, allow_pickle=True)
+                data_dict = data.item()
+                yes = 0
                 
+                for run, metrics in data_dict.items():
+
+                    generation_success = metrics['generation_success']
+                    
+                    if generation_success < 150:
+                        yes += 1
+                        
+                    results[thres][depth]['gens'].append(generation_success)
+                    results[thres][depth]['solved'] = yes
+
+                    
+                avg_per_thres += np.mean(results[thres][depth]['gens'])
+                solved_per_thres += results[thres][depth]['solved']
+                # print(f"\nThreshold: {thres}. Depth: {depth}. Avg Gen: {np.mean(results[thres][depth]['gens'])}. Solved: {results[thres][depth]['solved']}")
+            avg_per_thres = avg_per_thres / len(thresholds)
+            percent = (solved_per_thres / (len(depths) * 15)) * 100
+            print(f"\nThreshold: {thres}. Avg Gen per Threshold (all depths): {avg_per_thres:.3f}. AvgSolved: {solved_per_thres} ({percent:.3f}%)")
+
 if __name__ == "__main__":
     
     thresholds = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
     depths = [6, 7, 8, 9, 10] 
     
-    sr_fns = ["nguyen1", "nguyen2", "nguyen3", "nguyen4", "nguyen5"]
+    sr_fns = ["nguyen1", "nguyen2", "nguyen3"]#, "nguyen4"]#, "nguyen5"]
+    
+    # TODO: This is an Experimental checking for dynamical inbreeding threshold
+    # check_dynamic(sr_fns, depths)
+    # exit()
+    
     for sr in sr_fns:
         
         inbreed_quick = 0
@@ -179,7 +221,7 @@ if __name__ == "__main__":
         print(sr)
         thresholds_gens, min_max_gens = get_gen_avg_inbreed(sr, depths, thresholds, "inbreeding")
         no_threshold_results, no_min_max_gens, no_min_max_gens_depth = get_gen_no_inbred(sr, depths, thresholds, "no_inbreeding")
-
+        
         # Metrics for range.
         total_min_d = 0
         total_max_d = 0
@@ -191,10 +233,12 @@ if __name__ == "__main__":
         threshold_gens_counts = []
         
         for dep, thresholds in no_threshold_results.items():
-            # print(f"\nMax Depth: {dep}")
+            print(f"\nMax Depth: {dep}")
+            
+            
             for threshold, value in thresholds.items():
                 
-                # Generation Success Speed convergence count
+                # Generation Success Speed convergence count.
                 if thresholds_gens[dep] <= value:
                     inbreed_quick += 1
                 else:

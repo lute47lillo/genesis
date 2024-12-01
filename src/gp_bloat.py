@@ -14,8 +14,9 @@ import copy
 import random
 import util
 import experiments as exp
-import plotting as plot
+import time
 import gp_landscape
+import gp_landscape_parallel as parallel
 from gp_node import Individual
 
 class GeneticAlgorithmGPBloat:
@@ -50,10 +51,14 @@ class GeneticAlgorithmGPBloat:
         
     # -------------------- Intron computations ----------------------- #
     
-    def compute_introns_lists(self):
+    def compute_introns_lists(self, sample_fraction=1.0):
+        
+        # TODO: suubset because too expensive
+        sample_size = int(len(self.population) * sample_fraction)
+        sampled_population = random.sample(self.population, sample_size)
         
         # Measure intron metrics
-        intron_metrics = self.landscape.measure_introns(self.population)
+        intron_metrics = self.landscape.measure_introns(sampled_population)
         self.pop_ratio_intron_list.append(intron_metrics['population_intron_ratio'])
         self.avg_ratio_intron_list.append(intron_metrics['average_intron_ratio'])
         self.pop_total_intron_list.append(intron_metrics['population_total_intron_nodes'])
@@ -558,16 +563,21 @@ class GeneticAlgorithmGPBloat:
             # Measure diversity
             self.measure_diversity(self.population)
             
-            # # Measure Size, Depth  and Intron statistics
-            # self.compute_population_size_depth(self.poulation_success)
-            # self.compute_introns_lists()
-            # self.compute_kinship_population()
+            # Start timing
+            start_time = time.time()
+            
+            # Collect all metrics
+            metrics_lists, measures_lists, intron_lists, kinship_lists = self.collect_all_stats()
+            
+            # End timing
+            end_time = time.time()
+
+            elapsed_time = end_time - start_time
+            print(f"\nGen: {gen+1}. Time taken to collect all data: {elapsed_time:.4f} seconds")
             
             # Early Stopping condition if successful individual has been found
             if self.poulation_success == True:
                   
-                # Collect all metrics
-                metrics_lists, measures_lists, intron_lists, kinship_lists = self.collect_all_stats()
                 return metrics_lists, measures_lists, intron_lists, kinship_lists, gen + 1
     
             # Tournament Selection
@@ -635,9 +645,12 @@ class GeneticAlgorithmGPBloat:
             if (gen + 1) % 10 == 0:
                 
                 # Measure Size, Depth  and Intron statistics
-                self.compute_population_size_depth()
-                self.compute_introns_lists()
+                # self.compute_population_size_depth()
+                # self.compute_introns_lists()
                 # self.compute_kinship_population()
+                
+                # self.inbred_threshold = int(self.average_size_list[-1] / 2)
+                # print(f"\nNew inbreeding threshold set to: {self.inbred_threshold}.")
                 
                 print(f"Generation {gen + 1}: Best Fitness = {best_individual.fitness:.3f}\n"
                       f"Diversity = {self.diversity_list[gen]:.3f}\n"
@@ -662,22 +675,23 @@ if __name__ == "__main__":
     args = util.set_args()
     
     # Create Landscape
-    landscape = gp_landscape.GPLandscape(args)
+    # landscape = gp_landscape.GPLandscape(args)
+    landscape = parallel.GPIntronAnalyzer(args)
 
     # -------------------------------- Experiment: Multiple Runs w/ fixed population and fixed mutation rate --------------------------- #
     
     term1 = f"genetic_programming/{args.benchmark}/"
     term2 = "bloat/"
-    term3 = f"OnlyPopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
+    term3 = f"Parallel_PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
     args.config_plot = term1 + term2 + term3
     
-    # print("Running GA with NO Inbreeding Mating...")
-    # results_no_inbreeding = exp.test_multiple_runs_function_bloat(args, landscape, args.inbred_threshold)
-    # util.save_accuracy(results_no_inbreeding, f"{args.config_plot}_no_inbreeding.npy")
+    print("Running GA with NO Inbreeding Mating...")
+    results_no_inbreeding = exp.test_multiple_runs_function_bloat(args, landscape, args.inbred_threshold)
+    util.save_accuracy(results_no_inbreeding, f"{args.config_plot}_no_inbreeding.npy")
     
-    print("Running GA with Inbreeding Mating...")
-    results_inbreeding = exp.test_multiple_runs_function_bloat(args, landscape, None)
-    util.save_accuracy(results_inbreeding, f"{args.config_plot}_inbreeding.npy")
+    # print("Running GA with Inbreeding Mating...")
+    # results_inbreeding = exp.test_multiple_runs_function_bloat(args, landscape, None)
+    # util.save_accuracy(results_inbreeding, f"{args.config_plot}_inbreeding.npy")
     
     # # Plot the generation of successful runs
     # args.config_plot = term1 + "bloat/" + term3

@@ -142,7 +142,9 @@ class GPLandscape:
         population_total_nodes = 0
         individual_intron_ratios = []
         
-        for individual in population:
+        for idx, individual in enumerate(population):
+            print(f"\nEvaluating bloat of individual nº {idx} out of {len(population)}.")
+            
             # Detect introns and their sizes
             introns = self.detect_pattern_introns(individual.tree)
             total_intron_nodes = sum(intron_size for _, intron_size in introns)

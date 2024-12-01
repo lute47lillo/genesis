@@ -85,6 +85,31 @@ class GeneticAlgorithmGPTesting:
         self.population = []
         self.best_fitness_list = []
         self.diversity_list = []
+        
+    def count_nodes(self, node):
+        """
+            Definition
+            -----------
+                Count the number of nodes (functions and terminals) in a program tree.
+        """
+        if node is None:
+            return 0
+        count = 1  # Count the current node
+        for child in node.children:
+            count += self.count_nodes(child)
+        return count
+            
+    def compute_population_size_depth(self):
+        
+        # Get Tree sizes for entire population (nº nodes)
+        tree_sizes = [self.count_nodes(ind.tree) for ind in self.population]
+        average_size = sum(tree_sizes) / len(tree_sizes)
+        self.average_size_list.append(average_size)
+        
+        # Get Tree depths for entire population
+        tree_depths = [self.tree_depth(ind.tree) for ind in self.population]
+        average_depth = sum(tree_depths) / len(tree_depths)
+        self.average_depth_list.append(average_depth)  
     
     # ----------------------- Tree ~ Node functions ------------------ #
     
@@ -415,6 +440,10 @@ class GeneticAlgorithmGPTesting:
         # Init population
         self.initialize_population()
         
+        # Initialize lists to store bloat metrics
+        self.average_size_list = []
+        self.average_depth_list = []
+        
         for gen in range(self.generations):
 
             # Calculate fitness
@@ -495,7 +524,19 @@ class GeneticAlgorithmGPTesting:
         
             # Print progress
             if (gen + 1) % 10 == 0:
-                print(f"Generation {gen + 1}: Best Fitness = {best_individual.fitness:.4f}, Diversity = {diversity:.4f}")
+                # Measure Size, Depth  and Intron statistics
+                self.compute_population_size_depth()
+                
+                # Dynamic2
+                halving = int(self.average_size_list[-1] / 2)
+                self.inbred_threshold = halving + int(0.5 * halving)
+                
+                
+                print(f"\nNew inbreeding threshold set to: {self.inbred_threshold}.")
+                print(f"Generation {gen + 1}: Best Fitness = {best_individual.fitness:.3f}\n"
+                      f"Diversity = {self.diversity_list[gen]:.3f}\n"
+                      f"Avg Size = {self.average_size_list[-1]:.3f}\n"
+                      f"Avg Depth = {self.average_depth_list[-1]:.3f}\n")
     
         return self.best_fitness_list, self.diversity_list, gen+1
     
@@ -620,7 +661,7 @@ if __name__ == "__main__":
     
     term1 = f"genetic_programming/{args.benchmark}/"
     term2 = "gp_lambda/"
-    term3 = f"PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
+    term3 = f"PopSize:{args.pop_size}_InThres:Dynamic2_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
 
     args.config_plot = term1 + term2 + term3
     print("Running GA with NO Inbreeding Mating...")

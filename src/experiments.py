@@ -111,7 +111,7 @@ def test_multiple_runs_function_bloat(args, landscape, inbred_threshold):
                 # 't_far': t_far_list
             }
         
-        print(f"Population Size {args.pop_size} & Mutation Rate: {args.mutation_rate}\n"
+        print(f"Inbred Threshold: {inbred_threshold}. Population Size {args.pop_size} & Mutation Rate: {args.mutation_rate}\n"
                 f"Generation Success: {gen_success}. Best Fitness = {best_fitness_list[-1]:.3f}\n"
                 f"Diversity = {diversity_list[-1]:.3f}\n"
                 f"Avg Size = {average_size_list[-1]:.3f}\n"
@@ -168,6 +168,6 @@ def multiple_mrates_function_gp(args, mutation_rates, landscape, inbred_threshol
                 util.save_accuracy(results, f"{args.config_plot}_no_inbreeding_RUN:{run}_{gen_success}_MR:{rate}.npy")
             
                 
-            print(f"Population Size {args.pop_size} & Mutation Rate: {rate}: Generation Success {gen_success} ~ Best Fitness {best_fitness_list[-1]:.3f} ~ Best Diversity {diversity_list[-1]:.3f}")
+            print(f"Inbred Threshold: {inbred_threshold}. Population Size {args.pop_size} & Mutation Rate: {rate}: Generation Success {gen_success} ~ Best Fitness {best_fitness_list[-1]:.3f} ~ Best Diversity {diversity_list[-1]:.3f}")
 
     return results
