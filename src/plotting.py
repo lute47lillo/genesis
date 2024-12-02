@@ -680,7 +680,6 @@ def plot_all_heatmap(args, bench_name, thresholds, depths, init_depth):
     pivot_inbreeding_gen = heatmap_data_gen[heatmap_data_gen['Treatment'] == 'inbreeding'].pivot_table( index='Inbred_Threshold', columns='Max_Depth', values='Generation_Success', aggfunc='mean')  # or another aggregation function as needed)
     pivot_no_inbreeding_gen = heatmap_data_gen[heatmap_data_gen['Treatment'] == 'no_inbreeding'].pivot_table(index='Inbred_Threshold', columns='Max_Depth', values='Generation_Success', aggfunc='mean')  # or another aggregation function as needed)
     
-        
     # Create a figure with a specified size
     plt.figure(figsize=(32, 16))
 
@@ -917,37 +916,59 @@ def compute_correlations(results_inbreeding, config_plot="test", temp_runs=15, a
     plt.savefig(f"{os.getcwd()}/figures/{config_plot}_Scatter_{attribute_1}_vs_{attribute_2}.png")
     plt.close()
     
-def plot_indiv_corr_heatmap(df, threshold, attributes, config_plot):
+# Define the new plotting function
+def plot_combined_corr_heatmaps(dfs, thresholds, attributes, config_plot):
     
-    # Ensure only the specified attributes are used
-    df_no_inbreeding = df[attributes]
+    # Compute correlation matrices and find global min and max
+    corrs = []
+    min_corr = 1.0
+    max_corr = -1.0
+    for df in dfs:
+        df = df[attributes]
+        corr = df.corr(method='pearson')
+        corrs.append(corr)
+        min_corr = min(min_corr, corr.values.min())
+        max_corr = max(max_corr, corr.values.max())
     
-    # Compute correlation matrices
-    corr_no_inbreeding = df_no_inbreeding.corr(method='pearson')
-        
+    # Create figure and axes
+    fig, axes = plt.subplots(2, 2, figsize=(16, 10))
+    axes = axes.flatten()
+    
     # Define the colormap
     cmap = 'coolwarm'
     
-    # Plot the first heatmap: No Inbreeding
-    sns.heatmap(
-        corr_no_inbreeding, 
-        annot=True, 
-        cmap=cmap, 
-        cbar=True,  # We'll add a single colorbar later
-        square=True,
-        linewidths=.5,
-        fmt=".2f"
-    )
-    plt.title(f'Correlation Matrix - No Inbreeding ~ Inbreeding Threshold = {threshold}')
+    # Plot each heatmap
+    for i, (corr, thres) in enumerate(zip(corrs, thresholds)):
+        sns.heatmap(
+            corr,
+            annot=True,
+            cmap=cmap,
+            cbar=False,  # We'll add a single colorbar later
+            square=True,
+            linewidths=.6,
+            fmt=".2f",
+            vmin=min_corr,
+            vmax=max_corr,
+            ax=axes[i]
+        )
+        axes[i].set_title(f'Inbreeding Threshold = {thres}')
     
-    # Ensure the 'figures' directory exists
-    figures_dir = os.path.join(os.getcwd(), "figures")
+    # Adjust layout
+    plt.tight_layout(rect=[0, 0, 0.9, 1])  # Leave space for the colorbar
+    
+    # Create a single colorbar
+    cbar_ax = fig.add_axes([.91, .3, .03, .4])  # Adjust position as needed
+    norm = plt.Normalize(vmin=min_corr, vmax=max_corr)
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])
+    fig.colorbar(sm, cax=cbar_ax)
+    
+    # Ensure the 'figures/correlations' directory exists
+    figures_dir = os.path.join(os.getcwd(), "figures", "correlations")
     os.makedirs(figures_dir, exist_ok=True)
     
     # Save the combined figure
-    print(figures_dir)
-    save_path = figures_dir + f"/correlations/{config_plot}Heatmap.png"
-    print(save_path)
+    save_path = os.path.join(figures_dir, f"{config_plot}CombinedHeatmap.png")
     plt.savefig(save_path, bbox_inches='tight')
     plt.close()
     
@@ -1071,146 +1092,6 @@ def collect_plot_values(dfs, attribute_1, n_runs=15):
         label_list.append(threshold_label)
         
     return (gs_list, div_list, label_list)
-    
-def plot_gen_vs_intron_size(dfs, bloat_thresholds, config_plot, temp_runs, attribute_1):
-    
-    # Create a figure
-    plt.figure(figsize=(20, 12))
-    
-    # Metrics for CI
-    gs_list = []
-    div_list = []
-    label_list = []
-    
-    n_runs = temp_runs
-    
-    for idx, results in enumerate(dfs):
-        
-        threshold_label = "Inbred_Threshold: " + str(bloat_thresholds[idx])
-    
-        # Get Attribute
-        attribute_lists = [results[run][attribute_1] for run in range(n_runs)]
-    
-        # Find maximum length list and padd the rest to be final attr at point of convergence
-        max_length = max(len(sublist) for sublist in attribute_lists)
-        
-        global_max_length = min(150, max_length) # Capping at 150
-        global_max_length = 150
-  
-        # Pad all sublists in diversity_inbreeding
-        attribute_padded = [util.pad_sublist(sublist, global_max_length) for sublist in attribute_lists]
-
-        # Update results_inbreeding with padded diversity lists
-        for run in range(n_runs):
-   
-            results[run][attribute_1] = attribute_padded[run][:150]
-            # print(f"Run {run} Inbreeding: Original Length = {original_length}, Padded Length = {len(results_inbreeding[run][attribute])}.")
-
-        # ----- Bootstrap ------ #
-        
-        # Collect for No Inbreeding
-        g_noI, div_noI = plot_mean_and_bootstrapped_ci(results, key=attribute_1)
-        gs_list.append(g_noI)
-        div_list.append(div_noI)
-        label_list.append(threshold_label)
-
-    
-    # Plot
-    # for idx, ks in enumerate(gs_list):
-    #     plt.plot(ks, div_list[idx][0], label=label_list[idx])
-    #     # plt.fill_between(ks, div_list[idx][1], div_list[idx][2], alpha=0.3)
-    
-    # plt.title(f'{attribute_1} Over Generations')
-    # plt.xlabel('Generation')
-    # plt.ylabel(f'{attribute_1}')
-    # plt.legend()
-    
-    # plt.xticks(np.arange(0, global_max_length, step=int(global_max_length/10)))
-    # plt.legend()
-    # plt.grid(True, linestyle='--', which='major', color='grey', alpha=0.5)
-    # plt.tight_layout()
-    # plt.savefig(f"{os.getcwd()}/figures/{config_plot}{attribute_1}_vs_generations.png")
-    # plt.close()
-    
-    return (gs_list, div_list, label_list)
-
-def plot_all_sr_in_rows(sr_dfs, sr_fns, attribute_1, config_plot, global_max_length=150):
-    """
-    Plot each Symbolic Regression (SR) problem in its own row with a single column corresponding to attribute_1.
-    
-    Parameters:
-    -----------
-    sr_dfs : list of tuples
-        Each tuple contains three elements:
-            - gs_list: List of generation numbers for each SR run.
-            - div_list: List of diversity metrics corresponding to each SR run.
-            - label_list: List of labels for each SR run.
-    sr_fns : list
-        List of SR function names corresponding to each SR problem.
-    attribute_1 : str
-        The name of the attribute to plot on the Y-axis.
-    config_plot : str
-        Configuration identifier to include in the plot filename.
-    global_max_length : int
-        The maximum generation number to set as the upper limit on the X-axis.
-    """
-    
-    num_sr_problems = len(sr_dfs)
-    
-    # Define the figure size based on the number of SR problems
-    # Adjust the height per subplot as needed (e.g., 4 inches per subplot)
-    fig_height = 4 * num_sr_problems
-    fig, axes = plt.subplots(nrows=num_sr_problems, ncols=1, figsize=(10, fig_height), sharex=True)
-    
-    # If there's only one SR problem, axes is not a list. Make it a list for consistency.
-    if num_sr_problems == 1:
-        axes = [axes]
-    
-    for idx, (sr, sr_fn) in enumerate(zip(sr_dfs, sr_fns)):
-        gs_list, div_list, label_list = sr
-        
-        ax = axes[idx]
-        
-        # Plot each SR run within the current SR problem
-        for run_idx, ks in enumerate(gs_list):
-            diversity = div_list[run_idx][0]  # Assuming div_list contains tuples/lists with at least one element
-            ax.plot(ks, diversity, label=label_list[run_idx])
-            # If you have confidence intervals or other metrics, you can uncomment and modify the fill_between line
-            # ax.fill_between(ks, div_list[run_idx][1], div_list[run_idx][2], alpha=0.3)
-        
-        # Set Y-axis label
-        ax.set_ylabel(f'{sr_fn}')
-        
-        # Optional: Add legend to each subplot
-        ax.legend()
-        
-        # Optional: Set grid for better readability
-        ax.grid(True, linestyle='--', which='major', color='grey', alpha=0.5)
-    
-    # Set the X-axis label for the bottom subplot
-    axes[-1].set_xlabel('Generation')
-    
-    # Set title for first subplot
-    axes[0].set_title(f'{attribute_1}')
-    
-    # Set X-axis ticks based on global_max_length
-    xticks_step = max(1, int(global_max_length / 10))  # Ensure step is at least 1
-    axes[-1].set_xticks(np.arange(0, global_max_length + xticks_step, step=xticks_step))
-    
-    # Adjust layout to prevent overlap
-    plt.tight_layout()
-    
-    # Ensure the 'figures' directory exists
-    figures_dir = os.path.join(os.getcwd(), 'figures')
-    os.makedirs(figures_dir, exist_ok=True)
-    
-    # Save the figure
-    plot_filename = f"{config_plot}_{attribute_1}_vs_generations.png"
-    plt.savefig(os.path.join(figures_dir, plot_filename))
-    
-    # Close the plot to free up memory
-    plt.close()
-    
 
 def plot_all_sr_in_columns(sr_dfs, sr_fns, attributes, config_plot, global_max_length=150):
     """
@@ -1255,9 +1136,9 @@ def plot_all_sr_in_columns(sr_dfs, sr_fns, attributes, config_plot, global_max_l
     num_attributes = len(attributes)
     
     # Define the figure size based on the number of SR problems and attributes
-    # Adjust the height and width per subplot as needed (e.g., 4 inches per subplot)
-    fig_height = 4 * num_sr_problems
-    fig_width = 6 * num_attributes  # 6 inches per attribute column
+    # Adjust the height and width per subplot as needed (e.g., 3 inches per subplot)
+    fig_height = 3 * num_sr_problems
+    fig_width = 7 * num_attributes  # 7 inches per attribute column
     fig, axes = plt.subplots(nrows=num_sr_problems, ncols=num_attributes, figsize=(fig_width, fig_height), sharex=True)
     
     # If there's only one SR problem, axes is a 1D array. Make it a 2D array for consistency.
@@ -1292,12 +1173,6 @@ def plot_all_sr_in_columns(sr_dfs, sr_fns, attributes, config_plot, global_max_l
                 if not legend_added:
                     handles.append(line)
                     labels.append(label_list[run_idx])
-                    
-                # TODO: TEMP
-                # global_max_length = 150
-                # xticks_step = max(1, int(global_max_length / 10))  # Ensure step is at least 1
-                # ax.set_xticks(np.arange(0, global_max_length + xticks_step, step=xticks_step))
-                    
 
             # Optional: Set grid for better readability
             ax.grid(True, linestyle='--', which='major', color='grey', alpha=0.5)
@@ -1343,50 +1218,19 @@ def plot_all_sr_in_columns(sr_dfs, sr_fns, attributes, config_plot, global_max_l
     
 if __name__ == "__main__":
     
-    attributes = ['best_fitness', 'diversity', 'avg_tree_size',
-                  'avg_tree_depth', 'pop_intron_ratio', 'avg_intron_ratio', 'pop_total_introns',
-                  'pop_total_nodes']
-    
-    # TODO: 'avg_kinship', 't_close', 't_far' since they represent a single kinship value. Is just for reference. Think how to maybe use it
-    
-    # ----- BLOAT STUDY: Read files ------ #  
-    
-    # print("\nNO Inbreeding")
-    # file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/nguyen2/bloat/PopSize:300_InThres:8_Mrates:0.0005_Gens:150_TourSize:15_MaxD:6_InitD:3_no_inbreeding.npy"
-    # data = np.load(file_path_name, allow_pickle=True)
-    # results_no_inbreeding = data.item()
-
-    # print("\nInbreeding")
-    # file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/nguyen1/bloat/PopSize:300_InThres:5_Mrates:0.0005_Gens:150_TourSize:15_MaxD:10_InitD:3_inbreeding_RUN:4_18.npy"
-    # data = np.load(file_path_name, allow_pickle=True)
-    # results_inbreeding = data.item()
-
-
-    # # plot_any_attr_vs_gen(None, results_no_inbreeding, results_inbreeding, temp_runs=5, attribute="pop_total_nodes")
-    # # compute_correlations(results_no_inbreeding, results_inbreeding, attributes, config_plot="test", temp_runs=5, temp_gens=150, attribute_1="avg_tree_size", attribute_2="pop_total_introns")
-    
-    # # Pick attribute at random to get whats the run that had the most generations out of all.
-    # max_length_attr = util.get_global_max_depth(results_inbreeding)
-    # max_length_no_attr = util.get_global_max_depth(results_no_inbreeding)
-    # global_max_length = max(max_length_attr, max_length_no_attr)
-    
-    # # Create DF for all attributes for the given dictionary treatment
-    # df_inbreeding    = util.pad_dict_and_create_df(results_inbreeding, attributes, global_max_length, 5)
-    # df_no_inbreeding = util.pad_dict_and_create_df(results_no_inbreeding, attributes, global_max_length, 5)
-    
-    # plot_correlation_heatmap(df_no_inbreeding, df_inbreeding, attributes, config_plot="test")
-    
     # ------ Independent Bloat Study ------------- #
     
+    print("\nBloat ~ intron study.")
+    attributes = ['best_fitness', 'diversity', 'avg_tree_size', 'pop_intron_ratio']
     bloat_thresholds = [5, 10, 14, "None"] # "Dynamic" TODO: Maybe include dynamic discussion in appendix.
-    sr_fns = ["nguyen1"]#, "nguyen2", "nguyen3", "nguyen4", "nguyen5"]
-    
-    print("\nBloat Study.")
+    sr_fns = ["nguyen1", "nguyen2"]#, "nguyen3", "nguyen4", "nguyen5"]
     sr_dfs = {}
+    
     for sr in sr_fns:
-        dfs = []
         
         print(f"\nSymbolic Regression Function: {sr}")
+        dict_results = []
+        dfs = []
         
         for thres in bloat_thresholds:
             
@@ -1394,38 +1238,39 @@ if __name__ == "__main__":
             
             # Read file
             if thres == "None": # Read the inbreeding treatment without threshold
-                file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/{sr}/bloat/introns_PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:6_InitD:3_inbreeding.npy"
+                file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/{sr}/bloat/introns_PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:10_InitD:3_inbreeding.npy"
             else:
-                file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/{sr}/bloat/introns_PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:6_InitD:3_no_inbreeding.npy"
+                file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/{sr}/bloat/introns_PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:10_InitD:3_no_inbreeding.npy"
             
+            # Load the data dict
             data = np.load(file_path_name, allow_pickle=True)
             results_inbreeding = data.item()
-            dfs.append(results_inbreeding)
+            dict_results.append(results_inbreeding)
             
-            # To compute correlations between all attributes or plot an indivdual heatmap
+            # Pad the data for correct plotting
             global_max_length = util.get_global_max_depth(results_inbreeding)
-            df_no_inbreeding = util.pad_dict_and_create_df(results_inbreeding, attributes, global_max_length, 5)
-            # compute_correlations(results_inbreeding, config_plot=f"genetic_programming/{sr}/bloat/InThres:{thres}", temp_runs=15, attribute_1="pop_total_nodes", attribute_2="diversity")
-            plot_indiv_corr_heatmap(df_no_inbreeding, thres, attributes, config_plot=f"{sr}_InThreshold:{thres}_")
-        
-    #     # Plot individually
-    #     # sr_plots = plot_gen_vs_intron_size(dfs, bloat_thresholds, config_plot=f"genetic_programming/{sr}/bloat/Attr:", temp_runs=15, attribute_1="pop_total_introns")
-        
-    #     # Plot for all SR
-        sr_dfs[sr] = {
-            'pop_intron_ratio': collect_plot_values(dfs, 'pop_intron_ratio', n_runs=5), 
-            'diversity': collect_plot_values(dfs, 'diversity', n_runs=5),
-            'avg_tree_size': collect_plot_values(dfs, 'avg_tree_size', n_runs=5),
-            'best_fitness': collect_plot_values(dfs, 'best_fitness', n_runs=5)
-        }
+            df_no_inbreeding = util.pad_dict_and_create_df(results_inbreeding, attributes, global_max_length, 15)
+            dfs.append(df_no_inbreeding)
+            
+            # Compute PEARSON correlations between all attributes or plot an indivdual heatmap
+            # compute_correlations(results_inbreeding, config_plot=f"genetic_programming/{sr}/bloat/InThres:{thres}", temp_runs=15, attribute_1="pop_intron_ratio", attribute_2="diversity")
 
-    # plot_all_sr_in_rows(sr_dfs, sr_fns, attribute_1="pop_total_introns", config_plot=f"genetic_programming/bloat/")
+        # Plot all heatmaps in a 2x2 grid
+        plot_combined_corr_heatmaps(dfs, bloat_thresholds, attributes, config_plot=f"{sr}_")
+
+        # Plot for all SR
+        # sr_dfs[sr] = {
+        #     'pop_intron_ratio': collect_plot_values(dict_results, 'pop_intron_ratio', n_runs=15), 
+        #     'diversity': collect_plot_values(dict_results, 'diversity', n_runs=15),
+        #     'avg_tree_size': collect_plot_values(dict_results, 'avg_tree_size', n_runs=15),
+        #     'best_fitness': collect_plot_values(dict_results, 'best_fitness', n_runs=15)
+        # }
     
     attributes =["diversity", "pop_intron_ratio", "avg_tree_size"]
-    plot_all_sr_in_columns(sr_dfs, sr_fns, attributes, config_plot=f"genetic_programming/bloat/{sr}_structure", global_max_length=150)
+    # plot_all_sr_in_columns(sr_dfs, sr_fns, attributes, config_plot=f"genetic_programming/bloat/{sr}_structure", global_max_length=150)
     
     attributes =["best_fitness", "diversity", "pop_intron_ratio"]
-    plot_all_sr_in_columns(sr_dfs, sr_fns, attributes, config_plot=f"genetic_programming/bloat/{sr}_search_metrics", global_max_length=150)
+    # plot_all_sr_in_columns(sr_dfs, sr_fns, attributes, config_plot=f"genetic_programming/bloat/{sr}_search_metrics", global_max_length=150)
     
     
     # --------- Dynamic vs static ----------------- #
