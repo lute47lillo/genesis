@@ -17,7 +17,8 @@ import experiments as exp
 import time
 import gp_landscape
 import gp_landscape_parallel as parallel
-from gp_node import Individual
+# from gp_node import Individual
+from testing import Individual
 
 class GeneticAlgorithmGPBloat:
     
@@ -29,6 +30,7 @@ class GeneticAlgorithmGPBloat:
         self.inbred_threshold = inbred_threshold
         self.max_depth = args.max_depth
         self.initial_depth = args.initial_depth
+        self.intron_fraction = args.intron_fraction
         self.poulation_success = False
         self.population = []
         self.best_fitness_list = []
@@ -38,7 +40,7 @@ class GeneticAlgorithmGPBloat:
         
         # Compute population intros at failure.
         self.compute_population_size_depth()
-        self.compute_introns_lists()
+        self.compute_introns_lists(self.intron_fraction)
         # self.compute_kinship_population()
         
         # Then collect them
@@ -469,22 +471,34 @@ class GeneticAlgorithmGPBloat:
             # Failed to perform a valid crossover within max_attempts
             return None, None
 
-        # Create new individuals
+        # # Create new individuals
+        # offspring1 = Individual(
+        #     self.args,
+        #     fitness_function=self.fitness_function,
+        #     tree=child1,
+        #     parents=[parent1, parent2],
+        #     ancestors=parent1.ancestors.union(parent2.ancestors, {parent1.id, parent2.id}),
+        #     generation=parent1.generation + 1
+        # )
+        # offspring2 = Individual(
+        #     self.args,
+        #     fitness_function=self.fitness_function,
+        #     tree=child2,
+        #     parents=[parent1, parent2],
+        #     ancestors=parent1.ancestors.union(parent2.ancestors, {parent1.id, parent2.id}),
+        #     generation=parent1.generation + 1
+        # )
+        
+        # TODO: Without unnecesasry data. Create new individuals
         offspring1 = Individual(
             self.args,
             fitness_function=self.fitness_function,
             tree=child1,
-            parents=[parent1, parent2],
-            ancestors=parent1.ancestors.union(parent2.ancestors, {parent1.id, parent2.id}),
-            generation=parent1.generation + 1
         )
         offspring2 = Individual(
             self.args,
             fitness_function=self.fitness_function,
             tree=child2,
-            parents=[parent1, parent2],
-            ancestors=parent1.ancestors.union(parent2.ancestors, {parent1.id, parent2.id}),
-            generation=parent1.generation + 1
         )
 
         return offspring1, offspring2
@@ -573,7 +587,7 @@ class GeneticAlgorithmGPBloat:
             end_time = time.time()
 
             elapsed_time = end_time - start_time
-            print(f"\nGen: {gen+1}. Time taken to collect all data: {elapsed_time:.4f} seconds")
+            print(f"\nGen: {gen+1}. InbreedThreshold: {self.inbred_threshold}. Time taken to collect all data: {elapsed_time:.4f} seconds")
             
             # Early Stopping condition if successful individual has been found
             if self.poulation_success == True:

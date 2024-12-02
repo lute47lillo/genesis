@@ -527,12 +527,12 @@ class GeneticAlgorithmGPTesting:
                 # Measure Size, Depth  and Intron statistics
                 self.compute_population_size_depth()
                 
-                # Dynamic2
-                halving = int(self.average_size_list[-1] / 2)
-                self.inbred_threshold = halving + int(0.5 * halving)
+                # # Dynamic2
+                # halving = int(self.average_size_list[-1] / 2)
+                # self.inbred_threshold = halving + int(0.5 * halving)
                 
                 
-                print(f"\nNew inbreeding threshold set to: {self.inbred_threshold}.")
+                print(f"\nInbreeding threshold set to: {self.inbred_threshold}.")
                 print(f"Generation {gen + 1}: Best Fitness = {best_individual.fitness:.3f}\n"
                       f"Diversity = {self.diversity_list[gen]:.3f}\n"
                       f"Avg Size = {self.average_size_list[-1]:.3f}\n"
@@ -661,7 +661,7 @@ if __name__ == "__main__":
     
     term1 = f"genetic_programming/{args.benchmark}/"
     term2 = "gp_lambda/"
-    term3 = f"PopSize:{args.pop_size}_InThres:Dynamic2_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
+    term3 = f"PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
 
     args.config_plot = term1 + term2 + term3
     print("Running GA with NO Inbreeding Mating...")

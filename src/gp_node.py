@@ -17,6 +17,12 @@ class Node:
 
     def is_terminal(self):
         return len(self.children) == 0
+    
+    def __getstate__(self):
+        return (self.value, self.children)
+
+    def __setstate__(self, state):
+        self.value, self.children = state
 
     def __str__(self):
         if self.is_terminal():

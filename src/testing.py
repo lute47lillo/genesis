@@ -1,24 +1,13 @@
-"""
-    Author: Lute Lillo
-    
-    Definition
-    ------------
-        Genetic Programming Landscape class. 
-            - Evaluate Tree semantics.
-            - Calculate introns.
-            - Generate Input-Output Samples.
-"""
-
-import util
-import random
-import numpy as np
-import gp_math
-import time
-import experiments as exp
 import multiprocessing
 from typing import List, Tuple, Dict
+import time
+import util
+import gp_math
+import random
+import numpy as np
+import experiments as exp
 
-# Global variable to hold the GPIntronAnalyzer instance
+# Global variable to hold the GPIntronAnalyzer instance in worker processes
 global_analyzer = None
 
 def init_worker(args):
@@ -32,7 +21,7 @@ def init_worker(args):
         The arguments required to initialize GPIntronAnalyzer.
     """
     global global_analyzer
-    global_analyzer = GPIntronAnalyzer(args)
+    global_analyzer = GPIntronAnalyzer(args, initialize_pool=False)  # Avoid nested pools
 
 def process_individual_helper(individual):
     """
@@ -52,23 +41,21 @@ def process_individual_helper(individual):
     global global_analyzer
     if global_analyzer is None:
         raise ValueError("Global analyzer not initialized.")
-
+    
     introns = global_analyzer.detect_pattern_introns(individual.tree)
     total_intron_nodes = sum(intron_size for _, intron_size in introns)
     total_nodes = global_analyzer.count_nodes(individual.tree)
     intron_ratio = total_intron_nodes / total_nodes if total_nodes > 0 else 0
     return total_intron_nodes, total_nodes, intron_ratio
 
-# Define Node and Individual classes as provided
-# TODO: I have removed the ID
 class Node:
     def __init__(self, value, children=None):
         self.value = value  # Function or terminal
         self.children = children if children is not None else []
-
+    
     def is_terminal(self):
         return len(self.children) == 0
-
+    
     def __str__(self):
         if self.is_terminal():
             return str(self.value)
@@ -76,19 +63,13 @@ class Node:
             return f"({self.value} {' '.join(str(child) for child in self.children)})"
 
 class Individual:
-    def __init__(self, args, fitness_function=None, tree=None, id=None, ancestors=None, parents=None, generation=0):
+    def __init__(self, args, fitness_function=None, tree=None):
         self.args = args
-        self.bounds = self.args.bounds
-        self.max_depth = self.args.max_depth  # TODO
+        self.max_depth = self.args.max_depth
         self.initial_depth = self.args.initial_depth
-        self.id = id if id is not None else np.random.randint(1e9)
-        self.parents = parents if parents is not None else []
-        self.tree = tree if tree is not None else self.random_tree(depth=self.initial_depth)  # Initial depth of 6 as in paper
-        self.ancestors = ancestors if ancestors is not None else set()
-        self.generation = generation  # Track the generation of the individual
-        self.succ_kinship = None
+        self.tree = tree if tree is not None else self.random_tree(depth=self.initial_depth)
 
-        # Init fitness for individual in creation and self.success
+        # Initialize fitness and success
         self.fitness, self.success = fitness_function(self.tree)
 
     def get_function_arity(self, function):
@@ -121,20 +102,25 @@ class Individual:
     def __str__(self):
         return str(self.tree)
 
-# Define the GPIntronAnalyzer class
 class GPIntronAnalyzer:
-    def __init__(self, args, pool=None):
+    def __init__(self, args, initialize_pool=True):
         self.args = args
         self.target_function = util.select_gp_benchmark(args)
         self.bounds = args.bounds
         self.data = self.generate_data()  # Generate all data points
-        self.pool = pool
+
+        if initialize_pool:
+            # Initialize the multiprocessing pool with the initializer
+            self.pool = multiprocessing.Pool(initializer=init_worker, initargs=(self.args, ))
+        else:
+            # No pool initialization to prevent nested pools
+            self.pool = None
 
     def generate_data(self):
         """
         Define input vectors (sampled within the search space).
         """
-        x_values = np.arange(self.bounds[0], self.bounds[1] + 0.1, 0.1)  # TODO: Make step size a hyperparameter
+        x_values = np.arange(self.bounds[0], self.bounds[1] + 0.1, 0.1)  # Make step size a hyperparameter
         y_values = self.target_function(x_values)
         data = list(zip(x_values, y_values))
         return data
@@ -157,53 +143,6 @@ class GPIntronAnalyzer:
         epsilon = 1e-6
         return all(abs(output) < epsilon for output in outputs)
 
-    # def detect_pattern_introns(self, node) -> List[Tuple]:
-    #     """
-    #     Detects introns based on specific patterns where adding or subtracting zero
-    #     does not affect the program output.
-    #     """
-    #     introns = []
-
-    #     if node is None or node.is_terminal():
-    #         return introns
-
-    #     # Pattern: Node + 0 or 0 + Node
-    #     if node.value == '+':
-    #         if len(node.children) < 2:
-    #             # Handle cases where '+' has less than two children
-    #             return introns
-    #         left_child = node.children[0]
-    #         right_child = node.children[1]
-
-    #         if self.subtree_evaluates_to_zero(left_child):
-    #             # Pattern: 0 + Node
-    #             intron_node = left_child
-    #             intron_size = self.count_nodes(intron_node)
-    #             introns.append((intron_node, intron_size))
-    #         elif self.subtree_evaluates_to_zero(right_child):
-    #             # Pattern: Node + 0
-    #             intron_node = right_child
-    #             intron_size = self.count_nodes(intron_node)
-    #             introns.append((intron_node, intron_size))
-
-    #     # Pattern: Node - 0
-    #     elif node.value == '-':
-    #         if len(node.children) < 2:
-    #             # Handle cases where '-' has less than two children
-    #             return introns
-    #         right_child = node.children[1]
-
-    #         if self.subtree_evaluates_to_zero(right_child):
-    #             intron_node = right_child
-    #             intron_size = self.count_nodes(intron_node)
-    #             introns.append((intron_node, intron_size))
-
-    #     # Recursively check child nodes
-    #     for child in node.children:
-    #         introns.extend(self.detect_pattern_introns(child))
-
-    #     return introns
-    
     def detect_pattern_introns(self, node) -> List[Tuple]:
         """
         Detects introns based on specific patterns where adding or subtracting zero
@@ -224,10 +163,12 @@ class GPIntronAnalyzer:
                 left_child, right_child = current_node.children[:2]
 
                 if self.subtree_evaluates_to_zero(left_child):
+                    # Pattern: 0 + Node
                     intron_node = left_child
                     intron_size = self.count_nodes(intron_node)
                     introns.append((intron_node, intron_size))
                 elif self.subtree_evaluates_to_zero(right_child):
+                    # Pattern: Node + 0
                     intron_node = right_child
                     intron_size = self.count_nodes(intron_node)
                     introns.append((intron_node, intron_size))
@@ -239,6 +180,7 @@ class GPIntronAnalyzer:
                 right_child = current_node.children[1]
 
                 if self.subtree_evaluates_to_zero(right_child):
+                    # Pattern: Node - 0
                     intron_node = right_child
                     intron_size = self.count_nodes(intron_node)
                     introns.append((intron_node, intron_size))
@@ -260,6 +202,9 @@ class GPIntronAnalyzer:
         --------
         intron_info (dict): A dictionary containing total and average intron metrics.
         """
+        if self.pool is None:
+            raise ValueError("Multiprocessing pool not initialized.")
+
         # Start timing
         start_time = time.time()
         print(f"\nLength of population: {len(population)}")
@@ -268,16 +213,7 @@ class GPIntronAnalyzer:
         population_total_nodes = 0
         individual_intron_ratios = []
 
-        # # Use multiprocessing.Pool with initializer
-        # with multiprocessing.Pool(initializer=init_worker, initargs=(self.args, )) as pool:
-        #     # Map the helper function across the population
-        #     results = pool.map(process_individual_helper, population)
-        
-        # Use the existing pool for parallel processing
-        if self.pool is None:
-            raise ValueError("Multiprocessing pool not provided.")
-        
-        # Map the helper function across the population
+        # Map the helper function across the population using the existing pool
         results = self.pool.map(process_individual_helper, population)
 
         # Process the results
@@ -290,9 +226,9 @@ class GPIntronAnalyzer:
                 population_total_nodes += total_nodes
                 individual_intron_ratios.append(intron_ratio)
 
-                print(f"Processed individual {idx + 1}/{len(population)}: "
-                      f"Intron Nodes={total_intron_nodes}, Total Nodes={total_nodes}, "
-                      f"Ratio={intron_ratio:.4f}")
+                # print(f"Processed individual {idx + 1}/{len(population)}: "
+                #       f"Intron Nodes={total_intron_nodes}, Total Nodes={total_nodes}, "
+                #       f"Ratio={intron_ratio:.4f}")
             except Exception as e:
                 print(f"Error processing individual {idx + 1}: {e}")
 
@@ -310,12 +246,12 @@ class GPIntronAnalyzer:
         }
 
         print(f"\nThe total nodes: {population_total_nodes}.")
-        print(f"\nThe total intron nodes: {population_total_intron_nodes}.")
-        print(f"\nThe intron ratio: {population_intron_ratio}.")
-        
-        # # End timing
-        end_time = time.time()
+        print(f"Avg pop nodes: {population_total_nodes/len(population):.3f}.")
+        print(f"The total intron nodes: {population_total_intron_nodes}.")
+        print(f"The intron ratio: {population_intron_ratio}.")
 
+        # End timing
+        end_time = time.time()
         elapsed_time = end_time - start_time
         print(f"\nTime taken to measure introns: {elapsed_time:.4f} seconds")
 
@@ -409,20 +345,18 @@ class GPIntronAnalyzer:
         fitness = 1 / (total_error + 1e-6)  # Fitness increases as total error decreases
         return fitness, success
 
-# Example Usage
+    
 if __name__ == "__main__":
     
     # Get args
     args = util.set_args()
     
-    # Initialize the multiprocessing pool once
-    pool = multiprocessing.Pool(initializer=init_worker, initargs=(args, ))
+    # # Initialize the multiprocessing pool once
+    # pool = multiprocessing.Pool(initializer=init_worker, initargs=(args, ))
     
     # Create Landscape
-    landscape = GPIntronAnalyzer(args, pool=pool)
+    landscape = GPIntronAnalyzer(args)
 
-    # -------------------------------- Experiment --------------------------- #
-    
     try:
         term1 = f"genetic_programming/{args.benchmark}/"
         term2 = "bloat/"
@@ -443,19 +377,9 @@ if __name__ == "__main__":
             print("Running GA with NO Inbreeding Mating...")
             results_no_inbreeding = exp.test_multiple_runs_function_bloat(args, landscape, args.inbred_threshold)
             util.save_accuracy(results_no_inbreeding, f"{args.config_plot}_no_inbreeding.npy")
-            
+        
     finally:
         # Ensure that the pool is properly closed
-        pool.close()
-        pool.join()
-
-    # ------- TEST ----------- #
-    # Create a sample population
-    # population = [Individual(tree) for tree in your_tree_list]  # Replace `your_tree_list` with actual trees
-    
-    # analyzer = GPIntronAnalyzer()
-    # intron_stats = analyzer.measure_introns(population)
-    
-    # print("Intron Statistics:")
-    # print(intron_stats)
-        
+        if landscape.pool is not None:
+            landscape.pool.close()
+            landscape.pool.join()

@@ -945,7 +945,9 @@ def plot_indiv_corr_heatmap(df, threshold, attributes, config_plot):
     os.makedirs(figures_dir, exist_ok=True)
     
     # Save the combined figure
-    save_path = os.path.join(figures_dir, f"{config_plot}_IndividualCorrelation_Heatmap.png")
+    print(figures_dir)
+    save_path = figures_dir + f"/correlations/{config_plot}Heatmap.png"
+    print(save_path)
     plt.savefig(save_path, bbox_inches='tight')
     plt.close()
     
@@ -1027,7 +1029,7 @@ def plot_correlation_heatmap(df_no_inbreeding, df_inbreeding, attributes, config
     os.makedirs(figures_dir, exist_ok=True)
     
     # Save the combined figure
-    save_path = os.path.join(figures_dir, f"{config_plot}_CorrelationHeatmap_Comparison.png")
+    save_path = os.path.join(figures_dir, f"{config_plot}_Heatmap.png")
     plt.savefig(save_path, bbox_inches='tight')
     plt.close()
     
@@ -1048,6 +1050,7 @@ def collect_plot_values(dfs, attribute_1, n_runs=15):
         # Find maximum length list and padd the rest to be final attr at point of convergence
         max_length = max(len(sublist) for sublist in attribute_lists)
         global_max_length = min(150, max_length) # Capping at 150
+        print(global_max_length)
         global_max_length = 150
 
         # Pad all sublists in diversity_inbreeding
@@ -1090,6 +1093,7 @@ def plot_gen_vs_intron_size(dfs, bloat_thresholds, config_plot, temp_runs, attri
     
         # Find maximum length list and padd the rest to be final attr at point of convergence
         max_length = max(len(sublist) for sublist in attribute_lists)
+        
         global_max_length = min(150, max_length) # Capping at 150
         global_max_length = 150
   
@@ -1289,8 +1293,12 @@ def plot_all_sr_in_columns(sr_dfs, sr_fns, attributes, config_plot, global_max_l
                     handles.append(line)
                     labels.append(label_list[run_idx])
                     
-            
-            
+                # TODO: TEMP
+                # global_max_length = 150
+                # xticks_step = max(1, int(global_max_length / 10))  # Ensure step is at least 1
+                # ax.set_xticks(np.arange(0, global_max_length + xticks_step, step=xticks_step))
+                    
+
             # Optional: Set grid for better readability
             ax.grid(True, linestyle='--', which='major', color='grey', alpha=0.5)
         
@@ -1308,7 +1316,7 @@ def plot_all_sr_in_columns(sr_dfs, sr_fns, attributes, config_plot, global_max_l
     for idx, attribute in enumerate(sr_fns):
         axes[idx, 0].set_ylabel(f'{sr_fns[idx]}')
     
-    # Set X-axis ticks based on global_max_length
+    # # Set X-axis ticks based on global_max_length
     xticks_step = max(1, int(global_max_length / 10))  # Ensure step is at least 1
     for ax in axes[-1, :]:
         ax.set_xticks(np.arange(0, global_max_length + xticks_step, step=xticks_step))
@@ -1331,7 +1339,6 @@ def plot_all_sr_in_columns(sr_dfs, sr_fns, attributes, config_plot, global_max_l
     
     # Close the plot to free up memory
     plt.close()
-
 
     
 if __name__ == "__main__":
@@ -1372,7 +1379,7 @@ if __name__ == "__main__":
     # ------ Independent Bloat Study ------------- #
     
     bloat_thresholds = [5, 10, 14, "None"] # "Dynamic" TODO: Maybe include dynamic discussion in appendix.
-    sr_fns = ["nguyen1", "nguyen2", "nguyen3", "nguyen4", "nguyen5"]
+    sr_fns = ["nguyen1"]#, "nguyen2", "nguyen3", "nguyen4", "nguyen5"]
     
     print("\nBloat Study.")
     sr_dfs = {}
@@ -1387,38 +1394,38 @@ if __name__ == "__main__":
             
             # Read file
             if thres == "None": # Read the inbreeding treatment without threshold
-                file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/{sr}/bloat/PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:10_InitD:3_inbreeding.npy"
+                file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/{sr}/bloat/introns_PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:6_InitD:3_inbreeding.npy"
             else:
-                file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/{sr}/bloat/PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:10_InitD:3_no_inbreeding.npy"
+                file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/{sr}/bloat/introns_PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:6_InitD:3_no_inbreeding.npy"
             
             data = np.load(file_path_name, allow_pickle=True)
             results_inbreeding = data.item()
             dfs.append(results_inbreeding)
             
             # To compute correlations between all attributes or plot an indivdual heatmap
-            # global_max_length = util.get_global_max_depth(results_no_inbreeding)
-            # df_no_inbreeding = util.pad_dict_and_create_df(results_no_inbreeding, attributes, global_max_length, 15)
-            # compute_correlations(results_no_inbreeding, config_plot=f"genetic_programming/{sr}/bloat/InThres:{thres}", temp_runs=15, attribute_1="pop_total_nodes", attribute_2="diversity")
-            # plot_indiv_corr_heatmap(df_no_inbreeding, thres, attributes, config_plot=f"{sr}_InThreshold:{thres}_")
+            global_max_length = util.get_global_max_depth(results_inbreeding)
+            df_no_inbreeding = util.pad_dict_and_create_df(results_inbreeding, attributes, global_max_length, 5)
+            # compute_correlations(results_inbreeding, config_plot=f"genetic_programming/{sr}/bloat/InThres:{thres}", temp_runs=15, attribute_1="pop_total_nodes", attribute_2="diversity")
+            plot_indiv_corr_heatmap(df_no_inbreeding, thres, attributes, config_plot=f"{sr}_InThreshold:{thres}_")
         
-        # Plot individually
-        # sr_plots = plot_gen_vs_intron_size(dfs, bloat_thresholds, config_plot=f"genetic_programming/{sr}/bloat/Attr:", temp_runs=15, attribute_1="pop_total_introns")
+    #     # Plot individually
+    #     # sr_plots = plot_gen_vs_intron_size(dfs, bloat_thresholds, config_plot=f"genetic_programming/{sr}/bloat/Attr:", temp_runs=15, attribute_1="pop_total_introns")
         
-        # Plot for all SR
+    #     # Plot for all SR
         sr_dfs[sr] = {
-            'pop_intron_ratio': collect_plot_values(dfs, 'pop_intron_ratio', n_runs=15), 
-            'diversity': collect_plot_values(dfs, 'diversity', n_runs=15),
-            'avg_tree_size': collect_plot_values(dfs, 'avg_tree_size', n_runs=15),
-            'best_fitness': collect_plot_values(dfs, 'best_fitness', n_runs=15)
+            'pop_intron_ratio': collect_plot_values(dfs, 'pop_intron_ratio', n_runs=5), 
+            'diversity': collect_plot_values(dfs, 'diversity', n_runs=5),
+            'avg_tree_size': collect_plot_values(dfs, 'avg_tree_size', n_runs=5),
+            'best_fitness': collect_plot_values(dfs, 'best_fitness', n_runs=5)
         }
 
     # plot_all_sr_in_rows(sr_dfs, sr_fns, attribute_1="pop_total_introns", config_plot=f"genetic_programming/bloat/")
     
     attributes =["diversity", "pop_intron_ratio", "avg_tree_size"]
-    plot_all_sr_in_columns(sr_dfs, sr_fns, attributes, config_plot=f"genetic_programming/bloat/structure", global_max_length=150)
+    plot_all_sr_in_columns(sr_dfs, sr_fns, attributes, config_plot=f"genetic_programming/bloat/{sr}_structure", global_max_length=150)
     
     attributes =["best_fitness", "diversity", "pop_intron_ratio"]
-    plot_all_sr_in_columns(sr_dfs, sr_fns, attributes, config_plot=f"genetic_programming/bloat/search_metrics", global_max_length=150)
+    plot_all_sr_in_columns(sr_dfs, sr_fns, attributes, config_plot=f"genetic_programming/bloat/{sr}_search_metrics", global_max_length=150)
     
     
     # --------- Dynamic vs static ----------------- #
@@ -1437,8 +1444,8 @@ if __name__ == "__main__":
     
     # --------- Heatmaps and statistics ----------- #
     
-    depths = [6, 7, 8, 9, 10] 
-    thresholds = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14] # InitD:3
+    # depths = [6, 7, 8, 9, 10] 
+    # thresholds = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14] # InitD:3
     
     # gen_success_vs_mas_depth([], depths) # TODO: They are for an static threshold
     # gen_success_vs_inbreeding_threshold([], thresholds) # TODO: they are for an static depth
@@ -1449,22 +1456,6 @@ if __name__ == "__main__":
     # sr_fns = ["nguyen1", "nguyen2", "nguyen3", "nguyen4", "nguyen5"]
     # for sr in sr_fns:
     #     print()
-    #     plot_all_heatmap([], sr, thresholds, depths, 3)
-    
-    # ------------ Legacy experimental -------------- #
-    
-    # generations = range(1, len(self.average_size_list) + 1)
-    # plt.figure()
-    # plt.plot(generations, self.average_size_list, label='Average Size')
-    # plt.plot(generations, self.average_depth_list, label='Average Depth')
-    # plt.plot(generations, self.average_arity_list, label='Average Arity')
-    # plt.xlabel('Generation')
-    # plt.ylabel('Bloat Metric')
-    # plt.title('Bloat Metrics Over Generations')
-    # plt.legend()
-    # if self.inbred_threshold == None:
-    #     plt.savefig(f"{os.getcwd()}/figures/genetic_programming/bloat/test_inbreeding.png")
-    # else:
-    #     plt.savefig(f"{os.getcwd()}/figures/genetic_programming/bloat/test_NO_inbreeding.png")
+    #     plot_all_heatmap([], sr, thresholds, depths, 3) # BUG: Some are referred as none. Now is mi
 
     

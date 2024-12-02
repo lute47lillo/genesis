@@ -604,6 +604,22 @@ class TestPatternIntrons(unittest.TestCase):
         out = land.measure_introns(pop)
         
         print(out)
+        
+    # TODO: Intron tests
+    # def test_subtrees_are_identical():
+    #     # Create nodes
+    #     node_a1 = Node('+', [Node('x'), Node(1.0)])
+    #     node_a2 = Node('+', [Node('x'), Node(1.0)])
+    #     node_b = Node('*', [Node('x'), Node(1.0)])
+
+    #     analyzer = GPIntronAnalyzer(args=None, initialize_pool=False)
+
+    #     # Test identical subtrees
+    #     assert analyzer.subtrees_are_identical(node_a1, node_a2) == True, "Identical subtrees not recognized."
+
+    #     # Test different subtrees
+        # assert analyzer.subtrees_are_identical(node_a1, node_b) == False, "Different subtrees incorrectly recognized as identical."
+
 
 
 # class TestMeasureDiversity(unittest.TestCase):

@@ -33,8 +33,9 @@ def set_args():
     argparser.add_argument('--inbred_threshold', type=int, help='Inbreeding Threshold. Below threshold is considered inbreeding. \
                             Minimum genetic (tree-edit) distance required to allow mating', default=5)
     argparser.add_argument('--tournament_size', type=int, help='Nº of individuals to take part in the Tournament selection', default=3)
-    argparser.add_argument('--exp_num_runs', type=int, help='Nº of experimental runs. (Fixed hyperparameters)', default=5)
-    
+    argparser.add_argument('--exp_num_runs', type=int, help='Nº of experimental runs. (Fixed hyperparameters)', default=5) # intron_fraction
+    argparser.add_argument('--intron_fraction', type=float, help='Fraction of the population to compute introns from.', default=1.0) # intron_fraction
+
     # Genetic Programming variables
     argparser.add_argument('--max_depth', type=int, help='GP Tree maximum depth', default=15)
     argparser.add_argument('--initial_depth', type=int, help='GP Tree maximum depth', default=6)

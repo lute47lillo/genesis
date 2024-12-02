@@ -124,11 +124,11 @@ def test_multiple_runs_function_bloat(args, landscape, inbred_threshold):
                 # f"Most Related Tree Kinship = {t_close_list[-1][1]:.3f} with {len(t_close_list[-1][0])} ancestors\n"
                 # f"Least Related Tree Kinship = {t_far_list[-1][1]:.3f} with {len(t_far_list[-1][0])} ancestors.")
                 
-        # Sanity Save of results
-        if inbred_threshold == None:
-            util.save_accuracy(results, f"{args.config_plot}_inbreeding_RUN:{run}_{gen_success}.npy")
-        else:
-            util.save_accuracy(results, f"{args.config_plot}_no_inbreeding_RUN:{run}_{gen_success}.npy")
+        # # Sanity Save of results
+        # if inbred_threshold == None:
+        #     util.save_accuracy(results, f"{args.config_plot}_inbreeding_RUN:{run}_{gen_success}.npy")
+        # else:
+        #     util.save_accuracy(results, f"{args.config_plot}_no_inbreeding_RUN:{run}_{gen_success}.npy")
         
     return results
 
