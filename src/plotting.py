@@ -149,7 +149,7 @@ def autolabel(bars):
             ha='center', va='bottom', fontsize=8
         )
         
-def plot_gen_vs_run(args, results_no_inbreeding, results_inbreeding):
+def plot_gen_vs_run(args, results_no_inbreeding, results_inbreeding, thres):
     """
         Definition
         -----------
@@ -221,8 +221,8 @@ def plot_gen_vs_run(args, results_no_inbreeding, results_inbreeding):
     plt.subplot(1, 2, 1)
     
     # Plot scatter
-    plt.plot(run_numbers, generation_success_inbreeding, marker='o', linestyle='-', color='blue', label='Inbreeding')
-    plt.plot(run_numbers, generation_success_no_inbreeding, marker='x', linestyle='--', color='red', label='NO Inbreeding')
+    plt.plot(run_numbers, generation_success_inbreeding, marker='o', linestyle='-', color='blue', label='only fit')
+    plt.plot(run_numbers, generation_success_no_inbreeding, marker='x', linestyle='--', color='red', label='div+fit')
     
     # Show grid
     plt.title('Successful generation over Experimental Runs')
@@ -245,17 +245,17 @@ def plot_gen_vs_run(args, results_no_inbreeding, results_inbreeding):
     combined_max = max(max(diversity_inbreeding), max(diversity_no_inbreeding)) + 5
     
     # Plot bars for Inbreeding
-    bars_a = plt.bar(run_numbers - bar_width/2, diversity_inbreeding, bar_width,  label='Inbreeding', color='skyblue') #skyblue
+    bars_a = plt.bar(run_numbers - bar_width/2, diversity_inbreeding, bar_width,  label='only fit', color='skyblue') #skyblue
     
     # Plot bars for No Inbreeding
     # bars_b = plt.bar(run_numbers + bar_width/2, diversity_inbreeding_1, bar_width, label='Inbreeding Final', color='red') # salmon
-    bars_b = plt.bar(run_numbers + bar_width/2, diversity_no_inbreeding, bar_width, label='NO Inbreeding', color='salmon') # salmon
+    bars_b = plt.bar(run_numbers + bar_width/2, diversity_no_inbreeding, bar_width, label='div+fit', color='salmon') # salmon
 
     
     # Customize the subplot
     plt.xlabel('Experimental Run')
     plt.ylabel('Final Diversity')
-    plt.title('Comparison of Diversity: Inbreeding vs No Inbreeding')
+    plt.title('Comparison of Diversity: only fit vs div+fit')
     # plt.title('Comparison of Diversity: Inbreeding (at no-Inbreeding Gen solution) vs Inbreeding Final')
     plt.xticks(run_numbers)
     plt.ylim(combined_min, combined_max)
@@ -268,7 +268,7 @@ def plot_gen_vs_run(args, results_no_inbreeding, results_inbreeding):
     # Close
     plt.tight_layout()
     # plt.savefig(f"{os.getcwd()}/figures/{args.config_plot}_keep_last.png")
-    plt.savefig(f"{os.getcwd()}/figures/TESTing.png")
+    plt.savefig(f"{os.getcwd()}/figures/{thres}_diversity_TESTing.png")
     # plt.savefig(f"{os.getcwd()}/figures/genetic_programming/nguyen2/meeting/PopSize:300_InThres:5_Mrates:0.0005_Gens:150_TourSize:15_MaxD:9_InitD:3_keep_last.png")
     plt.close()
     
@@ -1071,7 +1071,6 @@ def collect_plot_values(dfs, attribute_1, n_runs=15):
         # Find maximum length list and padd the rest to be final attr at point of convergence
         max_length = max(len(sublist) for sublist in attribute_lists)
         global_max_length = min(150, max_length) # Capping at 150
-        print(global_max_length)
         global_max_length = 150
 
         # Pad all sublists in diversity_inbreeding
@@ -1220,72 +1219,77 @@ if __name__ == "__main__":
     
     # ------ Independent Bloat Study ------------- #
     
-    print("\nBloat ~ intron study.")
-    attributes = ['best_fitness', 'diversity', 'avg_tree_size', 'pop_intron_ratio']
-    bloat_thresholds = [5, 10, 14, "None"] # "Dynamic" TODO: Maybe include dynamic discussion in appendix.
-    sr_fns = ["nguyen1", "nguyen2"]#, "nguyen3", "nguyen4", "nguyen5"]
-    sr_dfs = {}
+    # print("\nBloat ~ intron study.")
+    # attributes = ['best_fitness', 'diversity', 'avg_tree_size', 'pop_intron_ratio']
+    # bloat_thresholds = [5, 10, 14, "None"] # "Dynamic" TODO: Maybe include dynamic discussion in appendix.
+    # sr_fns = ["nguyen1", "nguyen2", "nguyen3", "nguyen4", "nguyen5"]
+    # sr_dfs = {}
     
-    for sr in sr_fns:
+    # for sr in sr_fns:
         
-        print(f"\nSymbolic Regression Function: {sr}")
-        dict_results = []
-        dfs = []
+    #     print(f"\nSymbolic Regression Function: {sr}")
+    #     dict_results = []
+    #     dfs = []
         
-        for thres in bloat_thresholds:
+    #     for thres in bloat_thresholds:
             
-            print(f"\nBloat Threshold: {thres}")
+    #         print(f"\nBloat Threshold: {thres}")
             
-            # Read file
-            if thres == "None": # Read the inbreeding treatment without threshold
-                file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/{sr}/bloat/introns_PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:10_InitD:3_inbreeding.npy"
-            else:
-                file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/{sr}/bloat/introns_PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:10_InitD:3_no_inbreeding.npy"
+    #         # Read file
+    #         if thres == "None": # Read the inbreeding treatment without threshold
+    #             file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/{sr}/bloat/introns_PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:10_InitD:3_inbreeding.npy"
+    #         else:
+    #             file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/{sr}/bloat/introns_PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:10_InitD:3_no_inbreeding.npy"
             
-            # Load the data dict
-            data = np.load(file_path_name, allow_pickle=True)
-            results_inbreeding = data.item()
-            dict_results.append(results_inbreeding)
+    #         # Load the data dict
+    #         data = np.load(file_path_name, allow_pickle=True)
+    #         results_inbreeding = data.item()
+    #         dict_results.append(results_inbreeding)
             
-            # Pad the data for correct plotting
-            global_max_length = util.get_global_max_depth(results_inbreeding)
-            df_no_inbreeding = util.pad_dict_and_create_df(results_inbreeding, attributes, global_max_length, 15)
-            dfs.append(df_no_inbreeding)
+    #         # Pad the data for correct plotting
+    #         global_max_length = util.get_global_max_depth(results_inbreeding)
+    #         df_no_inbreeding = util.pad_dict_and_create_df(results_inbreeding, attributes, global_max_length, 15)
+    #         dfs.append(df_no_inbreeding)
             
             # Compute PEARSON correlations between all attributes or plot an indivdual heatmap
             # compute_correlations(results_inbreeding, config_plot=f"genetic_programming/{sr}/bloat/InThres:{thres}", temp_runs=15, attribute_1="pop_intron_ratio", attribute_2="diversity")
 
-        # Plot all heatmaps in a 2x2 grid
-        plot_combined_corr_heatmaps(dfs, bloat_thresholds, attributes, config_plot=f"{sr}_")
+    #     # Plot all heatmaps in a 2x2 grid
+    #     plot_combined_corr_heatmaps(dfs, bloat_thresholds, attributes, config_plot=f"{sr}_")
 
-        # Plot for all SR
-        # sr_dfs[sr] = {
-        #     'pop_intron_ratio': collect_plot_values(dict_results, 'pop_intron_ratio', n_runs=15), 
-        #     'diversity': collect_plot_values(dict_results, 'diversity', n_runs=15),
-        #     'avg_tree_size': collect_plot_values(dict_results, 'avg_tree_size', n_runs=15),
-        #     'best_fitness': collect_plot_values(dict_results, 'best_fitness', n_runs=15)
-        # }
+    #     # Plot for all SR
+    #     sr_dfs[sr] = {
+    #         'pop_intron_ratio': collect_plot_values(dict_results, 'pop_intron_ratio', n_runs=15), 
+    #         'diversity': collect_plot_values(dict_results, 'diversity', n_runs=15),
+    #         'avg_tree_size': collect_plot_values(dict_results, 'avg_tree_size', n_runs=15),
+    #         'best_fitness': collect_plot_values(dict_results, 'best_fitness', n_runs=15)
+    #     }
     
-    attributes =["diversity", "pop_intron_ratio", "avg_tree_size"]
-    # plot_all_sr_in_columns(sr_dfs, sr_fns, attributes, config_plot=f"genetic_programming/bloat/{sr}_structure", global_max_length=150)
+    # attributes =["diversity", "pop_intron_ratio", "avg_tree_size"]
+    # plot_all_sr_in_columns(sr_dfs, sr_fns, attributes, config_plot=f"genetic_programming/bloat/structure", global_max_length=150)
     
-    attributes =["best_fitness", "diversity", "pop_intron_ratio"]
-    # plot_all_sr_in_columns(sr_dfs, sr_fns, attributes, config_plot=f"genetic_programming/bloat/{sr}_search_metrics", global_max_length=150)
+    # attributes =["best_fitness", "diversity", "pop_intron_ratio"]
+    # plot_all_sr_in_columns(sr_dfs, sr_fns, attributes, config_plot=f"genetic_programming/bloat/search_metrics", global_max_length=150)
     
     
     # --------- Dynamic vs static ----------------- #
     
-    # print("\nNO Inbreeding")
-    # file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/nguyen3/gp_lambda/PopSize:300_InThres:Dynamic_Mrates:0.0005_Gens:150_TourSize:15_MaxD:10_InitD:3_no_inbreeding.npy"
-    # data = np.load(file_path_name, allow_pickle=True)
-    # results_no_inbreeding = data.item()
+    treatment = "no_inbreeding"
+    for thres in [5, 10, 14, "None"]:
+        
+        if thres == "None":
+            treatment = "inbreeding"
+        print("\nFitness + Diversity")
+        file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/nguyen1/diversity/PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:6_InitD:3_{treatment}.npy"
+        data = np.load(file_path_name, allow_pickle=True)
+        results_no_inbreeding = data.item()
 
-    # print("\nInbreeding")
-    # file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/nguyen3/bloat/PopSize:300_InThres:14_Mrates:0.0005_Gens:150_TourSize:15_MaxD:10_InitD:3_no_inbreeding.npy"
-    # data = np.load(file_path_name, allow_pickle=True)
-    # results_inbreeding = data.item()
-    
-    # plot_gen_vs_run(None, results_no_inbreeding, results_inbreeding)
+        print("\nJust Fitness")
+        file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/nguyen1/bloat/PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:6_InitD:3_{treatment}.npy"
+        data = np.load(file_path_name, allow_pickle=True)
+        results_inbreeding = data.item()
+        
+        plot_gen_vs_run(None, results_no_inbreeding, results_inbreeding, thres)
     
     # --------- Heatmaps and statistics ----------- #
     

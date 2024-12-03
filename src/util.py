@@ -27,18 +27,20 @@ def set_args():
     argparser.add_argument('--current_run', type=int, help='Current experimental run if multiple runs', default=0)
     
     # Experimental Hyperparameters
-    argparser.add_argument('--generations', type=int, help='Nº of generations to run the GA.', default=100)
-    argparser.add_argument('--pop_size', type=int, help='Population Size (could be used as fixed parameter in many settings)', default=100)
-    argparser.add_argument('--mutation_rate', type=float, help='Mutation Rate (could be used as fixed parameter in many settings)', default=0.01)
+    argparser.add_argument('--generations', type=int, help='Nº of generations to run the GA.', default=150)
+    argparser.add_argument('--pop_size', type=int, help='Population Size (could be used as fixed parameter in many settings)', default=300)
+    argparser.add_argument('--mutation_rate', type=float, help='Mutation Rate (could be used as fixed parameter in many settings)', default=0.0005)
     argparser.add_argument('--inbred_threshold', type=int, help='Inbreeding Threshold. Below threshold is considered inbreeding. \
                             Minimum genetic (tree-edit) distance required to allow mating', default=5)
-    argparser.add_argument('--tournament_size', type=int, help='Nº of individuals to take part in the Tournament selection', default=3)
-    argparser.add_argument('--exp_num_runs', type=int, help='Nº of experimental runs. (Fixed hyperparameters)', default=5) # intron_fraction
+    argparser.add_argument('--tournament_size', type=int, help='Nº of individuals to take part in the Tournament selection', default=15)
+    argparser.add_argument('--exp_num_runs', type=int, help='Nº of experimental runs. (Fixed hyperparameters)', default=15) # intron_fraction
     argparser.add_argument('--intron_fraction', type=float, help='Fraction of the population to compute introns from.', default=1.0) # intron_fraction
 
     # Genetic Programming variables
     argparser.add_argument('--max_depth', type=int, help='GP Tree maximum depth', default=15)
-    argparser.add_argument('--initial_depth', type=int, help='GP Tree maximum depth', default=6)
+    argparser.add_argument('--initial_depth', type=int, help='GP Tree maximum depth', default=3) 
+    argparser.add_argument('--fitness_weight', type=float, help='Proportional importance weight in the total fitness calculation for abs. error fitness', default=1.0)
+    argparser.add_argument('--diversity_weight', type=float, help='Proportional importance weight in the total fitness calculation for diversity', default=0.0)
     
     # Parse all arguments
     args = argparser.parse_args()
@@ -105,6 +107,45 @@ def pack_measures_lists(average_size_list, average_depth_list):
 def pack_metrics_lists(best_fitness_list, diversity_list):
     metrics_lists = (best_fitness_list, diversity_list)
     return metrics_lists
+
+# ---------------------- Diversity in fitness ---------------- #
+
+def compute_min_max_fit(population, max_fitness, min_fitness):
+    
+    # Get min - max fitness values for normalization
+    for individual in population:
+        min_fitness = min(min_fitness, individual.fitness)
+        max_fitness = max(max_fitness, individual.fitness)
+        
+    return max_fitness, min_fitness
+
+def compute_min_max_div(population, max_div, min_div):
+    # Compute min - max diversity for normalization.
+    for individual in population:
+        min_div = min(min_div, individual.diversity)
+        max_div = max(max_div, individual.diversity)
+        
+    return max_div, min_div
+            
+def scale_fitness_values(fitness_individual, max_fitness, min_fitness):
+    
+    # Avoid division by zero
+    if max_fitness == min_fitness:
+        fitness_individual = 1.0
+    else:
+        fitness_individual = (fitness_individual - min_fitness) / (max_fitness - min_fitness)
+        
+    return fitness_individual
+
+def scale_diversity_values(diversity_individual, max_div, min_div):
+    
+    # Avoid division by zero
+    if max_div == min_div:
+        diversity_individual = 1.0
+    else:
+        diversity_individual = (diversity_individual - min_div) / (max_div - min_div)
+        
+    return diversity_individual
     
 # -------------- Plotting helper functions --------------- #
         
@@ -263,4 +304,6 @@ def pad_dict_and_create_df(results, attributes, global_max_length, n_runs):
     df = pd.DataFrame(data)
     
     return df
+
+
 
