@@ -15,10 +15,8 @@ import random
 import util
 import experiments as exp
 import time
-import gp_landscape
-import gp_landscape_parallel as parallel
-# from gp_node import Individual
-from testing import Individual
+import gp_introns
+from gp_node import Individual
 
 class GeneticAlgorithmGPBloat:
     
@@ -689,8 +687,7 @@ if __name__ == "__main__":
     args = util.set_args()
     
     # Create Landscape
-    # landscape = gp_landscape.GPLandscape(args)
-    landscape = parallel.GPIntronAnalyzer(args)
+    landscape = gp_introns.GPIntronAnalyzer(args)
 
     # -------------------------------- Experiment: Multiple Runs w/ fixed population and fixed mutation rate --------------------------- #
     

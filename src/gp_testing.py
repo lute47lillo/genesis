@@ -15,6 +15,7 @@ import experiments as exp
 import plotting as plot
 import gp_math
 
+# TODO: Testing has its own self-contained classes. So, the iterations can be quick.
 class Node:
     def __init__(self, value, children=None):
         self.value = value  # Function or terminal

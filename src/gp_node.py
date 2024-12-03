@@ -10,20 +10,13 @@
 import numpy as np
 
 class Node:
-    def __init__(self, value, tree_id, children=None):
+    def __init__(self, value, children=None):
         self.value = value  # Function or terminal
         self.children = children if children is not None else []
-        self.tree_id = tree_id if tree_id is not None else None
-
+    
     def is_terminal(self):
         return len(self.children) == 0
     
-    def __getstate__(self):
-        return (self.value, self.children)
-
-    def __setstate__(self, state):
-        self.value, self.children = state
-
     def __str__(self):
         if self.is_terminal():
             return str(self.value)
@@ -31,31 +24,16 @@ class Node:
             return f"({self.value} {' '.join(str(child) for child in self.children)})"
 
 class Individual:
-    def __init__(self, args, fitness_function=None, tree=None, id=None, ancestors=None, parents=None, generation=0):
+    def __init__(self, args, fitness_function=None, tree=None, id=None):
         self.args = args
         self.bounds = self.args.bounds
-        self.max_depth = self.args.max_depth # TODO
+        self.max_depth = self.args.max_depth
         self.initial_depth = self.args.initial_depth
         self.id = id if id is not None else np.random.randint(1e9)
-        self.parents = parents if parents is not None else []
-        self.tree = tree if tree is not None else self.random_tree(depth=self.initial_depth) # Initial depth of 6 as in paper
-        self.ancestors = ancestors if ancestors is not None else set()
-        self.generation = generation  # Track the generation of the individual
-        self.succ_kinship = None
+        self.tree = tree if tree is not None else self.random_tree(depth=self.initial_depth)
         
         # Init fitness for individual in creation and self.success
         self.fitness, self.success = fitness_function(self.tree)
-        
-        # # Initial generation individual
-        # if not self.parents:
-        #     self.ancestors.add(self.id)
-            
-        # # Update ancestors with depth limitation
-        # ancestry_max_depth = 10  # Set the desired ancestry depth. Edit for computational issues
-        # for parent in self.parents:
-        #     if parent.generation >= self.generation - ancestry_max_depth:
-        #         self.ancestors.update(parent.ancestors)
-        #         self.ancestors.add(parent.id)
         
     def get_function_arity(self, function):
         arity_dict = {
