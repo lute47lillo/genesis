@@ -149,7 +149,7 @@ def autolabel(bars):
             ha='center', va='bottom', fontsize=8
         )
         
-def plot_gen_vs_run(args, results_no_inbreeding, results_inbreeding, thres):
+def plot_gen_vs_run(args, results_first, results_second, first_term, second_term, config):
     """
         Definition
         -----------
@@ -170,59 +170,32 @@ def plot_gen_vs_run(args, results_no_inbreeding, results_inbreeding, thres):
     run_numbers = np.arange(1, n_runs + 1)
     
     # Colect the generations
-    generation_success_inbreeding    = [results_inbreeding[run]['generation_success'] for run in range(n_runs)]
-    generation_success_no_inbreeding = [results_no_inbreeding[run]['generation_success'] for run in range(n_runs)]
+    generation_success_second    = [results_second[run]['generation_success'] for run in range(n_runs)]
+    generation_success_first = [results_first[run]['generation_success'] for run in range(n_runs)]
     
     # Collect the final diversity values for both treatments
-    diversity_inbreeding = [results_inbreeding[run]['diversity'][-1] for run in range(n_runs)]
-    diversity_no_inbreeding = [results_no_inbreeding[run]['diversity'][-1] for run in range(n_runs)]
+    diversity_second= [results_second[run]['diversity'][-1] for run in range(n_runs)]
+    diversity_first = [results_first[run]['diversity'][-1] for run in range(n_runs)]
     
     # Zip together to sort
-    paired_inbreeding = list(zip(generation_success_inbreeding, diversity_inbreeding))
-    paired_no_inbreeding = list(zip(generation_success_no_inbreeding, diversity_no_inbreeding))
+    paired_second = list(zip(generation_success_second, diversity_second))
+    paired_first = list(zip(generation_success_first, diversity_first))
     
-    sorted_paired_inbreeding = sorted(paired_inbreeding, key=lambda x: x[0])
-    sorted_paired_no_inbreeding = sorted(paired_no_inbreeding, key=lambda x: x[0])
+    sorted_paired_second= sorted(paired_second, key=lambda x: x[0])
+    sorted_paired_first = sorted(paired_first, key=lambda x: x[0])
     
     # Unzip
-    generation_success_inbreeding, diversity_inbreeding = zip(*sorted_paired_inbreeding)
-    generation_success_no_inbreeding, diversity_no_inbreeding = zip(*sorted_paired_no_inbreeding)
+    generation_success_second, diversity_second = zip(*sorted_paired_second)
+    generation_success_first, diversity_first = zip(*sorted_paired_first)
     
-    # NEED TO KEEP for final at gen is best
-    # ------
-    # Colect the generations
-    # generation_success_inbreeding    = [results_inbreeding[run]['generation_success'] for run in range(n_runs)]
-    # generation_success_no_inbreeding = [results_no_inbreeding[run]['generation_success'] for run in range(n_runs)]
-    
-    # diversity_inbreeding = [results_inbreeding[run]['diversity'] for run in range(n_runs)]
-    # diversity_no_inbreeding = [results_no_inbreeding[run]['diversity'] for run in range(n_runs)]
-    
-    # paired_inbreeding = list(zip(generation_success_inbreeding, diversity_inbreeding))
-    # paired_no_inbreeding = list(zip(generation_success_no_inbreeding, diversity_no_inbreeding))
-    
-    # sorted_paired_inbreeding = sorted(paired_inbreeding, key=lambda x: x[0])
-    # sorted_paired_no_inbreeding = sorted(paired_no_inbreeding, key=lambda x: x[0])
-    
-    # # Unzip
-    # generation_success_inbreeding, diversity_inbreeding = zip(*sorted_paired_inbreeding)
-    # generation_success_no_inbreeding, diversity_no_inbreeding = zip(*sorted_paired_no_inbreeding)
-    
-    # print(generation_success_no_inbreeding)
-    # print(generation_success_inbreeding)
-    # print(generation_success_no_inbreeding[n_runs-1])
-    # print(diversity_inbreeding[0][generation_success_no_inbreeding[0]])
-    # diversity_inbreeding = [diversity_inbreeding[idx][generation_success_no_inbreeding[idx]-1] for idx in range(n_runs)]
-    # diversity_no_inbreeding = [diversity_no_inbreeding[idx][-1] for idx in range(n_runs)]
-    
-
     # ----------------------------
     # Subplot 1: Generation Success
     # ----------------------------
     plt.subplot(1, 2, 1)
     
     # Plot scatter
-    plt.plot(run_numbers, generation_success_inbreeding, marker='o', linestyle='-', color='blue', label='only fit')
-    plt.plot(run_numbers, generation_success_no_inbreeding, marker='x', linestyle='--', color='red', label='div+fit')
+    plt.plot(run_numbers, generation_success_second, marker='o', linestyle='-', color='blue', label=first_term)
+    plt.plot(run_numbers, generation_success_first, marker='x', linestyle='--', color='red', label=second_term)
     
     # Show grid
     plt.title('Successful generation over Experimental Runs')
@@ -241,21 +214,20 @@ def plot_gen_vs_run(args, results_no_inbreeding, results_inbreeding, thres):
     bar_width = 0.35  # Adjust as needed
     
     # Calculate y-axis limits with epsilon
-    combined_min = min(min(diversity_inbreeding), min(diversity_no_inbreeding)) - 5
-    combined_max = max(max(diversity_inbreeding), max(diversity_no_inbreeding)) + 5
+    combined_min = min(min(diversity_second), min(diversity_first)) - 5
+    combined_max = max(max(diversity_second), max(diversity_first)) + 5
     
     # Plot bars for Inbreeding
-    bars_a = plt.bar(run_numbers - bar_width/2, diversity_inbreeding, bar_width,  label='only fit', color='skyblue') #skyblue
+    bars_a = plt.bar(run_numbers - bar_width/2, diversity_second, bar_width,  label=first_term, color='skyblue') #skyblue
     
     # Plot bars for No Inbreeding
-    # bars_b = plt.bar(run_numbers + bar_width/2, diversity_inbreeding_1, bar_width, label='Inbreeding Final', color='red') # salmon
-    bars_b = plt.bar(run_numbers + bar_width/2, diversity_no_inbreeding, bar_width, label='div+fit', color='salmon') # salmon
+    bars_b = plt.bar(run_numbers + bar_width/2, diversity_first, bar_width, label=second_term, color='salmon') # salmon
 
     
     # Customize the subplot
     plt.xlabel('Experimental Run')
     plt.ylabel('Final Diversity')
-    plt.title('Comparison of Diversity: only fit vs div+fit')
+    plt.title(f'Comparison of {first_term} vs {second_term}')
     # plt.title('Comparison of Diversity: Inbreeding (at no-Inbreeding Gen solution) vs Inbreeding Final')
     plt.xticks(run_numbers)
     plt.ylim(combined_min, combined_max)
@@ -267,9 +239,7 @@ def plot_gen_vs_run(args, results_no_inbreeding, results_inbreeding, thres):
     
     # Close
     plt.tight_layout()
-    # plt.savefig(f"{os.getcwd()}/figures/{args.config_plot}_keep_last.png")
-    plt.savefig(f"{os.getcwd()}/figures/{thres}_diversity_TESTing.png")
-    # plt.savefig(f"{os.getcwd()}/figures/genetic_programming/nguyen2/meeting/PopSize:300_InThres:5_Mrates:0.0005_Gens:150_TourSize:15_MaxD:9_InitD:3_keep_last.png")
+    plt.savefig(f"{os.getcwd()}/figures/experiments/{config}_{first_term}_vs_{second_term}.png")
     plt.close()
     
 def plot_time_of_convergence_vs_diversity(args, results_no_inbreeding, results_inbreeding, temp_runs=15):
@@ -1054,7 +1024,7 @@ def plot_correlation_heatmap(df_no_inbreeding, df_inbreeding, attributes, config
     plt.savefig(save_path, bbox_inches='tight')
     plt.close()
     
-def collect_plot_values(dfs, attribute_1, n_runs=15):
+def collect_plot_values(dfs, bloat_thresholds, attribute_1, n_runs=15):
     
     # Metrics for CI
     gs_list = []
@@ -1259,10 +1229,10 @@ if __name__ == "__main__":
 
     #     # Plot for all SR
     #     sr_dfs[sr] = {
-    #         'pop_intron_ratio': collect_plot_values(dict_results, 'pop_intron_ratio', n_runs=15), 
-    #         'diversity': collect_plot_values(dict_results, 'diversity', n_runs=15),
-    #         'avg_tree_size': collect_plot_values(dict_results, 'avg_tree_size', n_runs=15),
-    #         'best_fitness': collect_plot_values(dict_results, 'best_fitness', n_runs=15)
+    #         'pop_intron_ratio': collect_plot_values(dict_results, bloat_thresholds, 'pop_intron_ratio', n_runs=15), 
+    #         'diversity': collect_plot_values(dict_results, bloat_thresholds, 'diversity', n_runs=15),
+    #         'avg_tree_size': collect_plot_values(dict_results, bloat_thresholds, 'avg_tree_size', n_runs=15),
+    #         'best_fitness': collect_plot_values(dict_results, bloat_thresholds, 'best_fitness', n_runs=15)
     #     }
     
     # attributes =["diversity", "pop_intron_ratio", "avg_tree_size"]
@@ -1274,23 +1244,42 @@ if __name__ == "__main__":
     
     # --------- Dynamic vs static ----------------- #
     
+    # treatment = "no_inbreeding"
+    # for thres in [5, 10, 14, "None"]:
+        
+    #     if thres == "None":
+    #         treatment = "inbreeding"
+    #     print("\nFitness + Diversity")
+    #     file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/nguyen1/diversity/PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:6_InitD:3_{treatment}.npy"
+    #     data = np.load(file_path_name, allow_pickle=True)
+    #     results_no_inbreeding = data.item()
+
+    #     print("\nJust Fitness")
+    #     file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/nguyen1/bloat/PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:6_InitD:3_{treatment}.npy"
+    #     data = np.load(file_path_name, allow_pickle=True)
+    #     results_inbreeding = data.item()
+        
+    #     plot_gen_vs_run(None, results_no_inbreeding, results_inbreeding, thres)
+            
+    # --------- InbreedBlock vs InbreedUnBlock ----------------- #
     treatment = "no_inbreeding"
-    for thres in [5, 10, 14, "None"]:
+    for thres in [10]:
         
         if thres == "None":
             treatment = "inbreeding"
-        print("\nFitness + Diversity")
+            
+        print("\nInbreedBlock")
         file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/nguyen1/diversity/PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:6_InitD:3_{treatment}.npy"
         data = np.load(file_path_name, allow_pickle=True)
-        results_no_inbreeding = data.item()
+        results_first = data.item()
 
-        print("\nJust Fitness")
-        file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/nguyen1/bloat/PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:6_InitD:3_{treatment}.npy"
+        print("\nInbreedUnblock")
+        file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/nguyen1/unblock/FW:1.0_DW:0.0_PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:6_InitD:3_{treatment}.npy"
         data = np.load(file_path_name, allow_pickle=True)
-        results_inbreeding = data.item()
+        results_second = data.item()
         
-        plot_gen_vs_run(None, results_no_inbreeding, results_inbreeding, thres)
-    
+        plot_gen_vs_run(None, results_first, results_second, first_term="InbreedBlock", second_term="InbreedUnblock", config="UnblockComparison")
+        
     # --------- Heatmaps and statistics ----------- #
     
     # depths = [6, 7, 8, 9, 10] 

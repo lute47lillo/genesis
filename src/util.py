@@ -37,7 +37,7 @@ def set_args():
     argparser.add_argument('--intron_fraction', type=float, help='Fraction of the population to compute introns from.', default=1.0) # intron_fraction
 
     # Genetic Programming variables
-    argparser.add_argument('--max_depth', type=int, help='GP Tree maximum depth', default=15)
+    argparser.add_argument('--max_depth', type=int, help='GP Tree maximum depth', default=10)
     argparser.add_argument('--initial_depth', type=int, help='GP Tree maximum depth', default=3) 
     argparser.add_argument('--fitness_weight', type=float, help='Proportional importance weight in the total fitness calculation for abs. error fitness', default=1.0)
     argparser.add_argument('--diversity_weight', type=float, help='Proportional importance weight in the total fitness calculation for diversity', default=0.0)
@@ -304,6 +304,3 @@ def pad_dict_and_create_df(results, attributes, global_max_length, n_runs):
     df = pd.DataFrame(data)
     
     return df
-
-
-
