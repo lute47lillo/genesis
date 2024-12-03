@@ -27,17 +27,20 @@ def set_args():
     argparser.add_argument('--current_run', type=int, help='Current experimental run if multiple runs', default=0)
     
     # Experimental Hyperparameters
-    argparser.add_argument('--generations', type=int, help='Nº of generations to run the GA.', default=100)
-    argparser.add_argument('--pop_size', type=int, help='Population Size (could be used as fixed parameter in many settings)', default=100)
-    argparser.add_argument('--mutation_rate', type=float, help='Mutation Rate (could be used as fixed parameter in many settings)', default=0.01)
+    argparser.add_argument('--generations', type=int, help='Nº of generations to run the GA.', default=150)
+    argparser.add_argument('--pop_size', type=int, help='Population Size (could be used as fixed parameter in many settings)', default=300)
+    argparser.add_argument('--mutation_rate', type=float, help='Mutation Rate (could be used as fixed parameter in many settings)', default=0.0005)
     argparser.add_argument('--inbred_threshold', type=int, help='Inbreeding Threshold. Below threshold is considered inbreeding. \
                             Minimum genetic (tree-edit) distance required to allow mating', default=5)
-    argparser.add_argument('--tournament_size', type=int, help='Nº of individuals to take part in the Tournament selection', default=3)
-    argparser.add_argument('--exp_num_runs', type=int, help='Nº of experimental runs. (Fixed hyperparameters)', default=5)
-    
+    argparser.add_argument('--tournament_size', type=int, help='Nº of individuals to take part in the Tournament selection', default=15)
+    argparser.add_argument('--exp_num_runs', type=int, help='Nº of experimental runs. (Fixed hyperparameters)', default=15) # intron_fraction
+    argparser.add_argument('--intron_fraction', type=float, help='Fraction of the population to compute introns from.', default=1.0) # intron_fraction
+
     # Genetic Programming variables
     argparser.add_argument('--max_depth', type=int, help='GP Tree maximum depth', default=15)
-    argparser.add_argument('--initial_depth', type=int, help='GP Tree maximum depth', default=6)
+    argparser.add_argument('--initial_depth', type=int, help='GP Tree maximum depth', default=3) 
+    argparser.add_argument('--fitness_weight', type=float, help='Proportional importance weight in the total fitness calculation for abs. error fitness', default=1.0)
+    argparser.add_argument('--diversity_weight', type=float, help='Proportional importance weight in the total fitness calculation for diversity', default=0.0)
     
     # Parse all arguments
     args = argparser.parse_args()
@@ -87,160 +90,63 @@ def select_gp_benchmark(args):
     
     return gp_bench_fn
 
-# --------------------------- Genetic Programming visualization ------------------------------- #
+# --------------------------- Intron Helper Functions ------------------------------- #
 
-class Node:
-    def __init__(self, value, children=None):
-        self.value = value  # Operator (e.g., '+', '-', '*', '/') or Operand (e.g., 'x', '1.0')
-        self.children = children if children is not None else []
+def pack_intron_lists(pop_ration_in, avg_ratio_in, pop_total_in, pop_total_nodes):
+    intron_lists = (pop_ration_in, avg_ratio_in, pop_total_in, pop_total_nodes)
+    return intron_lists
 
-    def is_terminal(self):
-        """
-        Determines if the node is a terminal node (no children).
-        """
-        return len(self.children) == 0
+def pack_kinship_lists(avg_kinship, t_close, t_far):
+    kinship_lists = (avg_kinship, t_close, t_far)
+    return kinship_lists
 
-    def __repr__(self):
-        return f"Node({self.value})"
+def pack_measures_lists(average_size_list, average_depth_list):
+    measures_lists = (average_size_list, average_depth_list)
+    return measures_lists
 
-def tokenize(expression):
-    """
-    Converts the input string into a list of tokens.
-    """
-    tokens = []
-    current_token = ""
-    for char in expression:
-        if char in ('(', ')'):
-            if current_token:
-                tokens.append(current_token)
-                current_token = ""
-            tokens.append(char)
-        elif char.isspace():
-            if current_token:
-                tokens.append(current_token)
-                current_token = ""
-        else:
-            current_token += char
-    if current_token:
-        tokens.append(current_token)
-    return tokens
+def pack_metrics_lists(best_fitness_list, diversity_list):
+    metrics_lists = (best_fitness_list, diversity_list)
+    return metrics_lists
 
-def parse(tokens):
-    """
-    Parses the list of tokens into a tree of Nodes.
-    """
-    if len(tokens) == 0:
-        return None, tokens
+# ---------------------- Diversity in fitness ---------------- #
 
-    token = tokens.pop(0)
+def compute_min_max_fit(population, max_fitness, min_fitness):
+    
+    # Get min - max fitness values for normalization
+    for individual in population:
+        min_fitness = min(min_fitness, individual.fitness)
+        max_fitness = max(max_fitness, individual.fitness)
+        
+    return max_fitness, min_fitness
 
-    if token == '(':
-        # Next token should be the operator
-        if len(tokens) == 0:
-            raise SyntaxError("Unexpected end of tokens after '('")
-        operator = tokens.pop(0)
-        node = Node(operator)
-        while tokens and tokens[0] != ')':
-            child, tokens = parse(tokens)
-            if child is not None:
-                node.children.append(child)
-        if not tokens:
-            raise SyntaxError("Missing ')' in expression")
-        tokens.pop(0)  # Remove ')'
-        return node, tokens
-    elif token == ')':
-        # Should not reach here
-        raise SyntaxError("Unexpected ')' in expression")
+def compute_min_max_div(population, max_div, min_div):
+    # Compute min - max diversity for normalization.
+    for individual in population:
+        min_div = min(min_div, individual.diversity)
+        max_div = max(max_div, individual.diversity)
+        
+    return max_div, min_div
+            
+def scale_fitness_values(fitness_individual, max_fitness, min_fitness):
+    
+    # Avoid division by zero
+    if max_fitness == min_fitness:
+        fitness_individual = 1.0
     else:
-        # Operand or operator without children (terminal node)
-        return Node(token), tokens
-
-
-def print_tree(node, indent=""):
-    """
-    Recursively prints the tree in an indented format.
-    """
-    if node is None:
-        print(indent + "None")
-        return
-    print(indent + str(node.value))
-    for child in node.children:
-        print_tree(child, indent + "  ")
+        fitness_individual = (fitness_individual - min_fitness) / (max_fitness - min_fitness)
         
-def tree_to_expression(node):
-    """
-    Converts the Node tree into a simplified SymPy expression.
-    """
-    sympy_expr = tree_to_sympy(node)
-    expanded_expr = expand(sympy_expr)
-    simplified_expr = simplify(expanded_expr)
-    return simplified_expr
-        
-def convert_tree_to_expression(expression_str):
-    """
-    Converts a GP tree string in prefix notation into a simplified SymPy expression.
-    
-    Parameters:
-        expression_str (str): The GP tree in prefix notation.
-    
-    Returns:
-        sympy.Expr: The simplified SymPy expression.
-    """
-    tokens = tokenize(expression_str)
-    try:
-        tree, remaining = parse(tokens)
-        if remaining:
-            print("Warning: Remaining tokens after parsing:", remaining)
-    except SyntaxError as e:
-        print("Syntax Error during parsing:", e)
-        tree = None
-    
-    if tree is None:
-        raise ValueError("Invalid expression string. Parsing failed.")
-    
-    expr = tree_to_expression(tree)
-    return expr
+    return fitness_individual
 
-def tree_to_sympy(node):
-    """
-    Recursively converts a Node tree into a SymPy expression.
-    """
-    # Define the symbol 'x'
-    x = symbols('x')    
+def scale_diversity_values(diversity_individual, max_div, min_div):
     
-    if node.is_terminal():
-        if node.value == 'x':
-            return x
-        else:
-            try:
-                return sympify(node.value)
-            except:
-                raise ValueError(f"Invalid terminal node value: {node.value}")
+    # Avoid division by zero
+    if max_div == min_div:
+        diversity_individual = 1.0
     else:
-        func = node.value
-        args = [tree_to_sympy(child) for child in node.children]
-        if func == '+':
-            return args[0] + args[1]
-        elif func == '-':
-            if len(args) == 1:
-                return -args[0]
-            elif len(args) == 2:
-                return args[0] - args[1]
-            else:
-                raise ValueError(f"Unsupported number of arguments for '-': {len(args)}")
-        elif func == '*':
-            return args[0] * args[1]
-        elif func == '/':
-            return args[0] / args[1]
-        elif func == 'sin':
-            return sympy.sin(args[0])
-        elif func == 'cos':
-            return sympy.cos(args[0])
-        elif func == 'log':
-            return sympy.log(args[0])
-        else:
-            raise ValueError(f"Unsupported function: {func}")
+        diversity_individual = (diversity_individual - min_div) / (max_div - min_div)
         
+    return diversity_individual
+    
 # -------------- Plotting helper functions --------------- #
         
 def create_padded_df(data, metric, run_ids):
@@ -344,15 +250,6 @@ def flatten_results_in_max_depth_diversity(bench_name, treatment_name, threshold
                 })
     return pd.DataFrame(data_df)
 
-# Padding Function
-def pad_sublist(sublist, target_length):
-    current_length = len(sublist)
-    if current_length < target_length:
-        padding = [sublist[-1]] * (target_length - current_length)
-        return sublist + padding
-    else:
-        return sublist
-
 # Determine Global Maximum Depth
 def get_global_max_depth(*results_dicts):
     max_depth = 0
@@ -371,3 +268,42 @@ def pad_diversity_lists(results_dict, target_length):
         results_dict[run]['diversity'] = padded_diversity
         print(f"Run {run}: Padded Diversity Lengths = {[len(s) for s in results_dict[run]['diversity']]}")
     return results_dict
+
+# Create DF for all attributes for the given dictionary treatment
+def pad_dict_and_create_df(results, attributes, global_max_length, n_runs):
+    
+    data = {}
+    for attr in attributes:
+        attr_list = [results[run][attr] for run in range(n_runs)]
+        # print(len(attr_list))
+        
+        # Pad up to max length of any run for 1:1 comparison
+        attr_padded = [pad_sublist(sublist, global_max_length) for sublist in attr_list]
+        for run in range(n_runs):
+            results[run][attr] = attr_padded[run]
+        
+        # Initialize a list to collect data from all runs for this attribute
+        attr_data = []
+        
+        # Iterate through each run
+        for run in results:
+            # Extract the first 150 elements for the current attribute
+            # Convert to NumPy array for efficient computation
+            attr_values = np.array(results[run][attr][:150])
+            attr_data.append(attr_values)
+        
+        # Stack the data vertically to create a 2D NumPy array (runs x elements)
+        stacked_data = np.vstack(attr_data)  # Shape: (15, 150)
+        
+        # Compute the mean across the runs (axis=0)
+        mean_values = np.mean(stacked_data, axis=0)  # Shape: (150,)
+        
+        # Store the averaged data in the 'data' dictionary
+        data[attr] = mean_values
+        
+    df = pd.DataFrame(data)
+    
+    return df
+
+
+

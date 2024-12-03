@@ -319,41 +319,140 @@ class GPLandscapeTest:
         
     # ---------------------- Introns detection. EXPERIMENTAL ------------- #
     
-    def detect_redundant_nodes(self, node, x_values):
+    def sample_input_values(self, num_samples=10):
         """
-            Detects redundant nodes (introns) in a tree by checking if replacing the node with a terminal
-            value results in the same output for all x_values.
+        Generates a set of sample input values for x.
+        
+        Parameters:
+        -----------
+        num_samples : int
+            The number of sample input values to generate.
+        
+        Returns:
+        --------
+        list of floats
+            The list of sample x values.
+        """
+        lower_bound, upper_bound = -4.0, 4.0
+        return [random.uniform(lower_bound, upper_bound) for _ in range(num_samples)]
+    
+    def subtree_evaluates_to_zero(self, node):
+        """
+        Determines if a subtree always evaluates to zero for all input values.
+        
+        Parameters:
+        -----------
+        node : Node
+            The root node of the subtree to evaluate.
+        
+        Returns:
+        --------
+        bool
+            True if the subtree evaluates to zero for all x in x_values, False otherwise.
+        """
+        x_values = self.sample_input_values()
+        outputs = [self.evaluate_tree(node, x) for x in x_values]
+        epsilon = 1e-6
+        return all(abs(output) < epsilon for output in outputs)
+
+
+    def detect_pattern_introns(self, node):
+        """
+        Detects introns based on specific patterns where adding or subtracting zero
+        does not affect the program output.
+        
+        Parameters:
+        -----------
+        node : Node
+            The root node of the subtree to check.
+        
+        Returns:
+        --------
+        list of tuples
+            Each tuple contains (intron_node, intron_size).
+        """
+        introns = []
+        
+        if node is None or node.is_terminal():
+            return introns
+        
+        # Pattern: Node + 0 or 0 + Node
+        if node.value == '+':
+            left_child = node.children[0]
+            right_child = node.children[1]
             
-            Computationally expensive. 
-        """
-        if node.is_terminal():
-            return []
+            if self.subtree_evaluates_to_zero(left_child):
+                # Pattern: 0 + Node
+                intron_node = left_child
+                intron_size = self.count_nodes(intron_node)
+                introns.append((intron_node, intron_size))
+            elif self.subtree_evaluates_to_zero(right_child):
+                # Pattern: Node + 0
+                intron_node = right_child
+                intron_size = self.count_nodes(intron_node)
+                introns.append((intron_node, intron_size))
         
-        redundant_nodes = []
-        original_outputs = [self.evaluate_tree(node, x) for x in x_values]
-        
-        # Replace the node with a placeholder value (e.g., 'x') and evaluate
-        original_value = node.value
-        original_children = node.children
-        node.value = 'x'
-        node.children = []
-        
-        replaced_outputs = [self.evaluate_tree(node, x) for x in x_values]
-        
-        # Restore the original node
-        node.value = original_value
-        node.children = original_children
-        
-        # Compare outputs
-        if all(o1 == o2 for o1, o2 in zip(original_outputs, replaced_outputs)):
-            redundant_nodes.append(node)
+        # Pattern: Node - 0
+        elif node.value == '-':
+            right_child = node.children[1]
+            
+            if self.subtree_evaluates_to_zero(right_child):
+                intron_node = right_child
+                intron_size = self.count_nodes(intron_node)
+                introns.append((intron_node, intron_size))
         
         # Recursively check child nodes
         for child in node.children:
-            redundant_nodes.extend(self.detect_redundant_nodes(child, x_values))
+            introns.extend(self.detect_pattern_introns(child))
         
-        return redundant_nodes
+        return introns
     
+    def measure_introns(self, population):
+        """
+        Measures intron statistics in the population.
+        
+        Parameters:
+        -----------
+        population : list
+            The list of Individual objects in the population.
+        
+        Returns:
+        --------
+        dict
+            A dictionary containing total and average intron metrics.
+        """
+        population_total_intron_nodes = 0
+        population_total_nodes = 0
+        individual_intron_ratios = []
+        
+        for individual in population:
+            # Detect introns and their sizes
+            introns = self.detect_pattern_introns(individual.tree)
+            total_intron_nodes = sum(intron_size for _, intron_size in introns)
+            
+            # Total nodes in the individual's tree
+            total_nodes = self.count_nodes(individual.tree)
+            
+            # Intron ratio for the individual
+            intron_ratio = total_intron_nodes / total_nodes if total_nodes > 0 else 0
+            
+            # Update population totals
+            population_total_intron_nodes += total_intron_nodes
+            population_total_nodes += total_nodes
+            individual_intron_ratios.append(intron_ratio)
+        
+        # Population-level metrics
+        population_intron_ratio = population_total_intron_nodes / population_total_nodes if population_total_nodes > 0 else 0
+        average_intron_ratio = sum(individual_intron_ratios) / len(individual_intron_ratios) if individual_intron_ratios else 0
+        
+        return {
+            'population_total_intron_nodes': population_total_intron_nodes,
+            'population_total_nodes': population_total_nodes,
+            'population_intron_ratio': population_intron_ratio,
+            'average_intron_ratio': average_intron_ratio
+        }
+
+
     def count_nodes(self, node):
         """
             Definition
@@ -453,16 +552,86 @@ class GPLandscapeTest:
                 
         fitness = 1 / (total_error + 1e-6)  # Fitness increases as total error decreases or could return just total error
         return fitness, success
-
-class TestMeasureDiversity(unittest.TestCase):
     
-    def test_init_pop(self):
-        gp_system = GeneticProgrammingSystem(None)
-        population = gp_system.initialize_population(10, 3)
+import unittest
+
+# Assume the necessary classes and methods have been imported
+# from your GP implementation
+def create_tree_with_zero_introns():
+    # Subtree (x - x) evaluates to zero
+    zero_subtree = Node('-', [Node('x'), Node('x')])
+    
+    # Full tree: x + (x - x)
+    root = Node('+', [Node('x'), zero_subtree])
+    return root
+
+
+
+class TestPatternIntrons(unittest.TestCase):
+    
+    def test_detect_pattern_introns(self):
         
-        for i, indiv in enumerate(population):
-            depth_i = gp_system.tree_depth(indiv.tree)
-            print(f"\n({i}) Depth: {depth_i}, tree: {indiv.tree}")
+        # Create the tree with a known intron
+        tree = create_tree_with_zero_introns()
+        landscape = GPLandscapeTest()
+        
+        # Detect introns in the tree
+        introns = landscape.detect_pattern_introns(tree)
+ 
+        tree = introns[0][0]
+        size = introns[0][1]
+        print(tree, size)
+        
+        # Expected intron size is 3 (nodes: '-', 'x', 'x')
+        expected_intron_size = 3
+        
+        # Verify that introns were detected
+        self.assertTrue(len(introns) > 0, "No introns detected when there should be.")
+        
+        # Extract the sizes of detected introns
+        detected_intron_sizes = [intron_size for _, intron_size in introns]
+        
+        # Check that the expected intron size is in the detected intron sizes
+        self.assertIn(expected_intron_size, detected_intron_sizes, "Intron of expected size not detected.")
+
+    def test_detect_introns_pop(self):
+        
+        # Create a population
+        gp = GeneticProgrammingSystem(None)
+        pop = gp.initialize_population(20, 3)
+        
+        land = GPLandscapeTest()
+        out = land.measure_introns(pop)
+        
+        print(out)
+        
+    # TODO: Intron tests
+    # def test_subtrees_are_identical():
+    #     # Create nodes
+    #     node_a1 = Node('+', [Node('x'), Node(1.0)])
+    #     node_a2 = Node('+', [Node('x'), Node(1.0)])
+    #     node_b = Node('*', [Node('x'), Node(1.0)])
+
+    #     analyzer = GPIntronAnalyzer(args=None, initialize_pool=False)
+
+    #     # Test identical subtrees
+    #     assert analyzer.subtrees_are_identical(node_a1, node_a2) == True, "Identical subtrees not recognized."
+
+    #     # Test different subtrees
+        # assert analyzer.subtrees_are_identical(node_a1, node_b) == False, "Different subtrees incorrectly recognized as identical."
+
+
+
+# class TestMeasureDiversity(unittest.TestCase):
+    
+    # def test_init_pop(self):
+        # gp_system = GeneticProgrammingSystem(None)
+        # population = gp_system.initialize_population(10, 3)
+        
+        # for i, indiv in enumerate(population):
+        #     depth_i = gp_system.tree_depth(indiv.tree)
+        #     print(f"\n({i}) Depth: {depth_i}, tree: {indiv.tree}")
+            
     
     # def test_measure_diversity(self):
     #     # Create sample trees for testing
