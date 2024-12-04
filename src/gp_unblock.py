@@ -76,7 +76,7 @@ class Individual:
     def __str__(self):
         return str(self.tree)
 
-class GeneticAlgorithmGPTesting:
+class GeneticAlgorithmGPUnblock:
     
     def __init__(self, args, mut_rate, inbred_threshold=None):
         self.args = args
@@ -778,5 +778,5 @@ if __name__ == "__main__":
     args.config_plot = term1 + term2 + term3
         
     print("Running GA with forced Inbreeding Mating ~ InbreedBlock...")
-    results_no_inbreeding = exp.test_multiple_runs_function_gp(args, gp_landscape, args.inbred_threshold)
+    results_no_inbreeding = exp.test_multiple_runs_function_unblock(args, gp_landscape, args.inbred_threshold)
     util.save_accuracy(results_no_inbreeding, f"{args.config_plot}_no_inbreeding.npy")

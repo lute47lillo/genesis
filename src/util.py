@@ -40,7 +40,8 @@ def set_args():
     argparser.add_argument('--max_depth', type=int, help='GP Tree maximum depth', default=10)
     argparser.add_argument('--initial_depth', type=int, help='GP Tree maximum depth', default=3) 
     argparser.add_argument('--fitness_weight', type=float, help='Proportional importance weight in the total fitness calculation for abs. error fitness', default=1.0)
-    argparser.add_argument('--diversity_weight', type=float, help='Proportional importance weight in the total fitness calculation for diversity', default=0.0)
+    argparser.add_argument('--diversity_weight', type=float, help='Proportional importance weight in the total fitness calculation for diversity', default=0.0) 
+    argparser.add_argument('--sigma_share', type=float, help='The sharing radius. It determines how far the sharing effect extends.', default=0.1)
     
     # Parse all arguments
     args = argparser.parse_args()

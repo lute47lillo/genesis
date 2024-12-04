@@ -1,5 +1,8 @@
 from gp_testing import GeneticAlgorithmGPTesting
 from gp_bloat import GeneticAlgorithmGPBloat
+from gp_unblock import GeneticAlgorithmGPUnblock
+from gp_sharing import GeneticAlgorithmGPSharing
+from gp_only_mut import GeneticAlgorithmGPMutation
 import util as util
 import random
     
@@ -31,6 +34,95 @@ def test_multiple_runs_function_gp(args, landscape, inbred_threshold):
         print(f"Population Size {args.pop_size} & Mutation Rate: {args.mutation_rate}: Best Fitness {best_fitness_list[-1]:.3f} ~ Best Diversity {diversity_list[-1]:.3f}")
 
     return results
+
+# ----------------------------------- Genetic Programming Fitness Sharing -------------------------- #
+
+def test_multiple_runs_function_sharing(args, landscape, inbred_threshold):
+    
+    # Initialize GP-based GA for Any given function
+    results = {}
+    for run in range(args.exp_num_runs):
+        # Reset the seed for every run
+        util.set_seed(random.randint(0, 999999))
+       
+        print(f"Running experiment nº: {run}")
+        ga_gp = GeneticAlgorithmGPSharing(
+            args=args,
+            mut_rate=args.mutation_rate,
+            inbred_threshold=inbred_threshold  # Adjust based on inbreeding prevention
+        )
+        # Run GP-based GA for Given Function
+        best_fitness_list, diversity_list, gen_success = ga_gp.run(landscape.symbolic_fitness_function)
+        
+        results[run] = {
+                'best_fitness': best_fitness_list,
+                'diversity': diversity_list, 
+                'generation_success': gen_success
+            }
+        
+        print(f"Population Size {args.pop_size} & Mutation Rate: {args.mutation_rate}: Best Fitness {best_fitness_list[-1]:.3f} ~ Best Diversity {diversity_list[-1]:.3f}")
+
+    return results
+
+# ----------------------------------- Genetic Programming InbreedUnblock -------------------------- #
+
+def test_multiple_runs_function_unblock(args, landscape, inbred_threshold):
+    
+    # Initialize GP-based GA for Any given function
+    results = {}
+    for run in range(args.exp_num_runs):
+        # Reset the seed for every run
+        util.set_seed(random.randint(0, 999999))
+       
+        print(f"Running experiment nº: {run}")
+        ga_gp = GeneticAlgorithmGPUnblock(
+            args=args,
+            mut_rate=args.mutation_rate,
+            inbred_threshold=inbred_threshold  # Adjust based on inbreeding prevention
+        )
+        # Run GP-based GA for Given Function
+        best_fitness_list, diversity_list, gen_success = ga_gp.run(landscape.symbolic_fitness_function)
+        
+        results[run] = {
+                'best_fitness': best_fitness_list,
+                'diversity': diversity_list, 
+                'generation_success': gen_success
+            }
+        
+        print(f"Population Size {args.pop_size} & Mutation Rate: {args.mutation_rate}: Best Fitness {best_fitness_list[-1]:.3f} ~ Best Diversity {diversity_list[-1]:.3f}")
+
+    return results
+
+# ----------------------------------- Genetic Programming Mutation -------------------------- #
+
+def test_multiple_runs_function_mutation(args, landscape, inbred_threshold):
+    
+    # Initialize GP-based GA for Any given function
+    results = {}
+    for run in range(args.exp_num_runs):
+        # Reset the seed for every run
+        util.set_seed(random.randint(0, 999999))
+       
+        print(f"Running experiment nº: {run}")
+        ga_gp = GeneticAlgorithmGPMutation(
+            args=args,
+            mut_rate=args.mutation_rate,
+            inbred_threshold=inbred_threshold  # Adjust based on inbreeding prevention
+        )
+        # Run GP-based GA for Given Function
+        best_fitness_list, diversity_list, gen_success = ga_gp.run(landscape.symbolic_fitness_function)
+        
+        results[run] = {
+                'best_fitness': best_fitness_list,
+                'diversity': diversity_list, 
+                'generation_success': gen_success
+            }
+        
+        print(f"Population Size {args.pop_size} & Mutation Rate: {args.mutation_rate}: Best Fitness {best_fitness_list[-1]:.3f} ~ Best Diversity {diversity_list[-1]:.3f}")
+
+    return results
+
+# ----------------------------------- Genetic Programming Bloat and Introns -------------------------- #
 
 def test_multiple_runs_function_bloat(args, landscape, inbred_threshold):
     """
@@ -98,6 +190,8 @@ def test_multiple_runs_function_bloat(args, landscape, inbred_threshold):
         
     return results
 
+
+# ----------------------------------- Legacy  -------------------------- #
 def multiple_mrates_function_gp(args, mutation_rates, landscape, inbred_threshold):
     
     # Initialize GP-based GA for Any given function
