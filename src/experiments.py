@@ -3,6 +3,10 @@ from gp_bloat import GeneticAlgorithmGPBloat
 from gp_unblock import GeneticAlgorithmGPUnblock
 from gp_sharing import GeneticAlgorithmGPSharing
 from gp_only_mut import GeneticAlgorithmGPMutation
+from gp_only_cross import GeneticAlgorithmGPOnlyCrossover
+from gp_dynamic import GeneticAlgorithmGPDynamic
+from gp_linear import GeneticAlgorithmGPLinear
+from gp_performance import GeneticAlgorithmGPRamped
 import util as util
 import random
     
@@ -18,6 +22,35 @@ def test_multiple_runs_function_gp(args, landscape, inbred_threshold):
        
         print(f"Running experiment nº: {run}")
         ga_gp = GeneticAlgorithmGPTesting(
+            args=args,
+            mut_rate=args.mutation_rate,
+            inbred_threshold=inbred_threshold  # Adjust based on inbreeding prevention
+        )
+        # Run GP-based GA for Given Function
+        best_fitness_list, diversity_list, gen_success = ga_gp.run(landscape.symbolic_fitness_function)
+        
+        results[run] = {
+                'best_fitness': best_fitness_list,
+                'diversity': diversity_list, 
+                'generation_success': gen_success
+            }
+        
+        print(f"Population Size {args.pop_size} & Mutation Rate: {args.mutation_rate}: Best Fitness {best_fitness_list[-1]:.3f} ~ Best Diversity {diversity_list[-1]:.3f}")
+
+    return results
+
+# ----------------------------------- Genetic Programming Performance w/ ramped half-n-half initialization -------------------------- #
+
+def test_multiple_runs_function_gp_ramped(args, landscape, inbred_threshold):
+    
+    # Initialize GP-based GA for Any given function
+    results = {}
+    for run in range(args.exp_num_runs):
+        # Reset the seed for every run
+        util.set_seed(random.randint(0, 999999))
+       
+        print(f"Running experiment nº: {run}")
+        ga_gp = GeneticAlgorithmGPRamped(
             args=args,
             mut_rate=args.mutation_rate,
             inbred_threshold=inbred_threshold  # Adjust based on inbreeding prevention
@@ -52,6 +85,72 @@ def test_multiple_runs_function_sharing(args, landscape, inbred_threshold):
             inbred_threshold=inbred_threshold  # Adjust based on inbreeding prevention
         )
         # Run GP-based GA for Given Function
+        best_fitness_list, diversity_list, sigma_share_list, gen_success = ga_gp.run(landscape.symbolic_fitness_function)
+        
+        results[run] = {
+                'best_fitness': best_fitness_list,
+                'diversity': diversity_list, 
+                'generation_success': gen_success,
+                'sigma_share': sigma_share_list
+            }
+        
+        print(f"Inbred Threshold: {inbred_threshold}. Population Size {args.pop_size} & Mutation Rate: {args.mutation_rate}\n"
+                f"Generation Success: {gen_success}. Best Fitness = {best_fitness_list[-1]:.3f}\n"
+                f"Diversity = {diversity_list[-1]:.3f}\n"
+                f"Sigma Share = {sigma_share_list[-1]:.3f}\n")
+        
+    return results
+
+# ----------------------------------- Genetic Programming Dynamic-------------------------- #
+
+def test_multiple_runs_function_dynamic(args, landscape, inbred_threshold):
+    
+    # Initialize GP-based GA for Any given function
+    results = {}
+    for run in range(args.exp_num_runs):
+        # Reset the seed for every run
+        util.set_seed(random.randint(0, 999999))
+       
+        print(f"Running experiment nº: {run}")
+        ga_gp = GeneticAlgorithmGPDynamic(
+            args=args,
+            mut_rate=args.mutation_rate,
+            inbred_threshold=inbred_threshold  # Adjust based on inbreeding prevention
+        )
+        # Run GP-based GA for Given Function
+        best_fitness_list, diversity_list, inbred_threshold_list, gen_success = ga_gp.run(landscape.symbolic_fitness_function)
+        
+        results[run] = {
+                'best_fitness': best_fitness_list,
+                'diversity': diversity_list, 
+                'generation_success': gen_success,
+                'inbred_threshold': inbred_threshold_list
+            }
+        
+        print(f"Inbred Threshold: {inbred_threshold}. Population Size {args.pop_size} & Mutation Rate: {args.mutation_rate}\n"
+                f"Generation Success: {gen_success}. Best Fitness = {best_fitness_list[-1]:.3f}\n"
+                f"Diversity = {diversity_list[-1]:.3f}\n"
+                f"Inbreed Threshold = {inbred_threshold_list[-1]:.3f}\n")
+        
+    return results
+
+# ----------------------------------- Genetic Programming Exploration vs Exploitation -------------------------- #
+
+def test_multiple_runs_function_linear(args, landscape, inbred_threshold):
+    
+    # Initialize GP-based GA for Any given function
+    results = {}
+    for run in range(args.exp_num_runs):
+        # Reset the seed for every run
+        util.set_seed(random.randint(0, 999999))
+       
+        print(f"Running experiment nº: {run}")
+        ga_gp = GeneticAlgorithmGPLinear(
+            args=args,
+            mut_rate=args.mutation_rate,
+            inbred_threshold=inbred_threshold  # Adjust based on inbreeding prevention
+        )
+        # Run GP-based GA for Given Function
         best_fitness_list, diversity_list, gen_success = ga_gp.run(landscape.symbolic_fitness_function)
         
         results[run] = {
@@ -60,9 +159,12 @@ def test_multiple_runs_function_sharing(args, landscape, inbred_threshold):
                 'generation_success': gen_success
             }
         
-        print(f"Population Size {args.pop_size} & Mutation Rate: {args.mutation_rate}: Best Fitness {best_fitness_list[-1]:.3f} ~ Best Diversity {diversity_list[-1]:.3f}")
-
+        print(f"Linear with slope: {args.slope_threshold}. Population Size {args.pop_size} & Mutation Rate: {args.mutation_rate}\n"
+                f"Generation Success: {gen_success}. Best Fitness = {best_fitness_list[-1]:.3f}\n"
+                f"Diversity = {diversity_list[-1]:.3f}\n")
+        
     return results
+
 
 # ----------------------------------- Genetic Programming InbreedUnblock -------------------------- #
 
@@ -105,6 +207,35 @@ def test_multiple_runs_function_mutation(args, landscape, inbred_threshold):
        
         print(f"Running experiment nº: {run}")
         ga_gp = GeneticAlgorithmGPMutation(
+            args=args,
+            mut_rate=args.mutation_rate,
+            inbred_threshold=inbred_threshold  # Adjust based on inbreeding prevention
+        )
+        # Run GP-based GA for Given Function
+        best_fitness_list, diversity_list, gen_success = ga_gp.run(landscape.symbolic_fitness_function)
+        
+        results[run] = {
+                'best_fitness': best_fitness_list,
+                'diversity': diversity_list, 
+                'generation_success': gen_success
+            }
+        
+        print(f"Population Size {args.pop_size} & Mutation Rate: {args.mutation_rate}: Best Fitness {best_fitness_list[-1]:.3f} ~ Best Diversity {diversity_list[-1]:.3f}")
+
+    return results
+
+# ----------------------------------- Genetic Programming Only Crossover -------------------------- #
+
+def test_multiple_runs_function_only_cross(args, landscape, inbred_threshold):
+    
+    # Initialize GP-based GA for Any given function
+    results = {}
+    for run in range(args.exp_num_runs):
+        # Reset the seed for every run
+        util.set_seed(random.randint(0, 999999))
+       
+        print(f"Running experiment nº: {run}")
+        ga_gp = GeneticAlgorithmGPOnlyCrossover(
             args=args,
             mut_rate=args.mutation_rate,
             inbred_threshold=inbred_threshold  # Adjust based on inbreeding prevention

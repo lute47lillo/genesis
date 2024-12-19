@@ -31,21 +31,22 @@ class Node:
             return f"({self.value} {' '.join(str(child) for child in self.children)})"
 
 class Individual:
-    def __init__(self, args, fitness_function=None, tree=None, id=None, ancestors=None, generation=0):
+    def __init__(self, args, fitness_function=None, tree=None, id=None, init_method="full"):
         self.args = args
         self.bounds = self.args.bounds
         self.max_depth = self.args.max_depth 
-        self.initial_depth = self.args.initial_depth
-        self.tree = tree if tree is not None else self.random_tree(depth=self.initial_depth) # Initial depth of 6 as in paper
-        self.diversity = 0
+        self.init_method = init_method
         self.id = id if id is not None else np.random.randint(1e9)
-        self.ancestors = ancestors if ancestors is not None else set()
-        self.generation = generation  # Track the generation of the individual
+        
+        if tree is not None:
+            self.tree = tree
+        elif self.init_method == "grow":
+            self.tree = self.grow_tree(depth=self.args.initial_depth)
+        elif self.init_method == "full":
+            self.tree = self.full_tree(depth=self.args.initial_depth)
         
         # Init fitness for individual in creation and self.success
         self.fitness, self.success = fitness_function(self.tree) # Computes only the Absolute Error fitness
-        
-        self.sharing_factor = 0
         
     def get_function_arity(self, function):
         arity_dict = {
@@ -58,29 +59,69 @@ class Individual:
             'log': 1
         }
         return arity_dict.get(function, 0)
-    
-    def random_tree(self, depth):
-    
+        
+    def full_tree(self, depth):
+        """
+            Definition
+            -----------
+                In the "full" method, all the nodes at each level (except the leaves at the maximum depth) are function (non-terminal) nodes
+                and all leaves at the maximum depth are terminal nodes. This creates "bushy" and more balanced trees.
+                
+                    1. At every level of the tree (except the deepest level), we place a function (internal) node.
+                    2. Only at the maximum depth do we place terminal nodes (leaves).
+                    
+                    Therefore, the number of nodes in a "full" tree depends heavily on the arity (the number of children) of the chosen function nodes.
+                    Theoretical maximum nº of nodes is given by 2^(max_depth+1) - 1. Ex: Max Depth = 3. Then 15 is maximum.
+        """
         if depth == 0:
             # Return a terminal node
             terminal = np.random.choice(['x', '1.0'])
-            if terminal == '1.0':
-                return Node(1.0)
-            else:
-                return Node('x')
+            return Node(1.0 if terminal == '1.0' else 'x')
         else:
-            # Return a function node with appropriate arity
+            # Choose a function node
             function = np.random.choice(['+', '-', '*', '/', 'sin', 'cos', 'log'])
             arity = self.get_function_arity(function)
-            children = [self.random_tree(depth - 1) for _ in range(arity)]
+            
+            # Ensure all nodes at this level are expanded to full depth (non-terminal if possible)
+            children = [self.full_tree(depth - 1) for _ in range(arity)]
+            return Node(function, children)
+        
+    def grow_tree(self, depth):
+        """
+            Definition
+            -----------
+                At each node (except at maximum depth), randomly decide whether it will be a function node or a terminal node.
+                If picks a terminal before reaching the maximum depth, that branch stops growing, resulting in irregularly shaped trees.
+                Over many generated individuals, this leads to a variety of shapes and sizes rather than only "full" shapes.
+        """
+        
+        # If we are at max depth, we must choose a terminal
+        if depth == 0:
+            terminal = np.random.choice(['x', '1.0'])
+            return Node(1.0 if terminal == '1.0' else 'x')
+
+        # Otherwise, randomly decide whether to select a function or terminal
+        # Let's say there's a 50% chance of choosing a function node and a 50% chance of choosing a terminal node
+        # You can adjust this probability as needed
+        if np.random.rand() < 0.5:
+            # Choose a terminal (end branch early)
+            terminal = np.random.choice(['x', '1.0'])
+            return Node(1.0 if terminal == '1.0' else 'x')
+        else:
+            # Choose a function node and recurse for children
+            function = np.random.choice(['+', '-', '*', '/', 'sin', 'cos', 'log'])
+            arity = self.get_function_arity(function)
+            children = [self.grow_tree(depth - 1) for _ in range(arity)]
             return Node(function, children)
     
     def __str__(self):
         return str(self.tree)
 
-class GeneticAlgorithmGPSharing:
+class GeneticAlgorithmGPRamped:
     
     def __init__(self, args, mut_rate, inbred_threshold=None):
+        
+        # Variables
         self.args = args
         self.pop_size = args.pop_size
         self.generations = args.generations
@@ -89,74 +130,12 @@ class GeneticAlgorithmGPSharing:
         self.max_depth = args.max_depth
         self.initial_depth = args.initial_depth
         self.poulation_success = False
+        
+        # Trackers
         self.population = []
         self.best_fitness_list = []
         self.diversity_list = []
         
-        # TODO: For using diversity in the loss function
-        self.min_fitness = 0
-        self.max_fitness = - np.inf
-        
-        self.min_div = 0
-        self.max_div = - np.inf
-        
-        # TODO: Experimental move around fitness and diversity importance
-        self.diversity_weight = args.diversity_weight
-        self.fitness_weight = args.fitness_weight
-        
-        # TODO: Experimental for fitness sharing
-        self.sigma_share = args.sigma_share
-        self.sigma_share_weight = args.sigma_share_weight
-        
-    # ------------------------ Fitness sharing ------------------------ #
-    
-    def sharing_function(self, d):
-        """
-            Definition
-            -----------
-                Quantifies how much fitness should be shared between two individuals based on their distance.
-            
-            External Parameters
-            --------------------    
-                - sigma_share (float). Is threshold for how close two individuals must be for their fitness values to influence each other.
-                - d (int). Is a distance between two individuals. Computed from our custom distance metric. Calculated in the measure diversity function.
-        """
-        # print(d, self.sigma_share)
-        if d < self.sigma_share:
-            # print(f"Sharing distance becase d: {d} and sigma share: {self.sigma_share}")
-            return 1 - (d / self.sigma_share)
-        else:
-            return 0
-
-    def calculate_fitness_with_sharing(self, curr_gen):
-        
-        # Compute Absolute Error fitness
-        for individual in self.population:
-            fitness, individual.success = self.fitness_function(individual.tree)
-            
-            # Scale up fitness.
-            fitness = util.scale_fitness_values(fitness, self.max_fitness, self.min_fitness)
-            
-            # Compute final fitness based off sharing
-            if individual.sharing_factor > 0:
-                individual.fitness = fitness / individual.sharing_factor
-            else:
-                individual.fitness = fitness
-            
-            if individual.success:
-                print(f"Successful individual found in generation {curr_gen}")
-                print(f"Function: {individual.tree}")
-                self.poulation_success = True
-
-        # Adjust fitness
-        # for individual in self.population:
-        #     if individual.sharing_factor > 0:
-        #         individual.fitness = individual.fitness / individual.sharing_factor
-        #     else:
-        #         individual.fitness = individual.fitness
-        
-    # ------------------------ Fitness sharing ------------------------ #
-    
     def count_nodes(self, node):
         """
             Definition
@@ -175,7 +154,12 @@ class GeneticAlgorithmGPSharing:
         # Get Tree sizes for entire population (nº nodes)
         tree_sizes = [self.count_nodes(ind.tree) for ind in self.population]
         average_size = sum(tree_sizes) / len(tree_sizes)
-        self.average_size_list.append(average_size) 
+        self.average_size_list.append(average_size)
+        
+        # Get Tree depths for entire population
+        tree_depths = [self.tree_depth(ind.tree) for ind in self.population]
+        average_depth = sum(tree_depths) / len(tree_depths)
+        self.average_depth_list.append(average_depth)  
     
     # ----------------------- Tree ~ Node functions ------------------ #
     
@@ -313,55 +297,69 @@ class GeneticAlgorithmGPSharing:
           
         # Scale-up
         fitness = util.scale_fitness_values(individual.fitness, self.max_fitness, self.min_fitness)
-       
-        # Adjust fitness by sharing factor
-        # TODO: Might need to adjust fitness like in the div+fit
-        for individual in self.population:
-            if individual.sharing_factor > 0:
-                try:
-                    # print(individual.fitness, individual.sharing_factor)
-                    individual.fitness = fitness / individual.sharing_factor
-                except RuntimeWarning as e:
-                    print(f"RuntimeWarning: {e}")
-            else:
-                individual.fitness = fitness
+        # print(f"\nIndividual scaled only fitness: {fitness}. Scaled Diversity: {individual.diversity}")
         
-    def compute_individual_sharing_factor(self, population, individual):
+        # Compute full fitness
+        individual.fitness = (fitness * self.fitness_weight) + (individual.diversity * self.diversity_weight)
+    
+        
+    def compute_individual_div(self, population, individual):
      
-        S_i = 0
+        individual_diversity = 0
         for i in range(len(population)):
             if population[i].id != individual.id:
-                # Compute fitness sharing dist for later calculation
-                distance = self.compute_trees_distance(population[i].tree, individual.tree)                
-                sh = self.sharing_function(distance)
-                S_i += sh
+                distance = self.compute_trees_distance(population[i].tree, individual.tree)
+                individual_diversity += distance
         
-        # Assign diversity to specific individual.
-        individual.sharing_factor = S_i
+        # Assign diversity to specific individual, after scaling it
+        individual.diversity = util.scale_diversity_values(individual_diversity, self.max_div, self.min_div)
+        # print(f"\nNew individual diver: {individual.diversity }")
 
     # ----------------- General GP Functions ------------------------- #
     
-    def initialize_population(self):
-        print(f"\nInitializing population with fitness sharing and inital sigma share of {self.sigma_share}, weighted per gen as {self.sigma_share_weight}.")
+    def initialize_population_half_and_half(self):
+        print(f"\nInitializing population.")
         self.population = []
-        for _ in range(self.pop_size):
-            individual = Individual(self.args, fitness_function=self.fitness_function)
-            self.population.append(individual)
-        
-        # Measure initial diversity and get min~max range 
-        self.measure_diversity(self.population, 0)
-        self.max_fitness, self.min_fitness = util.compute_min_max_fit(self.population, self.max_fitness, self.min_fitness)
-        
-        # Adjust fitness by sharing factor
-        for individual in self.population:
-            fitness = util.scale_fitness_values(individual.fitness, self.max_fitness, self.min_fitness)
+        can_mate_full = 0
+        can_mate_grow = 0
 
-            if individual.sharing_factor > 0: # If 0 then Individual is sufficiently different from all other individuals in the population
-                individual.fitness = fitness / individual.sharing_factor
-            else:
-                individual.fitness = fitness
+        # Custom half-n-half -> 75/25 
+        # half = self.pop_size // 2
+        # half = int(self.pop_size * 0.80)
+        half = self.pop_size # TODO: This is the gp_lambda performance run
+        
+        # The first half is full initialization
+        for i in range(half):
+            individual = Individual(self.args, fitness_function=self.fitness_function, init_method="full") # Usually full
+            indiv_total_nodes = self.count_nodes(individual.tree)
+            if self.inbred_threshold is not None and indiv_total_nodes >= self.inbred_threshold:
+                can_mate_full += 1
+            self.population.append(individual)
             
-           
+            # print(f"Full ({i}) - individual total nodes: {indiv_total_nodes}")
+
+        # The second half is grow (random) initialization
+        for j in range(self.pop_size - half):
+            individual = Individual(self.args, fitness_function=self.fitness_function, init_method="grow")
+            indiv_total_nodes = self.count_nodes(individual.tree)
+            if self.inbred_threshold is not None and indiv_total_nodes >= self.inbred_threshold:
+                can_mate_grow += 1
+            self.population.append(individual)
+            
+            # print(f"Grow ({j}) - individual total nodes: {indiv_total_nodes}")
+            
+        print(f"\nStarting with MaxDepth: {self.max_depth} and initDepth: {self.initial_depth}. Out of {self.pop_size}.")
+        print(f"Grow: {can_mate_grow} Individuals can mate. Full: {can_mate_full} Individuals can mate.")
+        print(f"Total: {(can_mate_grow + can_mate_full)} ({(can_mate_grow + can_mate_full) / self.pop_size * 100:.3f}%).\n")
+        
+    def calculate_fitness(self, curr_gen):
+        for individual in self.population:
+            individual.fitness, individual.success = self.fitness_function(individual.tree)
+            if individual.success:
+                print(f"Successful individual found in generation {curr_gen}")
+                print(f"Function: {individual.tree}")
+                self.poulation_success = True
+                
     def check_succcess_new_pop(self, curr_gen, next_population):
         for individual in next_population:
             if individual.success:
@@ -404,6 +402,8 @@ class GeneticAlgorithmGPSharing:
             if not self.can_mate(parent1, parent2, self.inbred_threshold): # If distance(p1, p2) >= inbred_thres then skip bc [not False ==  True]
                 return None, None
 
+        self.allowed_mate_by_dist += 1
+        
         # Clone parents to avoid modifying originals
         child1 = copy.deepcopy(parent1.tree)
         child2 = copy.deepcopy(parent2.tree)
@@ -419,8 +419,6 @@ class GeneticAlgorithmGPSharing:
             if node1 is None or node2 is None:
                 continue  # Try again
 
-            # TODO: Currenlty enforcnig that the parents need to have the same arity. 
-            # TODO: In the future we could deal with different arities by removing, adding nodes rather than swapping entire subtrees
             # Check if both nodes have the same arity
             arity1 = parent1.get_function_arity(node1.value)
             arity2 = parent2.get_function_arity(node2.value)
@@ -472,21 +470,15 @@ class GeneticAlgorithmGPSharing:
             self.args,
             fitness_function=self.fitness_function,
             tree=child1,
-            ancestors=parent1.ancestors.union(parent2.ancestors, {parent1.id, parent2.id}),
-            generation=parent1.generation + 1
+            init_method="full"
         )
-        self.compute_individual_sharing_factor(self.population, offspring1)
-        self.compute_individual_fit(offspring1)
         
         offspring2 = Individual(
             self.args,
             fitness_function=self.fitness_function,
-            tree=child2,
-            ancestors=parent1.ancestors.union(parent2.ancestors, {parent1.id, parent2.id}),
-            generation=parent1.generation + 1
+            tree=child2, 
+            init_method="full"
         )
-        self.compute_individual_sharing_factor(self.population, offspring2)
-        self.compute_individual_fit(offspring2)
         
         return offspring1, offspring2
     
@@ -537,33 +529,16 @@ class GeneticAlgorithmGPSharing:
         
         # Iterate pairwise for all individuals in the population.
         for i in range(len(population)):
-            individual_diversity = 0
-            S_i = 0
             for j in range(len(population)):
                 if population[i].id != population[j].id:
-                    
-                    # Compute custom distance metric for diversity
                     distance = self.compute_trees_distance(population[i].tree, population[j].tree)
-                    individual_diversity += distance
+                    # individual_diversity += distance
                     total_distance += distance
                     count += 1
-                    
-                    # Compute fitness sharing dist for later calculation
-                    sh = self.sharing_function(distance)
-                    S_i += sh
             
-            # Assign sharing factor to individual.
-            # print(f"({i}) - Sharing factor: {S_i}")
-            population[i].sharing_factor = S_i
-            population[i].diversity = individual_diversity
-            
-        # How many comparisons, it goes i- > j and j->i so is double of C(300 over 2)
         if count == 0:
             return 0
         diversity = total_distance / count
-        
-        # Set sigma share for next iteration to be:
-        self.sigma_share = self.sigma_share_weight * diversity
         return diversity
     
     # ----------------- Main execution loop ------------------------- #
@@ -573,30 +548,29 @@ class GeneticAlgorithmGPSharing:
         self.fitness_function = fitness_function
         
         # Init population
-        self.initialize_population()
+        # self.initialize_population()
+        self.initialize_population_half_and_half() # ramped half-n-half initializaiton
         
         # Initialize lists to store bloat metrics
         self.average_size_list = []
-        self.sigma_share_list = []
+        self.average_depth_list = []
         
         for gen in range(self.generations):
 
             # Calculate fitness
-            self.calculate_fitness_with_sharing(gen)
+            self.calculate_fitness(gen) # Performance runs
             
             # Update best fitness list
             best_individual = max(self.population, key=lambda ind: ind.fitness)
             self.best_fitness_list.append(best_individual.fitness)
     
-            # Measure diversity and progress of sigma share
+            # Measure diversity
             diversity = self.measure_diversity(self.population, gen+1)
             self.diversity_list.append(diversity)
-            self.sigma_share_list.append(self.sigma_share)
             
             # Early Stopping condition if successful individual has been found
             if self.poulation_success == True:
-               
-                return self.best_fitness_list, self.diversity_list, self.sigma_share_list, gen + 1
+                return self.best_fitness_list, self.diversity_list, gen + 1
     
             # Selection
             selected = self.tournament_selection()
@@ -608,34 +582,70 @@ class GeneticAlgorithmGPSharing:
             # Lambda (parent+children)
             lambda_pop = self.pop_size * 2
             
-            while i < lambda_pop: 
-                parent1 = selected[i % len(selected)]
-                parent2 = selected[(i + 1) % len(selected)]
-                offspring = self.crossover(parent1, parent2)
+            # TODO: Highly experimental: Commented out for HALF and HALF No select experiment
+            # can_selected = selected # Make sure there is no specific individual selection.
+            if self.inbred_threshold is not None:
+                can_selected = []
+                can_mate_selected = 0
+                
+                for ind in selected:
+                    tree_size = self.count_nodes(ind.tree)
+        
+                    if tree_size >= self.inbred_threshold:
+                        can_mate_selected +=  1
+                        can_selected.append(ind)
+                
+                # print(f"\nGeneration {gen + 1}: out of Tourny selection. Only {can_mate_selected} Individuals could mate -> {can_mate_selected/len(selected) * 100:.3f}")
+            
+            else:
+                can_selected = selected
+            
+
+            self.allowed_mate_by_dist = 0 # Reset to 0 on every generation
+            offspring_count = 0
+            none_count = 0
+            while i < lambda_pop:     
+                
+                if len(can_selected) > 2:
+       
+                    # TODO: Only crossover those that have at least more nodes than what can be used.
+                    parent1 = can_selected[i % len(can_selected)]
+                    parent2 = can_selected[(i + 1) % len(can_selected)]
+                    offspring = self.crossover(parent1, parent2)
+               
+                else: # There is not a single one that ca be mated
+                    offspring = [None, None]
+                    
+                # # Original
+                # parent1 = selected[i % len(selected)]
+                # parent2 = selected[(i + 1) % len(selected)]
+                # offspring = self.crossover(parent1, parent2)
     
                 if offspring[0] is not None and offspring[1] is not None:
                     self.mutate(offspring[0])
                     self.mutate(offspring[1])
                     next_population.extend(offspring)
+                    offspring_count += 1
+
                 else:
+                    none_count += 1
                     # Append parents if Inbreeding is allowed
                     if self.inbred_threshold is None: 
                         next_population.append(copy.deepcopy(parent1))
                         next_population.append(copy.deepcopy(parent2))
                     else:
                         # Introduce new random individuals to maintain population size if inbreeding is not allowed
-                        new_individual = Individual(self.args, fitness_function=self.fitness_function)
-                        self.compute_individual_sharing_factor(self.population, new_individual)
-                        self.compute_individual_fit(new_individual)
+                        new_individual = Individual(self.args, fitness_function=self.fitness_function, init_method="full")
                         next_population.append(new_individual)
                                                 
                         if len(next_population) < self.pop_size:
-                            new_individual = Individual(self.args, fitness_function=self.fitness_function)
-                            self.compute_individual_sharing_factor(self.population, new_individual) 
-                            self.compute_individual_fit(new_individual)
+                            new_individual = Individual(self.args, fitness_function=self.fitness_function, init_method="full")
                             next_population.append(new_individual)
         
                 i += 2
+                
+            print(f"Generation {gen + 1}: Checking by distance. Only {self.allowed_mate_by_dist} Individuals can actually  mate -> {self.allowed_mate_by_dist/len(selected) * 100:.3f}\n")
+            print(f"New individuals added from real offspring: {offspring_count} vs added from random (they could'nt mate): {none_count}")
 
             # Check if individual of next population is already successful. No need to recombination as it will always have largest fitness
             self.check_succcess_new_pop(gen+1, next_population)
@@ -649,11 +659,10 @@ class GeneticAlgorithmGPSharing:
                 # Measure diversity
                 diversity = self.measure_diversity(next_population, gen+1)
                 self.diversity_list.append(diversity)
-                self.sigma_share_list.append(self.sigma_share)
                 
                 # Returns 2 + gens because technically we are just shortcutting the crossover of this current generation. So, +1 for 0th-indexed offset, and +1 for skipping some steps.
                 # This added values will have been returned in the next gen loop iteration.
-                return self.best_fitness_list, self.diversity_list, self.sigma_share_list, gen + 2
+                return self.best_fitness_list, self.diversity_list, gen + 2
             
             # Combine the population (mu+lambda)
             combined_population = next_population[:lambda_pop] + self.population     
@@ -663,24 +672,18 @@ class GeneticAlgorithmGPSharing:
             self.population = combined_population[:self.pop_size]
             self.pop_size = len(self.population)
             
-            # Re-compute min - max fitness for normalization
-            self.max_fitness, self.min_fitness = util.compute_min_max_fit(self.population, self.max_fitness, self.min_fitness)
-            
-            # print(f"Generation {gen + 1}: Sigma Share: {self.sigma_share}. Diversity: {diversity}. Best Individual Fitness = {best_individual.fitness:.3f}.\n")
-        
             # Print progress
             if (gen + 1) % 10 == 0:
-                
                 # Measure Size, Depth statistics
-                self.compute_population_size_depth()
+                self.compute_population_size_depth()                
            
                 print(f"\nInbreeding threshold set to: {self.inbred_threshold}.")
                 print(f"Generation {gen + 1}: Best Fitness = {best_individual.fitness:.3f}\n"
                       f"Diversity = {self.diversity_list[gen]:.3f}\n"
-                      f"Sigma Share: {self.sigma_share_list[gen]:.3f}\n"
-                      f"Avg Size = {self.average_size_list[-1]:.3f}\n")
+                      f"Avg Size = {self.average_size_list[-1]:.3f}\n"
+                      f"Avg Depth = {self.average_depth_list[-1]:.3f}\n")
     
-        return self.best_fitness_list, self.diversity_list, self.sigma_share_list, gen+1
+        return self.best_fitness_list, self.diversity_list, gen+1
     
 class GPLandscape:
     
@@ -804,26 +807,23 @@ if __name__ == "__main__":
     # -------------------------------- Experiment: Multiple Runs w/ fixed population and fixed mutation rate --------------------------- #
     
     term1 = f"genetic_programming/{args.benchmark}/"
-    term2 = "sharing/"
-
+    term2 = "gp_lambda/"
+    
     if args.inbred_threshold == 1:
-        term3 = f"SigmaShare:{args.sigma_share_weight}_PopSize:{args.pop_size}_InThres:None_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
+        term3 = f"PopSize:{args.pop_size}_InThres:None_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
     else:
-        term3 = f"SigmaShare:{args.sigma_share_weight}_PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
+        term3 = f"PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
         
     # Text to save files and plot.
     args.config_plot = term1 + term2 + term3
         
     if args.inbred_threshold == 1:
         print("Running GA with Inbreeding Mating...")
-        results_inbreeding = exp.test_multiple_runs_function_sharing(args, gp_landscape, None)
+        results_inbreeding = exp.test_multiple_runs_function_gp_ramped(args, gp_landscape, None)
         util.save_accuracy(results_inbreeding, f"{args.config_plot}_inbreeding.npy")
     else:
         print("Running GA with NO Inbreeding Mating...")
-        results_no_inbreeding = exp.test_multiple_runs_function_sharing(args, gp_landscape, args.inbred_threshold)
+        results_no_inbreeding = exp.test_multiple_runs_function_gp_ramped(args, gp_landscape, args.inbred_threshold)
         util.save_accuracy(results_no_inbreeding, f"{args.config_plot}_no_inbreeding.npy")
-        
-    # Plot the generation of successful runs
-    args.config_plot = term1 + term2 + "diversity_last_lambda/" + term3
-    plot.plot_gen_vs_run(args, results_no_inbreeding, results_inbreeding)
+
     

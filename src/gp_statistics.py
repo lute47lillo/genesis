@@ -464,7 +464,7 @@ def temp_plot2(df_bench, bench_name):
 if __name__ == "__main__":
     
     thresholds = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
-    depths = [6, 7, 8, 9, 10] 
+    depths = [6, 7, 8]#, 9, 10] 
     
     sr_fns = ["nguyen1", "nguyen2", "nguyen3", "nguyen4", "nguyen5"]
     
@@ -553,13 +553,15 @@ if __name__ == "__main__":
 # TODO: There will be another table where for each depth 150 runs each treatment, what is the convergence, in that we will see how different inbreeding thresholds affect the depth
 
     # ----------- Legacy ------------- #
-    sr_fns = ["nguyen1", "nguyen2", "nguyen3", "nguyen4", "nguyen5"]
+    sr_fns = ["nguyen6"] #["nguyen1", "nguyen2", "nguyen3", "nguyen4", "nguyen5"]
     for sr in sr_fns:
         print(sr)
+        depths = [6, 7, 8]
+        thresholds = ["None"]
         succes1, no_suc1 = get_gp_statistics(sr, depths, thresholds, "inbreeding", 3)
-        succes2, no_suc2 = get_gp_statistics(sr, depths, thresholds, "no_inbreeding", 3)
+        # succes2, no_suc2 = get_gp_statistics(sr, depths, thresholds, "no_inbreeding", 3)
     
         n_combs = len(depths)*len(thresholds)*15
         print(f"For a total of {n_combs} experimental runs")
-        print(f"NO Inbreeding success: {succes2}. Success rate: {(succes2/n_combs)*100:.2f}%")
+        # print(f"NO Inbreeding success: {succes2}. Success rate: {(succes2/n_combs)*100:.2f}%")
         print(f"Inbreeding success: {succes1}. Success rate: {(succes1/n_combs)*100:.2f}%\n")

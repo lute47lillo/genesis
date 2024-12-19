@@ -906,3 +906,71 @@ if __name__ == '__main__':
 #         # After mutation, check that the arity remains the same
 #         new_arity = individual.get_function_arity(individual.tree.value)
 #         self.assertEqual(original_arity, new_arity)
+
+
+
+
+# ------- #
+# # Extract keys and diversity lists
+        # keys = sr_dfs[sr]['diversity'][2]          # List of keys
+        # diversity_lists = sr_dfs[sr]['diversity'][1]  # List of diversity lists
+
+        # # Combine keys with their corresponding diversity lists
+        # combined = list(zip(keys, diversity_lists))
+
+        # # Sort the combined list based on the last value of the last sublist in diversity_lists
+        # # Modify the lambda function if your structure is different
+        # sorted_combined = sorted(combined, key=lambda x: x[1][-1][-1])
+
+        # # Iterate over the sorted items and print the desired information
+        # for k, diversity_list in sorted_combined:
+        #     # Extract the diversity value to sort by
+        #     diversity_value = diversity_list[-1][-1]  # Adjust based on your actual structure
+
+        #     # Extract other relevant information from the results dictionary
+        #     n_successes = results[k]['n_successes']
+        #     mean_gen_success = np.mean(results[k]['generation_successes'])
+
+        #     # Print the formatted output
+        #     print(f"\nKey: {k}: Diversity: {diversity_value:.3f}. Nº total successes: {n_successes}. Mean Gen. success: {mean_gen_success:.2f}")
+            
+        # print()
+        # # Extract keys
+        # keys = sr_dfs[sr]['diversity'][2]  # List of keys
+
+        # # Combine keys with their corresponding n_successes
+        # combined_n_successes = [(key, results[key]['n_successes']) for key in keys]
+
+        # # Sort the combined list based on n_successes (ascending order)
+        # sorted_combined_n_successes = sorted(combined_n_successes, key=lambda x: x[1])
+
+        # # For descending order, set reverse=True
+        # # sorted_combined_n_successes = sorted(combined_n_successes, key=lambda x: x[1], reverse=True)
+
+        # # Iterate over the sorted items and print the desired information
+        # for key, n_successes in sorted_combined_n_successes:
+        #     diversity_list = sr_dfs[sr]['diversity'][1][keys.index(key)]
+        #     diversity_value = diversity_list[-1][-1]  # Adjust based on your actual structure
+        #     mean_gen_success = np.mean(results[key]['generation_successes'])
+            
+        #     print(f"\nKey: {key}: Nº total successes: {n_successes}. Diversity: {diversity_value:.3f}. Mean Gen. success: {mean_gen_success:.2f}")
+            
+        # print()
+        # # Combine keys with their corresponding mean generation success
+        # combined_mean_gen_success = [
+        #     (key, np.mean(results[key]['generation_successes'])) for key in keys
+        # ]
+
+        # # Sort the combined list based on mean generation success (ascending order)
+        # sorted_combined_mean_gen_success = sorted(combined_mean_gen_success, key=lambda x: x[1])
+
+        # # For descending order, set reverse=True
+        # # sorted_combined_mean_gen_success = sorted(combined_mean_gen_success, key=lambda x: x[1], reverse=True)
+
+        # # Iterate over the sorted items and print the desired information
+        # for key, mean_gen_success in sorted_combined_mean_gen_success:
+        #     diversity_list = sr_dfs[sr]['diversity'][1][keys.index(key)]
+        #     diversity_value = diversity_list[-1][-1]  # Adjust based on your actual structure
+        #     n_successes = results[key]['n_successes']
+            
+        #     print(f"\nKey: {key}: Mean Gen. success: {mean_gen_success:.2f}. Diversity: {diversity_value:.3f}. Nº total successes: {n_successes}")

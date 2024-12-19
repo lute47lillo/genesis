@@ -53,15 +53,15 @@ class Individual:
             # Return a terminal node
             terminal = np.random.choice(['x', '1.0'])
             if terminal == '1.0':
-                return Node(1.0, tree_id=self.id)
+                return Node(1.0)
             else:
-                return Node('x', tree_id=self.id)
+                return Node('x')
         else:
             # Return a function node with appropriate arity
             function = np.random.choice(['+', '-', '*', '/', 'sin', 'cos', 'log'])
             arity = self.get_function_arity(function)
             children = [self.random_tree(depth - 1) for _ in range(arity)]
-            return Node(function, self.id, children)
+            return Node(function, children)
     
     def __str__(self):
         return str(self.tree)

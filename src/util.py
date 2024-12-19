@@ -41,7 +41,17 @@ def set_args():
     argparser.add_argument('--initial_depth', type=int, help='GP Tree maximum depth', default=3) 
     argparser.add_argument('--fitness_weight', type=float, help='Proportional importance weight in the total fitness calculation for abs. error fitness', default=1.0)
     argparser.add_argument('--diversity_weight', type=float, help='Proportional importance weight in the total fitness calculation for diversity', default=0.0) 
-    argparser.add_argument('--sigma_share', type=float, help='The sharing radius. It determines how far the sharing effect extends.', default=0.1)
+    
+    # Fitness Sharing Experiment variables
+    argparser.add_argument('--sigma_share', type=float, help='The sharing radius. It determines how far the sharing effect extends.', default=3)
+    argparser.add_argument('--sigma_share_weight', type=float, help='Percentage of Diversity as distance metric to  be used to calculate sigma share. ss = ss_weight * ss', default=0.2)
+    
+    # Dynamic threshold variables
+    argparser.add_argument('--slope_threshold', type=int, help='Type of increase of inbreeding threhsold. 1 or -1', default=1)
+    argparser.add_argument('--gen_change', type=int, help='Generation X at which changin rate of change of threshold', default=25) 
+    argparser.add_argument('--linear_type', type=str, help='Whether the change is abrupt or continuous', default='continuous') 
+
+    
     
     # Parse all arguments
     args = argparser.parse_args()
@@ -305,3 +315,77 @@ def pad_dict_and_create_df(results, attributes, global_max_length, n_runs):
     df = pd.DataFrame(data)
     
     return df
+
+
+# ---------------- Result printing and visualization -------------- #
+def compute_composite_score_for_eval(sr_dfs, sr, results, suc_w=2, div_w=0, gen_w=-1):
+    """
+        Definition
+        ------------
+            Computes and ranks the different hyperparameter combination for a given experiment based off 3 metrics:
+                - Total successful runs.
+                - Diversity
+                - Mean Generation Success (speed of convergence)
+                
+        Parameters
+        -------------
+            - sr_dfs (dict): Contains the diversity and best_fitness parameters ready to be accessed per SR function
+            - sr (str): The SR function.
+            - results (dict): Contains the statistical metrics.
+            - suc_w, div_w, gen_w (int): The weigth of each of the metrics to compute the composite score.
+    """
+# Extract keys and diversity lists
+    keys = sr_dfs[sr]['diversity'][2]                # List of keys
+    diversity_lists = sr_dfs[sr]['diversity'][1]    # List of diversity lists
+
+    # Prepare data for DataFrame
+    data = []
+    for i, key in enumerate(keys):
+        diversity_list = diversity_lists[i]
+        try:
+            diversity_value = diversity_list[-1][-1]  # Last element of the last sublist
+        except IndexError:
+            diversity_value = float('-inf')  # Handle empty lists if necessary
+        n_successes = results[key]['n_successes']
+        mean_gen_success = np.mean(results[key]['generation_successes'])
+        
+        data.append({
+            'key': key,
+            'n_successes': n_successes,
+            'diversity': round(diversity_value, 2),
+            'mean_gen_success': round(mean_gen_success, 2)
+        })
+
+    # Create DataFrame
+    df = pd.DataFrame(data)
+
+    # Define Weights. Playing with these tells me different interpretations. 
+    # Example: With 0 diversity, we can observe the pattern of how diversity is spread when the other two are the important things
+    # And then for the top-3 best, and top-3 worse we can plot the evolution of diversity to see how it might go up then down.
+    weights = {
+        'n_successes': suc_w,
+        'diversity': div_w,
+        'mean_gen_success': gen_w  # Negative weight because lower is better
+    }
+
+    # Calculate Composite Score
+    df['composite_score'] = (
+        df['n_successes'] * weights['n_successes'] +
+        df['diversity'] * weights['diversity'] +
+        df['mean_gen_success'] * weights['mean_gen_success']
+    )
+    df['composite_score'] = round(df['composite_score'], 3)
+
+    # Sort DataFrame based on Composite Score
+    df_sorted = df.sort_values(
+        by='composite_score',
+        ascending=False
+    ).reset_index(drop=True)
+
+    # Display the sorted DataFrame
+    print(f"\nUsing weights -> SucW: {suc_w}. DivW: {div_w}. GenW: {gen_w}")
+    print("Sorted Results Based on Composite Score:")
+    print(df_sorted[['key', 'n_successes', 'diversity', 'mean_gen_success', 'composite_score']])
+    
+    return df_sorted
+        

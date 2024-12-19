@@ -89,19 +89,25 @@ class GeneticAlgorithmGPBloat:
                           have distance of 1. 
                           
         """
+       
         total_distance = 0
         count = 0
+        
+        # Iterate pairwise for all individuals in the population.
         for i in range(len(population)):
-            for j in range(i + 1, len(population)):
-                distance = self.compute_trees_distance(population[i].tree, population[j].tree)
-                total_distance += distance
-                count += 1
+            for j in range(len(population)):
+                if population[i].id != population[j].id:
+                    distance = self.compute_trees_distance(population[i].tree, population[j].tree)
+                    total_distance += distance
+                    count += 1
+            
         if count == 0:
             return 0
         diversity = total_distance / count
         
         # Track diversity value
         self.diversity_list.append(diversity)
+        
 
     # ---------------------- Ancestry computations -------------------------------- #
     
@@ -469,25 +475,6 @@ class GeneticAlgorithmGPBloat:
             # Failed to perform a valid crossover within max_attempts
             return None, None
 
-        # # Create new individuals
-        # offspring1 = Individual(
-        #     self.args,
-        #     fitness_function=self.fitness_function,
-        #     tree=child1,
-        #     parents=[parent1, parent2],
-        #     ancestors=parent1.ancestors.union(parent2.ancestors, {parent1.id, parent2.id}),
-        #     generation=parent1.generation + 1
-        # )
-        # offspring2 = Individual(
-        #     self.args,
-        #     fitness_function=self.fitness_function,
-        #     tree=child2,
-        #     parents=[parent1, parent2],
-        #     ancestors=parent1.ancestors.union(parent2.ancestors, {parent1.id, parent2.id}),
-        #     generation=parent1.generation + 1
-        # )
-        
-        # TODO: Without unnecesasry data. Create new individuals
         offspring1 = Individual(
             self.args,
             fitness_function=self.fitness_function,
@@ -656,22 +643,10 @@ class GeneticAlgorithmGPBloat:
             # Print progress
             if (gen + 1) % 10 == 0:
                 
-                # Measure Size, Depth  and Intron statistics
-                # self.compute_population_size_depth()
-                # self.compute_introns_lists()
-                # self.compute_kinship_population()
-                
-                # self.inbred_threshold = int(self.average_size_list[-1] / 2)
-                # print(f"\nNew inbreeding threshold set to: {self.inbred_threshold}.")
-                
                 print(f"Generation {gen + 1}: Best Fitness = {best_individual.fitness:.3f}\n"
                       f"Diversity = {self.diversity_list[gen]:.3f}\n"
                       f"Avg Size = {self.average_size_list[-1]:.3f}\n"
-                      f"Avg Depth = {self.average_depth_list[-1]:.3f}\n"
-                      f"Population Intron Ratio = {self.pop_ratio_intron_list[-1]:.3f}\n"
-                      f"Avg Intron Ratio per Individual = {self.avg_ratio_intron_list[-1]:.3f}\n"
-                      f"Population Total Intron Nodes = {self.pop_total_intron_list[-1]:.3f}\n" 
-                      f"Population Total Nodes = {self.pop_total_nodes_list[-1]:.3f}\n")
+                      f"Population Intron Ratio = {self.pop_ratio_intron_list[-1]:.3f}\n")
                     #   f"Avg Population Tree Kinship = {self.avg_pop_kinship_list[-1]:.3f}\n"
                     #   f"Most Related Tree Kinship = {self.clossest_tree_list[-1][1]:.3f} with {len(self.clossest_tree_list[-1][0])} ancestors\n"
                     #   f"Least Related Tree Kinship = {self.furthest_tree_list[-1][1]:.3f} with {len(self.furthest_tree_list[-1][0])} ancestors.")
@@ -699,22 +674,6 @@ if __name__ == "__main__":
     print("Running GA with NO Inbreeding Mating...")
     results_no_inbreeding = exp.test_multiple_runs_function_bloat(args, landscape, args.inbred_threshold)
     util.save_accuracy(results_no_inbreeding, f"{args.config_plot}_no_inbreeding.npy")
-    
-    # print("Running GA with Inbreeding Mating...")
-    # results_inbreeding = exp.test_multiple_runs_function_bloat(args, landscape, None)
-    # util.save_accuracy(results_inbreeding, f"{args.config_plot}_inbreeding.npy")
-    
-    # # Plot the generation of successful runs
-    # args.config_plot = term1 + "bloat/" + term3
-    # plot.plot_gen_vs_run(args, results_no_inbreeding, results_inbreeding)
-    
-    # # Plot Diversity vs generations runs
-    # args.config_plot = term1 + "bloat/" + term3
-    # plot.plot_diversity_generation_over_time(args, results_no_inbreeding, results_inbreeding)
-    
-    # # Plot diversity vs generation of success (convergence)
-    # args.config_plot = term1 + "bloat/" + term3
-    # plot.plot_time_of_convergence_vs_diversity(args, results_no_inbreeding, results_inbreeding)
     
     
     
