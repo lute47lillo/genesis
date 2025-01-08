@@ -822,8 +822,4 @@ if __name__ == "__main__":
         print("Running GA with NO Inbreeding Mating...")
         results_no_inbreeding = exp.test_multiple_runs_function_sharing(args, gp_landscape, args.inbred_threshold)
         util.save_accuracy(results_no_inbreeding, f"{args.config_plot}_no_inbreeding.npy")
-        
-    # Plot the generation of successful runs
-    args.config_plot = term1 + term2 + "diversity_last_lambda/" + term3
-    plot.plot_gen_vs_run(args, results_no_inbreeding, results_inbreeding)
     

@@ -362,11 +362,47 @@ class GeneticAlgorithmGPBloat:
 
     # ----------------- General GP Functions ------------------------- #
     
+    # def initialize_population(self):
+    #     self.population = []
+    #     for _ in range(self.pop_size):
+    #         individual = Individual(self.args, fitness_function=self.fitness_function)
+    #         self.population.append(individual)
+            
     def initialize_population(self):
+        print(f"\nInitializing population.")
         self.population = []
-        for _ in range(self.pop_size):
-            individual = Individual(self.args, fitness_function=self.fitness_function)
+        can_mate_full = 0
+        can_mate_grow = 0
+
+        # Custom half-n-half -> 75/25 
+        # half = self.pop_size // 2
+        # half = int(self.pop_size * 0.80)
+        half = self.pop_size # TODO: This is the gp_lambda performance run
+        
+        # The first half is full initialization
+        for i in range(half):
+            individual = Individual(self.args, fitness_function=self.fitness_function, init_method="full") # Usually full
+            indiv_total_nodes = self.count_nodes(individual.tree)
+            if self.inbred_threshold is not None and indiv_total_nodes >= self.inbred_threshold:
+                can_mate_full += 1
             self.population.append(individual)
+            
+            # print(f"Full ({i}) - individual total nodes: {indiv_total_nodes}")
+
+        # The second half is grow (random) initialization
+        for j in range(self.pop_size - half):
+            individual = Individual(self.args, fitness_function=self.fitness_function, init_method="grow")
+            indiv_total_nodes = self.count_nodes(individual.tree)
+            if self.inbred_threshold is not None and indiv_total_nodes >= self.inbred_threshold:
+                can_mate_grow += 1
+            self.population.append(individual)
+            
+            # print(f"Grow ({j}) - individual total nodes: {indiv_total_nodes}")
+            
+        print(f"\nStarting with MaxDepth: {self.max_depth} and initDepth: {self.initial_depth}. Out of {self.pop_size}.")
+        print(f"Grow: {can_mate_grow} Individuals can mate. Full: {can_mate_full} Individuals can mate.")
+        print(f"Total: {(can_mate_grow + can_mate_full)} ({(can_mate_grow + can_mate_full) / self.pop_size * 100:.3f}%).\n")
+        
     
     def calculate_fitness(self, curr_gen):
         for individual in self.population:
@@ -384,6 +420,25 @@ class GeneticAlgorithmGPBloat:
             winner = max(participants, key=lambda ind: ind.fitness)
             selected.append(winner)
         return selected
+    
+    def mating_selection(self, selected):
+        can_selected = []
+        
+        # Select only individuals with nº nodes > inbred_threshold value
+        if self.inbred_threshold is not None:
+                can_mate_selected = 0
+                
+                for ind in selected:
+                    tree_size = self.count_nodes(ind.tree)
+        
+                    if tree_size >= self.inbred_threshold:
+                        can_mate_selected +=  1
+                        can_selected.append(ind)
+                            
+        else:
+            can_selected = selected
+    
+        return can_selected
     
     def crossover(self, parent1, parent2):
         """
@@ -411,6 +466,8 @@ class GeneticAlgorithmGPBloat:
         if self.inbred_threshold is not None:
             if not self.can_mate(parent1, parent2, self.inbred_threshold): # If distance(p1, p2) >= inbred_thres then skip bc [not False ==  True]
                 return None, None
+            
+        self.allowed_mate_by_dist += 1
 
         # Clone parents to avoid modifying originals
         child1 = copy.deepcopy(parent1.tree)
@@ -505,7 +562,7 @@ class GeneticAlgorithmGPBloat:
             return  # Cannot mutate without a node
 
         # Replace the subtree with a new random subtree
-        new_subtree = individual.random_tree(self.initial_depth) 
+        new_subtree = individual.full_tree(self.initial_depth) 
         
         # Ensure that the new_subtree has the correct arity
         required_children = individual.get_function_arity(new_subtree.value)
@@ -581,6 +638,9 @@ class GeneticAlgorithmGPBloat:
     
             # Tournament Selection
             selected = self.tournament_selection()
+            
+            # Mating selection
+            # can_selected = self.mating_selection(selected)
     
             # Crossover and Mutation
             next_population = []
@@ -589,6 +649,51 @@ class GeneticAlgorithmGPBloat:
             # Lambda (parent+children)
             lambda_pop = self.pop_size * 2
             
+            # Start metrics for debugging
+            self.allowed_mate_by_dist = 0 # Reset to 0 on every generation
+            offspring_count = 0
+            none_count = 0
+            
+            # Evolutionary recombination
+            
+            # -------------- YES specific mating selection ------------ #
+            # while i < lambda_pop:     
+                
+            #     if len(can_selected) > 2:
+       
+            #         # TODO: Only crossover those that have at least more nodes than what can be used.
+            #         parent1 = can_selected[i % len(can_selected)]
+            #         parent2 = can_selected[(i + 1) % len(can_selected)]
+            #         offspring = self.crossover(parent1, parent2)
+               
+            #     else: # There is not a single one that ca be mated
+            #         offspring = [None, None]
+    
+            #     if offspring[0] is not None and offspring[1] is not None:
+            #         self.mutate(offspring[0])
+            #         self.mutate(offspring[1])
+            #         next_population.extend(offspring)
+            #         offspring_count += 1
+
+            #     else:
+            #         none_count += 1
+                    
+            #         # Append parents if Inbreeding is allowed
+            #         if self.inbred_threshold is None: 
+            #             next_population.append(copy.deepcopy(parent1))
+            #             next_population.append(copy.deepcopy(parent2))
+            #         else:
+            #             # Introduce new random individuals to maintain population size if inbreeding is not allowed
+            #             new_individual = Individual(self.args, fitness_function=self.fitness_function, init_method="full")
+            #             next_population.append(new_individual)
+                                                
+            #             if len(next_population) < self.pop_size:
+            #                 new_individual = Individual(self.args, fitness_function=self.fitness_function, init_method="full")
+            #                 next_population.append(new_individual)
+        
+            #     i += 2
+                
+            # -------------- No specific mating selection ------------ #
             while i < lambda_pop: 
                 parent1 = selected[i % len(selected)]
                 parent2 = selected[(i + 1) % len(selected)]
@@ -598,23 +703,27 @@ class GeneticAlgorithmGPBloat:
                     self.mutate(offspring[0])
                     self.mutate(offspring[1])
                     next_population.extend(offspring)
+                    offspring_count += 1
                 else:
+                    none_count += 1
                     # Append parents if Inbreeding is allowed
                     if self.inbred_threshold is None: 
                         next_population.append(copy.deepcopy(parent1))
                         next_population.append(copy.deepcopy(parent2))
                     else:
                         # Introduce new random individuals to maintain population size if inbreeding is not allowed
-                        new_individual = Individual(self.args, fitness_function=self.fitness_function)
-                    
+                        new_individual = Individual(self.args, fitness_function=self.fitness_function, init_method="full")
                         next_population.append(new_individual)
                                                 
                         if len(next_population) < self.pop_size:
-                            new_individual = Individual(self.args, fitness_function=self.fitness_function)
+                            new_individual = Individual(self.args, fitness_function=self.fitness_function, init_method="full")
                             next_population.append(new_individual)
         
                 i += 2
-            
+                
+            print(f"Generation {gen + 1}: Checking by distance. Only {self.allowed_mate_by_dist} Individuals can actually  mate -> {self.allowed_mate_by_dist/len(selected) * 100:.3f}\n")
+            print(f"New individuals added from real offspring: {offspring_count} vs added from random (they could'nt mate): {none_count}")
+
             # Combine the population (mu+lambda)
             combined_population = next_population[:lambda_pop] + self.population     
             combined_population.sort(key=lambda ind: ind.fitness, reverse=True)
@@ -647,10 +756,7 @@ class GeneticAlgorithmGPBloat:
                       f"Diversity = {self.diversity_list[gen]:.3f}\n"
                       f"Avg Size = {self.average_size_list[-1]:.3f}\n"
                       f"Population Intron Ratio = {self.pop_ratio_intron_list[-1]:.3f}\n")
-                    #   f"Avg Population Tree Kinship = {self.avg_pop_kinship_list[-1]:.3f}\n"
-                    #   f"Most Related Tree Kinship = {self.clossest_tree_list[-1][1]:.3f} with {len(self.clossest_tree_list[-1][0])} ancestors\n"
-                    #   f"Least Related Tree Kinship = {self.furthest_tree_list[-1][1]:.3f} with {len(self.furthest_tree_list[-1][0])} ancestors.")
-        
+                
         # Collect all if failed run
         metrics_lists, measures_lists, intron_lists, kinship_lists = self.collect_all_stats()
         
@@ -674,6 +780,3 @@ if __name__ == "__main__":
     print("Running GA with NO Inbreeding Mating...")
     results_no_inbreeding = exp.test_multiple_runs_function_bloat(args, landscape, args.inbred_threshold)
     util.save_accuracy(results_no_inbreeding, f"{args.config_plot}_no_inbreeding.npy")
-    
-    
-    

@@ -26,6 +26,8 @@ def get_gp_statistics(bench_name, depths, thresholds, treatment_name, init_depth
             
             # Load dict data
             file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/{bench_name}/gp_lambda/PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:{depth}_InitD:{init_depth}_{treatment_name}.npy"
+            # file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/{bench_name}/ramped/final_PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:{depth}_InitD:{init_depth}_{treatment_name}.npy"
+
             data = np.load(file_path_name, allow_pickle=True)
             data_dict = data.item()
             for run, metrics in data_dict.items():
@@ -68,7 +70,9 @@ def get_gen_avg_inbreed(bench_name, depths, thresholds, treatment_name):
             temp_gens_thres = []
             
             # Load dict data
-            file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/{bench_name}/gp_lambda/PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:{depth}_InitD:3_{treatment_name}.npy"
+            # file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/{bench_name}/gp_lambda/PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:{depth}_InitD:3_{treatment_name}.npy"
+            file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/{bench_name}/ramped/final_PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:{depth}_InitD:3_{treatment_name}.npy"
+
             data = np.load(file_path_name, allow_pickle=True)
             data_dict = data.item()
             for run, metrics in data_dict.items():
@@ -134,7 +138,9 @@ def get_gen_no_inbred(bench_name, depths, thresholds, treatment_name):
             gen_avgs_t = 0
 
             # Load dict data
-            file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/{bench_name}/gp_lambda/PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:{depth}_InitD:3_{treatment_name}.npy"
+            # file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/{bench_name}/gp_lambda/PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:{depth}_InitD:3_{treatment_name}.npy"
+            file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/{bench_name}/ramped/final_PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:{depth}_InitD:3_{treatment_name}.npy"
+
             data = np.load(file_path_name, allow_pickle=True)
             data_dict = data.item()
             for run, metrics in data_dict.items():
@@ -464,76 +470,76 @@ def temp_plot2(df_bench, bench_name):
 if __name__ == "__main__":
     
     thresholds = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
-    depths = [6, 7, 8]#, 9, 10] 
+    depths = [6, 7, 8, 9, 10] 
     
-    sr_fns = ["nguyen1", "nguyen2", "nguyen3", "nguyen4", "nguyen5"]
+    sr_fns = ["nguyen1", "nguyen2", "nguyen3", "nguyen4", "nguyen5", "nguyen7", "nguyen8"]
     
     # TODO: This is an Experimental checking for dynamical inbreeding threshold
     # check_dynamic(sr_fns, depths)
     # exit()
     
-    for sr in sr_fns:
+    # for sr in sr_fns:
         
-        inbreed_quick = 0
-        no_inbreed_quick = 0
+    #     inbreed_quick = 0
+    #     no_inbreed_quick = 0
         
-        print(f"\n{sr}")
-        thresholds_gens, min_max_gens = get_gen_avg_inbreed(sr, depths, thresholds, "inbreeding")
-        no_threshold_results, no_min_max_gens, no_min_max_gens_depth = get_gen_no_inbred(sr, depths, thresholds, "no_inbreeding")
+    #     print(f"\n{sr}")
+    #     thresholds_gens, min_max_gens = get_gen_avg_inbreed(sr, depths, thresholds, "inbreeding")
+    #     no_threshold_results, no_min_max_gens, no_min_max_gens_depth = get_gen_no_inbred(sr, depths, thresholds, "no_inbreeding")
         
-        # Metrics for range.
-        total_min_d = 0
-        total_max_d = 0
+    #     # Metrics for range.
+    #     total_min_d = 0
+    #     total_max_d = 0
         
-        no_total_min_d = 0
-        no_total_max_d = 0
+    #     no_total_min_d = 0
+    #     no_total_max_d = 0
         
-        # Count for each threshold which one beats in depth
-        threshold_gens_counts = []
+    #     # Count for each threshold which one beats in depth
+    #     threshold_gens_counts = []
         
-        for dep, thresholds in no_threshold_results.items():
-            # print(f"\nMax Depth: {dep}")
+    #     for dep, thresholds in no_threshold_results.items():
+    #         # print(f"\nMax Depth: {dep}")
             
             
-            for threshold, value in thresholds.items():
+    #         for threshold, value in thresholds.items():
                 
-                # Generation Success Speed convergence count.
-                if thresholds_gens[dep] <= value:
-                    inbreed_quick += 1
-                else:
-                    no_inbreed_quick += 1
-                    threshold_gens_counts.append(threshold)
+    #             # Generation Success Speed convergence count.
+    #             if thresholds_gens[dep] <= value:
+    #                 inbreed_quick += 1
+    #             else:
+    #                 no_inbreed_quick += 1
+    #                 threshold_gens_counts.append(threshold)
                     
-                # print(f"Inbreeding: {thresholds_gens[dep]} ~ No Inbreeding: {value}")
+    #             # print(f"Inbreeding: {thresholds_gens[dep]} ~ No Inbreeding: {value}")
 
-            # Min-Max range of inbreeding
-            (min_d, max_d) = min_max_gens[dep]
-            total_min_d += min_d
-            total_max_d += max_d
+    #         # Min-Max range of inbreeding
+    #         (min_d, max_d) = min_max_gens[dep]
+    #         total_min_d += min_d
+    #         total_max_d += max_d
             
-            # Min-Max range of no-inbreeding
-            (no_min_d, no_max_d) = no_min_max_gens_depth[dep]
-            no_total_min_d += no_min_d
-            no_total_max_d += no_max_d
+    #         # Min-Max range of no-inbreeding
+    #         (no_min_d, no_max_d) = no_min_max_gens_depth[dep]
+    #         no_total_min_d += no_min_d
+    #         no_total_max_d += no_max_d
             
-        #     print("\nBy Depth Generation Range:")
-        #     print(f"Depth: {dep}")
-        #     print(f"No Inbreeding: {no_min_d:.3f} ~ {no_max_d:.3f}.")
-        #     print(f"Inbreeding: {min_d:.3f} ~ {max_d:.3f}.")
+    #     #     print("\nBy Depth Generation Range:")
+    #     #     print(f"Depth: {dep}")
+    #     #     print(f"No Inbreeding: {no_min_d:.3f} ~ {no_max_d:.3f}.")
+    #     #     print(f"Inbreeding: {min_d:.3f} ~ {max_d:.3f}.")
             
-        # Get the global generation range
-        print("\nGlobal Generation Range:")
-        total_min_d = total_min_d / len(depths)
-        total_max_d = total_max_d / len(depths)   
+    #     # Get the global generation range
+    #     print("\nGlobal Generation Range:")
+    #     total_min_d = total_min_d / len(depths)
+    #     total_max_d = total_max_d / len(depths)   
         
-        print(f"No Inbreeding: {no_min_max_gens[0]:.3f} ~ {no_min_max_gens[1]:.3f}.")
-        print(f"Inbreeding: {total_min_d:.3f} ~ {total_max_d:.3f}.")
+    #     print(f"No Inbreeding: {no_min_max_gens[0]:.3f} ~ {no_min_max_gens[1]:.3f}.")
+    #     print(f"Inbreeding: {total_min_d:.3f} ~ {total_max_d:.3f}.")
            
-        # Get the convergence speed ratio globally
-        total_inb = (inbreed_quick / 50) * 100
-        total_no_in = (no_inbreed_quick / 50) * 100
-        print(f"\nConvergence Speed Ratio (%):")
-        print(f"Inbreeding: {total_inb:.3f}% ({inbreed_quick}) ~ No Inbreeding: {total_no_in:.3f}% ({no_inbreed_quick})\n")
+    #     # Get the convergence speed ratio globally
+    #     total_inb = (inbreed_quick / 50) * 100
+    #     total_no_in = (no_inbreed_quick / 50) * 100
+    #     print(f"\nConvergence Speed Ratio (%):")
+    #     print(f"Inbreeding: {total_inb:.3f}% ({inbreed_quick}) ~ No Inbreeding: {total_no_in:.3f}% ({no_inbreed_quick})\n")
         
         # # TODO: I do not think is too relevant
         # print(f"For a specific Inbreeding Threshold. In how many different maximum depths was no_inbreeding quicker?\n")
@@ -553,15 +559,25 @@ if __name__ == "__main__":
 # TODO: There will be another table where for each depth 150 runs each treatment, what is the convergence, in that we will see how different inbreeding thresholds affect the depth
 
     # ----------- Legacy ------------- #
-    sr_fns = ["nguyen6"] #["nguyen1", "nguyen2", "nguyen3", "nguyen4", "nguyen5"]
+    # TODO: this is for normal run -> gp_lambda. Missing 7 and 8
+    # sr_fns = ["nguyen1", "nguyen2", "nguyen3", "nguyen4", "nguyen5", "nguyen6"]#, "nguyen7", "nguyen8"]
+    
+    # TODO: This is for mating-selection -> ramped/final_... missing 6 and one depth of 4 (wip)
+    sr_fns = ["nguyen1", "nguyen2", "nguyen3", "nguyen5", "nguyen6", "nguyen7", "nguyen8"]
+
     for sr in sr_fns:
         print(sr)
-        depths = [6, 7, 8]
-        thresholds = ["None"]
-        succes1, no_suc1 = get_gp_statistics(sr, depths, thresholds, "inbreeding", 3)
-        # succes2, no_suc2 = get_gp_statistics(sr, depths, thresholds, "no_inbreeding", 3)
+        depths = [6, 7, 8, 9, 10]
+        thresholds_none = ["None"]
+        succes1, no_suc1 = get_gp_statistics(sr, depths, thresholds_none, "inbreeding", 3)
+        
+        thresholds = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+        succes2, no_suc2 = get_gp_statistics(sr, depths, thresholds, "no_inbreeding", 3)
     
         n_combs = len(depths)*len(thresholds)*15
         print(f"For a total of {n_combs} experimental runs")
-        # print(f"NO Inbreeding success: {succes2}. Success rate: {(succes2/n_combs)*100:.2f}%")
-        print(f"Inbreeding success: {succes1}. Success rate: {(succes1/n_combs)*100:.2f}%\n")
+        print(f"NO Inbreeding success: {succes2}. Success rate: {(succes2/n_combs)*100:.2f}%")
+        
+        n_combs_none = len(depths)*len(thresholds_none)*15
+        print(f"For a total of {n_combs_none} experimental runs")
+        print(f"Inbreeding success: {succes1}. Success rate: {(succes1/n_combs_none)*100:.2f}%\n")

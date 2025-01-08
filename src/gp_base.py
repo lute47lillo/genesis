@@ -374,25 +374,6 @@ class GeneticAlgorithmGPRamped:
             selected.append(winner)
         return selected
     
-    def mating_selection(self, selected):
-        can_selected = []
-        
-        # Select only individuals with nº nodes > inbred_threshold value
-        if self.inbred_threshold is not None:
-                can_mate_selected = 0
-                
-                for ind in selected:
-                    tree_size = self.count_nodes(ind.tree)
-        
-                    if tree_size >= self.inbred_threshold:
-                        can_mate_selected +=  1
-                        can_selected.append(ind)
-                            
-        else:
-            can_selected = selected
-    
-        return can_selected
-    
     def crossover(self, parent1, parent2):
         """
             Definition
@@ -566,7 +547,6 @@ class GeneticAlgorithmGPRamped:
         self.fitness_function = fitness_function
         
         # Init population
-        # self.initialize_population()
         self.initialize_population_half_and_half() # ramped half-n-half initializaiton
         
         # Initialize lists to store bloat metrics
@@ -592,9 +572,6 @@ class GeneticAlgorithmGPRamped:
     
             # Tournament Selection
             selected = self.tournament_selection()
-            
-            # Mating selection
-            can_selected = self.mating_selection(selected)
     
             # Crossover and Mutation
             next_population = []
@@ -608,25 +585,19 @@ class GeneticAlgorithmGPRamped:
             offspring_count = 0
             none_count = 0
             
-            # Evolutionary recombination
-            while i < lambda_pop:     
-                
-                if len(can_selected) > 2:
-       
-                    # TODO: Only crossover those that have at least more nodes than what can be used.
-                    parent1 = can_selected[i % len(can_selected)]
-                    parent2 = can_selected[(i + 1) % len(can_selected)]
-                    offspring = self.crossover(parent1, parent2)
-               
-                else: # There is not a single one that ca be mated
-                    offspring = [None, None]
+            # Lambda (parent+children)
+            lambda_pop = self.pop_size * 2
+            
+            while i < lambda_pop: 
+                parent1 = selected[i % len(selected)]
+                parent2 = selected[(i + 1) % len(selected)]
+                offspring = self.crossover(parent1, parent2)
     
                 if offspring[0] is not None and offspring[1] is not None:
                     self.mutate(offspring[0])
                     self.mutate(offspring[1])
                     next_population.extend(offspring)
                     offspring_count += 1
-
                 else:
                     none_count += 1
                     # Append parents if Inbreeding is allowed
@@ -807,12 +778,12 @@ if __name__ == "__main__":
     # -------------------------------- Experiment: Multiple Runs w/ fixed population and fixed mutation rate --------------------------- #
     
     term1 = f"genetic_programming/{args.benchmark}/"
-    term2 = "ramped/"
+    term2 = "gp_lambda/"
     
     if args.inbred_threshold == 1:
-        term3 = f"final_PopSize:{args.pop_size}_InThres:None_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
+        term3 = f"PopSize:{args.pop_size}_InThres:None_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
     else:
-        term3 = f"final_PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
+        term3 = f"PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
         
     # Text to save files and plot.
     args.config_plot = term1 + term2 + term3
@@ -825,5 +796,3 @@ if __name__ == "__main__":
         print("Running GA with NO Inbreeding Mating...")
         results_no_inbreeding = exp.test_multiple_runs_function_gp_ramped(args, gp_landscape, args.inbred_threshold)
         util.save_accuracy(results_no_inbreeding, f"{args.config_plot}_no_inbreeding.npy")
-
-    

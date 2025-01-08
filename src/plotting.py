@@ -1223,60 +1223,64 @@ if __name__ == "__main__":
     
     # ------ Independent Bloat Study ------------- #
     
-    # print("\nBloat ~ intron study.")
-    # attributes = ['best_fitness', 'diversity', 'avg_tree_size', 'pop_intron_ratio']
-    # bloat_thresholds = [5, 10, 14, "None"] # 10
-    # sr_fns = ["nguyen6"]#["nguyen1", "nguyen2", "nguyen3", "nguyen4", "nguyen5", "nguyen6", "nguyen7", "nguyen8"]
-    # sr_dfs = {}
-    # max_depth = 10 # (6 or 10). but 6 only 5 runs
+    print("\nBloat ~ intron study.")
+    attributes = ['best_fitness', 'diversity', 'avg_tree_size', 'pop_intron_ratio']
+    # bloat_thresholds = [5, 10, 14, "None"] 
+    sr_fns = ["nguyen1", "nguyen2", "nguyen3", "nguyen4", "nguyen5", "nguyen6", "nguyen7", "nguyen8"]
+    sr_dfs = {}
+    max_depth = 10 # (6 or 10). but 6 only 5 runs
     
-    # for sr in sr_fns:
+    bloat_thresholds = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, "None"] 
+    # sr_fns = ["nguyen1", "nguyen2", "nguyen3"]
+   
+    
+    for sr in sr_fns:
         
-    #     print(f"\nSymbolic Regression Function: {sr}")
-    #     dict_results = []
-    #     dfs = []
+        print(f"\nSymbolic Regression Function: {sr}")
+        dict_results = []
+        dfs = []
         
-    #     for thres in bloat_thresholds:
+        for thres in bloat_thresholds:
             
-    #         print(f"\nBloat Threshold: {thres}")
+            print(f"\nBloat Threshold: {thres}")
             
-    #         # Read file
-    #         if thres == "None": # Read the inbreeding treatment without threshold
-    #             file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/{sr}/bloat/introns_PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:{max_depth}_InitD:3_inbreeding.npy"
-    #         else:
-    #             file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/{sr}/bloat/introns_PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:{max_depth}_InitD:3_no_inbreeding.npy"
+            # Read file
+            if thres == "None": # Read the inbreeding treatment without threshold
+                file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/{sr}/bloat/introns_PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:{max_depth}_InitD:3_inbreeding.npy"
+            else:
+                file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/{sr}/bloat/introns_PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:{max_depth}_InitD:3_no_inbreeding.npy"
             
-    #         # Load the data dict
-    #         data = np.load(file_path_name, allow_pickle=True)
-    #         results_inbreeding = data.item()
-    #         dict_results.append(results_inbreeding)
+            # Load the data dict
+            data = np.load(file_path_name, allow_pickle=True)
+            results_inbreeding = data.item()
+            dict_results.append(results_inbreeding)
             
-    #         # Pad the data for correct plotting
-    #         global_max_length = util.get_global_max_depth(results_inbreeding)
-    #         df_no_inbreeding = util.pad_dict_and_create_df(results_inbreeding, attributes, global_max_length, 15)
-    #         dfs.append(df_no_inbreeding)
+            # Pad the data for correct plotting
+            global_max_length = util.get_global_max_depth(results_inbreeding)
+            df_no_inbreeding = util.pad_dict_and_create_df(results_inbreeding, attributes, global_max_length, 15)
+            dfs.append(df_no_inbreeding)
             
-    #         # Compute PEARSON correlations between all attributes or plot an indivdual heatmap
-    #         compute_correlations(results_inbreeding, config_plot=f"genetic_programming/{sr}/bloat/InThres:{thres}", temp_runs=15, attribute_1="pop_intron_ratio", attribute_2="avg_tree_size")
+            # Compute PEARSON correlations between all attributes or plot an indivdual heatmap
+            compute_correlations(results_inbreeding, config_plot=f"genetic_programming/{sr}/bloat/InThres:{thres}", temp_runs=15, attribute_1="pop_intron_ratio", attribute_2="avg_tree_size")
 
-    #     # Plot all heatmaps in a 2x2 grid
-    #     plot_combined_corr_heatmaps(dfs, bloat_thresholds, attributes, config_plot=f"{sr}_")
+        # Plot all heatmaps in a 2x2 grid
+        # plot_combined_corr_heatmaps(dfs, bloat_thresholds, attributes, config_plot=f"{sr}_")
 
-    #     # Plot for all SR
-    #     sr_dfs[sr] = {
-    #         'pop_intron_ratio': collect_plot_values(dict_results, 'Inbred Threshold', bloat_thresholds, 'pop_intron_ratio', n_runs=15), 
-    #         'diversity': collect_plot_values(dict_results, 'Inbred Threshold', bloat_thresholds, 'diversity', n_runs=15),
-    #         'avg_tree_size': collect_plot_values(dict_results, 'Inbred Threshold', bloat_thresholds, 'avg_tree_size', n_runs=15),
-    #         'best_fitness': collect_plot_values(dict_results, 'Inbred Threshold', bloat_thresholds, 'best_fitness', n_runs=15)
-    #     }
+        # Plot for all SR
+        sr_dfs[sr] = {
+            'pop_intron_ratio': collect_plot_values(dict_results, 'Inbred Threshold', bloat_thresholds, 'pop_intron_ratio', n_runs=15), 
+            'diversity': collect_plot_values(dict_results, 'Inbred Threshold', bloat_thresholds, 'diversity', n_runs=15),
+            'avg_tree_size': collect_plot_values(dict_results, 'Inbred Threshold', bloat_thresholds, 'avg_tree_size', n_runs=15),
+            'best_fitness': collect_plot_values(dict_results, 'Inbred Threshold', bloat_thresholds, 'best_fitness', n_runs=15)
+        }
     
-    # attributes =["diversity", "pop_intron_ratio", "avg_tree_size"]
-    # plot_all_sr_in_columns(sr_dfs, sr_fns, attributes, config_plot=f"genetic_programming/bloat/TESTingMaxDepth:{max_depth}_structure", global_max_length=150)
+    attributes =["diversity", "pop_intron_ratio", "avg_tree_size"]
+    plot_all_sr_in_columns(sr_dfs, sr_fns, attributes, config_plot=f"genetic_programming/bloat/AllThresh_MaxDepth:{max_depth}_structure", global_max_length=150)
     
-    # attributes =["best_fitness", "diversity", "pop_intron_ratio"]
-    # plot_all_sr_in_columns(sr_dfs, sr_fns, attributes, config_plot=f"genetic_programming/bloat/TESTingMaxDepth:{max_depth}_search_metrics", global_max_length=150)
+    attributes =["best_fitness", "diversity", "pop_intron_ratio"]
+    plot_all_sr_in_columns(sr_dfs, sr_fns, attributes, config_plot=f"genetic_programming/bloat/AllThresh_MaxDepth:{max_depth}_search_metrics", global_max_length=150)
     
-    
+    # -------------- ALL Thresholds ---------------- #
     
     # print("\nBloat ~ intron study.")
     # attributes = ['best_fitness', 'diversity', 'avg_tree_size', 'pop_intron_ratio']
@@ -1340,24 +1344,25 @@ if __name__ == "__main__":
     
     # --------- Dynamic vs static ----------------- #
     
-    treatment = "no_inbreeding"
-    comps = [5, 10, 14, "None"]
+    # treatment = "no_inbreeding"
+    # comps = [5, 10, 14, "None"]
     
-    for thres in [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, "None"]:
-        print(f"Threshold: {thres}")
-        if thres == "None":
-            treatment = "inbreeding"
+    # for thres in [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, "None"]:
+    #     print(f"Threshold: {thres}")
+    #     if thres == "None":
+    #         treatment = "inbreeding"
 
-        file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/nguyen6/gp_lambda/PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:6_InitD:3_{treatment}.npy"
-        data = np.load(file_path_name, allow_pickle=True)
-        results_no_inbreeding = data.item()
+    #     file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/nguyen6/gp_lambda/PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:6_InitD:3_{treatment}.npy"
+    #     data = np.load(file_path_name, allow_pickle=True)
+    #     results_no_inbreeding = data.item()
 
-        file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/nguyen6/gp_lambda/PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:10_InitD:3_{treatment}.npy"
-        data = np.load(file_path_name, allow_pickle=True)
-        results_inbreeding = data.item()
+    #     file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/nguyen6/gp_lambda/PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:10_InitD:3_{treatment}.npy"
+    #     data = np.load(file_path_name, allow_pickle=True)
+    #     results_inbreeding = data.item()
         
-        plot_gen_vs_run(None, results_no_inbreeding, results_inbreeding, 'Depth6', 'Depth10', "Comparison")
-        print()
+    #     plot_gen_vs_run(None, results_no_inbreeding, results_inbreeding, 'Depth6', 'Depth10', "Comparison")
+    #     print()
+        
     # --------- InbreedBlock vs InbreedUnBlock ----------------- #
     
     # treatment = "no_inbreeding"
