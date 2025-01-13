@@ -564,6 +564,8 @@ class GeneticAlgorithmGPBloat:
         # Replace the subtree with a new random subtree
         new_subtree = individual.full_tree(self.initial_depth) 
         
+        # ------
+        
         # Ensure that the new_subtree has the correct arity
         required_children = individual.get_function_arity(new_subtree.value)
         if len(new_subtree.children) != required_children:

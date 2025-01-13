@@ -422,7 +422,7 @@ def test_only_crossover_performance(sr_fns, thresholds, max_depth=6):
 
 # --------- Fitness Sharing Experiments ----------------- #
 
-def test_fit_sharing_performance(max_depth=6):
+def test_fit_sharing_performance(max_depth=10):
     """
         Definition
         -----------
@@ -434,7 +434,7 @@ def test_fit_sharing_performance(max_depth=6):
         -----------
            
     """
-    sr_fns = ["nguyen1", "nguyen2"]#, "nguyen3", "nguyen4", "nguyen5"]
+    sr_fns = ["nguyen1", "nguyen2", "nguyen3", "nguyen4", "nguyen5", "nguyen6", "nguyen7", "nguyen8"]
     thresholds = [5, 10, 14, "None"]
     sigma_weights = [0.0, 0.1, 0.2, 0.3, 0.5, 0.8]
     keys = []
@@ -460,16 +460,23 @@ def test_fit_sharing_performance(max_depth=6):
                 else:
                     file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/{sr}/gp_lambda/PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:{max_depth}_InitD:3_{treatment}.npy"
                     
-                data = np.load(file_path_name, allow_pickle=True)
-                results_rate = data.item()
-                
-                for k, v in results_rate.items():
-                    gen = results_rate[k]['generation_success']
-                    gens_succs.append(gen)
+                try:
+                    data = np.load(file_path_name, allow_pickle=True)  
                     
-                    if gen < 150:
-                        success_count +=1
+                    results_rate = data.item()
                 
+                    for k, v in results_rate.items():
+                        gen = results_rate[k]['generation_success']
+                        gens_succs.append(gen)
+                        
+                        if gen < 150:
+                            success_count +=1     
+                            
+                except FileNotFoundError:
+                    print(f"Warning: The file '{file_path_name}' does not exist. Loading default data.")
+                    gens_succs = [150] * 15
+                    success_count = 0
+            
                 key = "W:" + str(weight) + "_T:" + str(thres)
                 results[key] = {
                     'generation_successes' : gens_succs,
@@ -629,11 +636,11 @@ if __name__ == "__main__":
     
     # -------- Fitness Sharing ------- #
     print("\nFitness Sharing")
-    test_fit_sharing_performance(6)
-    test_fit_sharing_performance(7)
-    test_fit_sharing_performance(8)
-    test_fit_sharing_performance(9)
-    test_fit_sharing_performance(10)
+    # test_fit_sharing_performance(6)
+    # test_fit_sharing_performance(7)
+    # test_fit_sharing_performance(8)
+    # test_fit_sharing_performance(9)
+    # test_fit_sharing_performance(10)
     
     # -------- Exploration vs Exploitation ------- #
     # print("\nExplore vs Exploit")

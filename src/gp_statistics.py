@@ -472,11 +472,13 @@ if __name__ == "__main__":
     thresholds = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
     depths = [6, 7, 8, 9, 10] 
     
-    sr_fns = ["nguyen1", "nguyen2", "nguyen3", "nguyen4", "nguyen5", "nguyen7", "nguyen8"]
+    sr_fns = ["nguyen6", "nguyen7", "nguyen8"]
+    
+    # ["nguyen1", "nguyen2", "nguyen3", "nguyen4", "nguyen5",
     
     # TODO: This is an Experimental checking for dynamical inbreeding threshold
-    # check_dynamic(sr_fns, depths)
-    # exit()
+    check_dynamic(sr_fns, depths)
+    exit()
     
     # for sr in sr_fns:
         
