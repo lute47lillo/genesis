@@ -7,6 +7,7 @@ from gp_only_cross import GeneticAlgorithmGPOnlyCrossover
 from gp_dynamic import GeneticAlgorithmGPDynamic
 from gp_linear import GeneticAlgorithmGPLinear
 from gp_performance import GeneticAlgorithmGPRamped
+from gp_sharing_parallel import GeneticAlgorithmGPSharingParallel
 import util as util
 import random
     
@@ -79,7 +80,8 @@ def test_multiple_runs_function_sharing(args, landscape, inbred_threshold):
         util.set_seed(random.randint(0, 999999))
        
         print(f"Running experiment nº: {run}")
-        ga_gp = GeneticAlgorithmGPSharing(
+        # TODO: Running parallel
+        ga_gp = GeneticAlgorithmGPSharingParallel(
             args=args,
             mut_rate=args.mutation_rate,
             inbred_threshold=inbred_threshold  # Adjust based on inbreeding prevention

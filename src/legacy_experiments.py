@@ -495,10 +495,10 @@ def test_fit_sharing_performance(max_depth=10):
         
         util.compute_composite_score_for_eval(sr_dfs, sr, results)
         
-    plot.plot_generation_successes(results, keys, f"genetic_programming/{sr}/sharing/Depth:{max_depth}_gens_vs_runs")
+    # plot.plot_generation_successes(results, keys, f"genetic_programming/{sr}/sharing/Depth:{max_depth}_gens_vs_runs")
 
     attributes =["best_fitness", "diversity"]
-    plot.plot_all_sr_in_columns(sr_dfs, sr_fns, attributes, config_plot=f"genetic_programming/{sr}/sharing/Depth:{max_depth}_performance", global_max_length=150)
+    # plot.plot_all_sr_in_columns(sr_dfs, sr_fns, attributes, config_plot=f"genetic_programming/{sr}/sharing/Depth:{max_depth}_performance", global_max_length=150)
 
 # --------- Exploration vs Exploitation Experiments ----------------- #
 
@@ -640,7 +640,7 @@ if __name__ == "__main__":
     # test_fit_sharing_performance(7)
     # test_fit_sharing_performance(8)
     # test_fit_sharing_performance(9)
-    # test_fit_sharing_performance(10)
+    test_fit_sharing_performance(10)
     
     # -------- Exploration vs Exploitation ------- #
     # print("\nExplore vs Exploit")

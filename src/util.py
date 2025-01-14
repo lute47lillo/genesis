@@ -4,9 +4,9 @@ import torch
 import os
 import pandas as pd
 import benchmark_factory as bf
-from sympy import symbols, sympify, simplify, expand
-import sympy
+from gp_node import Node
 import random
+import copy
 
 def set_seed(seed):
     torch.manual_seed(seed)
@@ -50,8 +50,9 @@ def set_args():
     argparser.add_argument('--slope_threshold', type=int, help='Type of increase of inbreeding threhsold. 1 or -1', default=1)
     argparser.add_argument('--gen_change', type=int, help='Generation X at which changin rate of change of threshold', default=25) 
     argparser.add_argument('--linear_type', type=str, help='Whether the change is abrupt or continuous', default='continuous') 
-
     
+    # Dynamic Mutation Type
+    argparser.add_argument('--mutation_type', type=str, help='Whether the mutation subtrees are intron or random', default='random')     
     
     # Parse all arguments
     args = argparser.parse_args()
@@ -118,6 +119,75 @@ def pack_measures_lists(average_size_list, average_depth_list):
 def pack_metrics_lists(best_fitness_list, diversity_list):
     metrics_lists = (best_fitness_list, diversity_list)
     return metrics_lists
+
+def subtree_yields_one():
+    """
+    Returns a subtree guaranteed to yield 1 for all x.
+    Useful as an intron in multiplication or division contexts.
+    """
+    patterns = []
+    
+    # 1) Direct one
+    patterns.append(Node(1.0))
+    
+    # 2) cos(0)
+    patterns.append(Node('cos', [Node(0.0)]))
+    
+    # 3) Node / Node (identical)
+    #   Create a small subtree for the child, then duplicate it.
+    
+    child = None
+    while True:
+        candidate = small_random_terminal_subtree()
+        # If candidate can evaluate to 0, it might cause division by zero issues
+        # But let's allow 'x' or 1.0. If candidate is Node(0.0), let's regenerate.
+        if not (isinstance(candidate.value, float) and candidate.value == 0.0):
+            child = candidate
+            break
+    
+    child_copy = copy.deepcopy(child)
+    patterns.append(Node('/', [child, child_copy]))  # e.g. x / x or 1 / 1
+    
+    return np.random.choice(patterns)
+
+def subtree_yields_zero():
+    """
+    Returns a subtree guaranteed to yield 0 for all x.
+    Useful as an intron in addition or subtraction contexts.
+    """
+    patterns = []
+    
+    # 1) Direct zero
+    patterns.append(Node(0.0))
+    
+    # 2) sin(0)
+    patterns.append(Node('sin', [Node(0.0)]))
+    
+    # 3) log(1.0)
+    patterns.append(Node('log', [Node(1.0)]))
+    
+    # 4) Node - Node (identical)
+    #   We'll create a small subtree for the child, then duplicate it.
+    child = small_random_terminal_subtree()
+    child_copy = copy.deepcopy(child)
+    patterns.append(Node('-', [child, child_copy]))  # e.g. x - x
+    
+    return np.random.choice(patterns)
+
+def small_random_terminal_subtree():
+    """
+    Returns a Node that is either:
+      - Node('x'), or
+      - Node(0.0), or
+      - Node(1.0).
+    """
+    choice = np.random.choice(['x', '0', '1'])
+    if choice == 'x':
+        return Node('x')
+    elif choice == '0':
+        return Node(0.0)
+    else:
+        return Node(1.0)
 
 # ---------------------- Diversity in fitness ---------------- #
 

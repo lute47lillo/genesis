@@ -34,12 +34,19 @@ class GeneticAlgorithmGPBloat:
         self.best_fitness_list = []
         self.diversity_list = []
         
+        # TODO: Testing dynamic mutation type
+        self.mutation_type = args.mutation_type
+        
+        if self.mutation_type == "random":
+            self.div_checkpoint = 0
+        else:
+            self.div_checkpoint = 15 # TODO: This has to be re-thought, because it is harder to define a value to start going down at the beginning
+        
     def collect_all_stats(self):
         
         # Compute population intros at failure.
         self.compute_population_size_depth()
         self.compute_introns_lists(self.intron_fraction)
-        # self.compute_kinship_population()
         
         # Then collect them
         intron_lists = util.pack_intron_lists(self.pop_ratio_intron_list, self.avg_ratio_intron_list, self.pop_total_intron_list, self.pop_total_nodes_list)
@@ -107,101 +114,51 @@ class GeneticAlgorithmGPBloat:
         
         # Track diversity value
         self.diversity_list.append(diversity)
-        
 
-    # ---------------------- Ancestry computations -------------------------------- #
-    
-    def compute_kinship_population(self):
-        """
-            Definition
-            -----------
-                Compute the kinship coefficient of the all individuals in the population with respect to the rest of the population.
-        """
-        
-        population_kinship = []
-        
-        # Iterate over population
-        for i in range(self.pop_size):
-            i_kinship = 0
-            for j in range(self.pop_size):
-                if i != j: # Don't compare with yourself
-                    ij_ratio = self.kinship_coefficient(self.population[i], self.population[j])
-                
-                    # Storing in array, and checking how much different.
-                    # TODO
-                    # Storing kinship and paris of trees in a dictionary, and comparing their syntactic and semantic differences.
-                    # TODO
-                    # Add all and normalize by number of individuals to check how much one population is 
-                    i_kinship += ij_ratio
-                    
-            i_kinship = i_kinship / (self.pop_size - 1) # Not counting yourself
-            population_kinship.append(i_kinship)
-            
-        # Compute kinship for population
-        avg_pop_kinship = np.mean(population_kinship)
-        closest_i = np.argmax(population_kinship)
-        furthest_i = np.argmin(population_kinship)
-        
-        # Retrieve individuals
-        tree_clossest = self.population[closest_i]
-        tree_furthest = self.population[furthest_i]
-        
-        # Track statistics
-        self.furthest_tree_list.append((tree_furthest.ancestors, min(population_kinship)))
-        self.clossest_tree_list.append((tree_clossest.ancestors, max(population_kinship)))
-        self.avg_pop_kinship_list.append(avg_pop_kinship) # Could compute the average ancestors
-        
-        # print(f"The population has an average kinship coefficient (K_AVG) of {avg_pop_kinship}.")
-        # print(f"The most related individual is {tree_clossest.tree} with K of: {max(population_kinship)} and {len(tree_clossest.ancestors)} total different ancestors.")
-        # print(f"The least related individual is {tree_furthest.tree} with K of: {min(population_kinship)} and {len(tree_furthest.ancestors)} total different ancestors.\n")
-    
-    def compute_successful_individual_kinship(self, suc_indiv):
-        """
-            Definition
-            -----------
-                Compute the kinship coefficient of the successful individual with respect to the rest of the population.
-        """
-        
-        succ_kinship = 0
-        for individual in self.population:
-            ij_kinship = self.kinship_coefficient(suc_indiv, individual)
-            succ_kinship += ij_kinship
-            
-        # Update Succesful individual to be tracked.
-        succ_kinship = (succ_kinship - 1) / (self.pop_size - 1) # Not counting yourself and -1 for the comparison between yourself
-        suc_indiv.succ_kinship = succ_kinship
-        
-        print(f"\nThe successful individual is {suc_indiv.tree} with K of: {succ_kinship} and {len(suc_indiv.ancestors)} total different ancestors.\n")
-        
-    def kinship_coefficient(self, ind1, ind2):
-        """
-            Definition
-            -----------
-                TODO: this could go to util file.
-                The kinship coefficient (f) between two individuals is how close 2 individuals in a population are related to each other.
-                
-            Parameters
-            -----------
-                - ind1 and ind2 (Individual): The individuals of a population to compare their kinship coefficient.
-                
-            Return
-            -----------
-                - ratio_ancestry (float): How related two individuals are. The closer to 1, the more related they are.
-        """
-        
-        shared_ancestors = ind1.ancestors.intersection(ind2.ancestors)
-        total_ancestors = ind1.ancestors.union(ind2.ancestors)
-
-        # No ancestors, unrelated
-        if not total_ancestors:
-            return 0.0  
-
-        # Ratio of shared ancestors to total ancestors.
-        ratio_ancestry = len(shared_ancestors) / len(total_ancestors)
-        return ratio_ancestry
-    
     # ----------------------- Individial Tree ~ Node computations ------------------ #
     
+    def generate_intron_subtree_for_context(self, context_operator=None):
+        """
+            Definition
+            -----------
+                Returns a subtree that behaves as an intron, i.e., it does not affect the parent operator's outcome.
+        
+            Parameters
+            -----------
+                - context_operator(str or None): The operator in the parent node where this subtree is being inserted.
+                                                If None, we'll randomly choose from all intron patterns.
+            
+            Returns
+            -----------
+                - Node (node): A subtree that yields 0 in add/sub contexts or 1 in mul/div contexts, or random if context is None.
+        """
+        # Distinguish the two main contexts:
+        #  - add/sub => yields zero
+        #  - mul/div => yields one
+        
+        if context_operator in ['+', '-']:
+            # We want a subtree that yields 0
+            return util.subtree_yields_zero()
+        elif context_operator in ['*', '/']:
+            # We want a subtree that yields 1
+            return util.subtree_yields_one()
+        else:
+            # If we don't know the context, pick from either one randomly
+            # or build a combined library of all patterns
+            patterns = []
+            
+            # All zero-yielding
+            zero_subtree = util.subtree_yields_zero()
+            # All one-yielding
+            one_subtree = util.subtree_yields_one()
+            
+            # We can just pick from [zero_subtree, one_subtree], or expand it further
+            # to pick from multiple patterns each time
+            patterns.append(zero_subtree)
+            patterns.append(one_subtree)
+            
+            return np.random.choice(patterns)
+
     def select_random_node(self, tree):
         """
             Definition
@@ -227,6 +184,53 @@ class GeneticAlgorithmGPBloat:
         for child in tree.children:
             nodes.extend(self.get_all_nodes(child))
         return nodes
+
+    def select_random_node_and_parent_operator(self, tree):
+        """
+        Traverses the tree and collects (node, parent's operator).
+        Then returns one randomly chosen (node, parent_operator).
+        
+        Parameters
+        ----------
+        root : Node
+            The root of the individual's tree.
+        
+        Returns
+        -------
+        (Node, str or None)
+            The randomly chosen node and the operator in the parent node 
+            that uses this node as a child. If the node is the root, 
+            parent_operator will be None.
+            
+            Returns (None, None) if the tree is empty.
+        """
+        if tree is None:
+            return None, None  # Empty tree
+        
+        # We'll do a BFS or DFS, collecting (child, parent's operator).
+        # For the root, there's no parent, so parent_operator is None.
+        
+        queue = [(tree, None)]  # (current_node, parent_operator)
+        collected = []
+        
+        while queue:
+            current_node, parent_op = queue.pop()
+            
+            # Record this node and the parent's operator
+            collected.append((current_node, parent_op))
+            
+            # If this node is not terminal, enqueue its children
+            if not current_node.is_terminal():
+                for child in current_node.children:
+                    queue.append((child, current_node.value))
+        
+        if not collected:
+            return None, None
+        
+        # Randomly select one entry from 'collected'
+        chosen_node, chosen_parent_op = random.choice(collected)
+        return chosen_node, chosen_parent_op
+
     
     def select_random_node_with_parent(self, tree):
         """
@@ -545,6 +549,38 @@ class GeneticAlgorithmGPBloat:
 
         return offspring1, offspring2
     
+    def mutate_intron(self, individual):
+        """
+            Definition
+            -----------
+                Applies Random Subtree mutation to an individual, specifically inserting guaranteed intron subtrees in the correct operator context (if known).
+        """
+        mutated_tree = copy.deepcopy(individual.tree)
+
+        # Select a random node to mutate
+        node_to_mutate, parent_op = self.select_random_node_and_parent_operator(mutated_tree) # Note: Do not use the other prent, node function as this specifically selects for 1 parent node. Ensuring introns.
+        if node_to_mutate is None:
+            return  # No mutation possible
+
+        # Generate an intron subtree based on the parent's operator or None if you don't track it
+        new_subtree = self.generate_intron_subtree_for_context(parent_op)
+                
+        # Optionally check arity, or just override
+        required_children = individual.get_function_arity(new_subtree.value)
+        if len(new_subtree.children) != required_children:
+            return  # Discard mutation if it doesn't match
+        
+        # Replace
+        node_to_mutate.value = new_subtree.value
+        node_to_mutate.children = new_subtree.children
+
+        # Validate tree depth
+        if self.tree_depth(mutated_tree) > self.max_depth:
+            return  # Exceeding depth, discard
+        
+        # Commit mutation
+        individual.tree = mutated_tree
+        
     def mutate(self, individual):
         """
             Definition
@@ -564,8 +600,6 @@ class GeneticAlgorithmGPBloat:
         # Replace the subtree with a new random subtree
         new_subtree = individual.full_tree(self.initial_depth) 
         
-        # ------
-        
         # Ensure that the new_subtree has the correct arity
         required_children = individual.get_function_arity(new_subtree.value)
         if len(new_subtree.children) != required_children:
@@ -582,7 +616,29 @@ class GeneticAlgorithmGPBloat:
 
         # Update individual
         individual.tree = mutated_tree
-    
+        
+    def control_mutation_type(self, gen):
+        
+        # Trim last 15 generations
+        temp_list = self.diversity_list[gen - 15:gen]
+        
+        # Take average of last 15 generations
+        avg_div = np.mean(temp_list)
+        
+        # Compare to last checkpoint
+        if avg_div < self.div_checkpoint:
+            
+            # Introduce exploration if diversity is lower
+            self.mutation_type = "intron"
+            
+        else:
+            self.mutation_type = "random"
+            
+        print(f"\nMutation type at generation: {gen} is {self.mutation_type}. Current Average (last 15 gens) Diversity is {avg_div}. Previous was {self.div_checkpoint}.")
+        
+        # Update
+        self.div_checkpoint = avg_div
+        
     # ----------------- Main execution loop ------------------------- #
     
     def run(self, landscape):
@@ -604,11 +660,6 @@ class GeneticAlgorithmGPBloat:
         self.pop_total_intron_list = []
         self.pop_total_nodes_list = []
         
-        # Initialize lists to store kinship statistical metrics
-        self.avg_pop_kinship_list = []
-        self.clossest_tree_list = [] # most related tree wrt population
-        self.furthest_tree_list = [] # least related tree wrt population
-        
         for gen in range(self.generations):
 
             # Calculate fitness
@@ -620,6 +671,9 @@ class GeneticAlgorithmGPBloat:
     
             # Measure diversity
             self.measure_diversity(self.population)
+            
+            if (gen + 1) % 15 == 0:
+                self.control_mutation_type(gen + 1)
             
             # Start timing
             start_time = time.time()
@@ -640,9 +694,6 @@ class GeneticAlgorithmGPBloat:
     
             # Tournament Selection
             selected = self.tournament_selection()
-            
-            # Mating selection
-            # can_selected = self.mating_selection(selected)
     
             # Crossover and Mutation
             next_population = []
@@ -655,46 +706,7 @@ class GeneticAlgorithmGPBloat:
             self.allowed_mate_by_dist = 0 # Reset to 0 on every generation
             offspring_count = 0
             none_count = 0
-            
-            # Evolutionary recombination
-            
-            # -------------- YES specific mating selection ------------ #
-            # while i < lambda_pop:     
-                
-            #     if len(can_selected) > 2:
-       
-            #         # TODO: Only crossover those that have at least more nodes than what can be used.
-            #         parent1 = can_selected[i % len(can_selected)]
-            #         parent2 = can_selected[(i + 1) % len(can_selected)]
-            #         offspring = self.crossover(parent1, parent2)
-               
-            #     else: # There is not a single one that ca be mated
-            #         offspring = [None, None]
-    
-            #     if offspring[0] is not None and offspring[1] is not None:
-            #         self.mutate(offspring[0])
-            #         self.mutate(offspring[1])
-            #         next_population.extend(offspring)
-            #         offspring_count += 1
-
-            #     else:
-            #         none_count += 1
-                    
-            #         # Append parents if Inbreeding is allowed
-            #         if self.inbred_threshold is None: 
-            #             next_population.append(copy.deepcopy(parent1))
-            #             next_population.append(copy.deepcopy(parent2))
-            #         else:
-            #             # Introduce new random individuals to maintain population size if inbreeding is not allowed
-            #             new_individual = Individual(self.args, fitness_function=self.fitness_function, init_method="full")
-            #             next_population.append(new_individual)
-                                                
-            #             if len(next_population) < self.pop_size:
-            #                 new_individual = Individual(self.args, fitness_function=self.fitness_function, init_method="full")
-            #                 next_population.append(new_individual)
-        
-            #     i += 2
-                
+                      
             # -------------- No specific mating selection ------------ #
             while i < lambda_pop: 
                 parent1 = selected[i % len(selected)]
@@ -702,8 +714,20 @@ class GeneticAlgorithmGPBloat:
                 offspring = self.crossover(parent1, parent2)
     
                 if offspring[0] is not None and offspring[1] is not None:
+                    
+                    # if self.mutation_type == "random":
+                    #     # --- Mutate introducing random subtrees --- #
+                    #     self.mutate(offspring[0])
+                    #     self.mutate(offspring[1])
+                    # else:
+                    #     # --- Mutate introducing specific introns --- #
+                    #     self.mutate_intron(offspring[0])
+                    #     self.mutate_intron(offspring[1])
+                    
+                    # ---- Half-n-half mutation type population ---- #
                     self.mutate(offspring[0])
-                    self.mutate(offspring[1])
+                    self.mutate_intron(offspring[1])
+                        
                     next_population.extend(offspring)
                     offspring_count += 1
                 else:
@@ -723,8 +747,8 @@ class GeneticAlgorithmGPBloat:
         
                 i += 2
                 
-            print(f"Generation {gen + 1}: Checking by distance. Only {self.allowed_mate_by_dist} Individuals can actually  mate -> {self.allowed_mate_by_dist/len(selected) * 100:.3f}\n")
-            print(f"New individuals added from real offspring: {offspring_count} vs added from random (they could'nt mate): {none_count}")
+            # print(f"Generation {gen + 1}: Checking by distance. Only {self.allowed_mate_by_dist} Individuals can actually  mate -> {self.allowed_mate_by_dist/len(selected) * 100:.3f}\n")
+            # print(f"New individuals added from real offspring: {offspring_count} vs added from random (they could'nt mate): {none_count}")
 
             # Combine the population (mu+lambda)
             combined_population = next_population[:lambda_pop] + self.population     
@@ -757,7 +781,8 @@ class GeneticAlgorithmGPBloat:
                 print(f"Generation {gen + 1}: Best Fitness = {best_individual.fitness:.3f}\n"
                       f"Diversity = {self.diversity_list[gen]:.3f}\n"
                       f"Avg Size = {self.average_size_list[-1]:.3f}\n"
-                      f"Population Intron Ratio = {self.pop_ratio_intron_list[-1]:.3f}\n")
+                      f"Population Intron Ratio = {self.pop_ratio_intron_list[-1]:.3f}\n"
+                      f"Current Mutation Type = {self.mutation_type}\n")
                 
         # Collect all if failed run
         metrics_lists, measures_lists, intron_lists, kinship_lists = self.collect_all_stats()

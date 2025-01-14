@@ -499,10 +499,11 @@ if __name__ == "__main__":
         term1 = f"genetic_programming/{args.benchmark}/"
         term2 = "bloat/"
         
+        # introns_ referes to classic intron run. introns_mutation_ are doing mutation to introduce specific introns.
         if args.inbred_threshold == 1:
-            term3 = f"introns_PopSize:{args.pop_size}_InThres:None_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
+            term3 = f"half_mut_PopSize:{args.pop_size}_InThres:None_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
         else:
-            term3 = f"introns_PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
+            term3 = f"half_mut_PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
         
         # Text to save files and plot.
         args.config_plot = term1 + term2 + term3
