@@ -790,8 +790,6 @@ class GPLandscape:
         total_error = 0.0
         success = True  # Assume success initially
         epsilon = 1e-4  # Small threshold for success
-        
-        total_error
 
         for x, target in self.data:
 

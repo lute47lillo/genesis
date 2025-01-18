@@ -8,6 +8,7 @@ from gp_dynamic import GeneticAlgorithmGPDynamic
 from gp_linear import GeneticAlgorithmGPLinear
 from gp_performance import GeneticAlgorithmGPRamped
 from gp_sharing_parallel import GeneticAlgorithmGPSharingParallel
+from gp_base import GeneticAlgorithmGPPerformance
 import util as util
 import random
     
@@ -50,8 +51,9 @@ def test_multiple_runs_function_gp_ramped(args, landscape, inbred_threshold):
         # Reset the seed for every run
         util.set_seed(random.randint(0, 999999))
        
+        # TODO: Running 750 performance algorithms
         print(f"Running experiment nº: {run}")
-        ga_gp = GeneticAlgorithmGPRamped(
+        ga_gp = GeneticAlgorithmGPPerformance(
             args=args,
             mut_rate=args.mutation_rate,
             inbred_threshold=inbred_threshold  # Adjust based on inbreeding prevention

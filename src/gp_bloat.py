@@ -715,6 +715,7 @@ class GeneticAlgorithmGPBloat:
     
                 if offspring[0] is not None and offspring[1] is not None:
                     
+                    # ---- Dynamic mutation type population ---- #
                     # if self.mutation_type == "random":
                     #     # --- Mutate introducing random subtrees --- #
                     #     self.mutate(offspring[0])
@@ -725,8 +726,24 @@ class GeneticAlgorithmGPBloat:
                     #     self.mutate_intron(offspring[1])
                     
                     # ---- Half-n-half mutation type population ---- #
-                    self.mutate(offspring[0])
-                    self.mutate_intron(offspring[1])
+                    # self.mutate(offspring[0])
+                    # self.mutate_intron(offspring[1])
+                    
+                    # ---- half-n-half with quartiles mutation type population Random p(0.75) and Intron p(0.25) -> random_plus_... ---- #
+                    if random.random() <= 0.75:
+                        self.mutate(offspring[0])
+                        self.mutate(offspring[1])
+                    else:
+                        self.mutate_intron(offspring[0])
+                        self.mutate_intron(offspring[1])
+                        
+                    # ---- half-n-half with quartiles mutation type population Random p(0.25) and Intron p(0.75) -> intron_plus_...---- #
+                    # if random.random() > 0.75:
+                    #     self.mutate(offspring[0])
+                    #     self.mutate(offspring[1])
+                    # else:
+                    #     self.mutate_intron(offspring[0])
+                    #     self.mutate_intron(offspring[1])
                         
                     next_population.extend(offspring)
                     offspring_count += 1
@@ -801,7 +818,7 @@ if __name__ == "__main__":
     
     term1 = f"genetic_programming/{args.benchmark}/"
     term2 = "bloat/"
-    term3 = f"Parallel_PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
+    term3 = f"PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
     args.config_plot = term1 + term2 + term3
     
     print("Running GA with NO Inbreeding Mating...")

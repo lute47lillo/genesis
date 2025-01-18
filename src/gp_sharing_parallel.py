@@ -660,13 +660,26 @@ class GeneticAlgorithmGPSharingParallel:
 
         return self.best_fitness_list, self.diversity_list, self.sigma_share_list, gen+1
 
+# ---------- Landscape --------- # 
+
+# Define this at the top level of your module
+FUNC_MAP = {
+    '+': gp_math.protected_sum,
+    '-': gp_math.protected_subtract,
+    '*': gp_math.protected_mult,
+    '/': gp_math.protected_divide,
+    'sin': gp_math.protected_sin,
+    'cos': gp_math.protected_cos,
+    'log': gp_math.protected_log
+}
+
 class GPLandscape:
     
     def __init__(self, args, initialize_pool=True):
         self.args = args
         self.target_function = util.select_gp_benchmark(args)
         self.bounds = args.bounds
-        self.data = self.generate_data() # Generate all data points
+        self.generate_data() # Generate all data points
         
         if initialize_pool:
             # Initialize the multiprocessing pool with the initializer
@@ -685,86 +698,33 @@ class GPLandscape:
         for child in node.children:
             count += self.count_nodes(child)
         return count
-    
-    def evaluate_tree(self, node, x):
-        # Base case checking for error
-        if node is None:
-            return 0.0
-
-        # Check if node is terminal (leaf) or not
-        if node.is_terminal():
-            if node.value == 'x':
-                return x  # x is a scalar
-            else:
-                try:
-                    val = float(node.value)
-                    return val
-                except ValueError as e:
-                    return 0.0
-        else:
-            func = node.value
-            args_tree = [self.evaluate_tree(child, x) for child in node.children]
-     
-            try:
-                if func == '+':
-                    result = gp_math.protected_sum(args_tree[0], args_tree[1])
-                elif func == '-':
-                    result = gp_math.protected_subtract(args_tree[0], args_tree[1])
-                elif func == '*':
-                    result = gp_math.protected_mult(args_tree[0], args_tree[1])
-                elif func == '/':
-                    result = gp_math.protected_divide(args_tree[0], args_tree[1])
-                elif func == 'sin':
-                    result = gp_math.protected_sin(args_tree[0])
-                elif func == 'cos':
-                    result = gp_math.protected_cos(args_tree[0])
-                elif func == 'log':
-                    result = gp_math.protected_log(args_tree[0])
-                else:
-                    raise ValueError(f"Undefined function: {func}")
-
-                # Clamp the result to the interval [-1e6, 1e6]
-                # Extracted from paper: Effective Adaptive Mutation Rates for Program Synthesis by Ni, Andrew and Spector, Lee 2024
-                result = np.clip(result, -1e6, 1e6)
-
-                return result
-            except Exception as e:
-                return 0.0  # Return 0.0 for any error
-    
+ 
     def generate_data(self):
         """
             Define input vectors (sampled within the search space).
         """
-        x_values = np.arange(self.bounds[0], self.bounds[1] + 0.1, 0.1)  # Include the step size (0.1) as hyperparameters if adding more benchmarks
-        y_values = self.target_function(x_values)
-        data = list(zip(x_values, y_values))
-        return data
+        self.x_values = np.arange(self.bounds[0], self.bounds[1] + 0.1, 0.1)  # Include the step size (0.1) as hyperparameters if adding more benchmarks
+        self.y_values = self.target_function(self.x_values)
+        self.data = list(zip(self.x_values, self.y_values))
+    
+    def evaluate_tree_vectorized(self, node, x_array):
+        if node.is_terminal():
+            return x_array if node.value == 'x' else np.full_like(x_array, float(node.value))
+        else:
+            func = FUNC_MAP.get(node.value, lambda a, b: np.zeros_like(a))
+            args = [self.evaluate_tree_vectorized(child, x_array) for child in node.children]
+            return func(*args)
     
     def symbolic_fitness_function(self, genome):
-        """
-            Calculate the fitness of the individual after evaluating the tree.
-        """
-        total_error = 0.0
-        success = True  # Assume success initially
-        epsilon = 1e-4  # Small threshold for success
-        
-        for x, target in self.data:
-
-            try:
-                output = self.evaluate_tree(genome, x)
-                error = output - target
-                
-                # As used in original Paper
-                total_error += abs(error)
-
-                if abs(error) > epsilon:
-                    success = False  # Error exceeds acceptable threshold
-                    
-            except Exception as e:
-                total_error += 1e6  # Penalize invalid outputs
-                success = False
-                
-        fitness = 1 / (total_error + 1e-6)  # Fitness increases as total error decreases
+        try:
+            outputs = self.evaluate_tree_vectorized(genome, self.x_values)  # Pass entire array
+            errors = outputs - self.y_values
+            total_error = np.sum(np.abs(errors))
+            success = np.all(np.abs(errors) <= 1e-4)
+        except Exception as e:
+            total_error = 1e6
+            success = False
+        fitness = 1 / (total_error + 1e-6)
         return fitness, success
 
 if __name__ == "__main__":
@@ -788,9 +748,6 @@ if __name__ == "__main__":
         # Text to save files and plot.
         args.config_plot = term1 + term2 + term3
             
-        # Initialize Genetic Algorithm
-        # ga = GeneticAlgorithmGPSharing(args, mut_rate=args.mutation_rate, inbred_threshold=args.inbred_threshold)
-        
         if args.inbred_threshold == 1:
             print("Running GA with Inbreeding Mating...")
             results_inbreeding = exp.test_multiple_runs_function_sharing(args, gp_landscape, None)

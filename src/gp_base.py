@@ -14,6 +14,42 @@ import util
 import experiments as exp
 import gp_math
 
+import multiprocessing
+import time
+
+# Global variable to hold the GPLandscape instance in worker processes
+gp_landscape = None
+
+def init_worker(args):
+    """
+    Initializer function for each worker process.
+    Instantiates a GPLandscape and assigns it to a global variable.
+    
+    Parameters:
+    -----------
+    args : Namespace or custom object
+        The arguments required to initialize GPLandscape.
+    """
+    global gp_landscape
+    gp_landscape = GPLandscape(args, initialize_pool=False)
+    
+# Top-level helper function for multiprocessing
+def evaluate_fitness(tree):
+    """
+    Evaluates the fitness of a given tree using the global GPLandscape instance.
+
+    Parameters:
+    -----------
+    tree : Node
+        The root node of the individual's program tree.
+
+    Returns:
+    --------
+    tuple
+        A tuple containing the fitness value and a success flag.
+    """
+    return gp_landscape.symbolic_fitness_function(tree)
+
 # TODO: Testing has its own self-contained classes. So, the iterations can be quick.
 class Node:
     def __init__(self, value, children=None):
@@ -116,7 +152,7 @@ class Individual:
     def __str__(self):
         return str(self.tree)
 
-class GeneticAlgorithmGPRamped:
+class GeneticAlgorithmGPPerformance:
     
     def __init__(self, args, mut_rate, inbred_threshold=None):
         
@@ -352,8 +388,24 @@ class GeneticAlgorithmGPRamped:
         print(f"Total: {(can_mate_grow + can_mate_full)} ({(can_mate_grow + can_mate_full) / self.pop_size * 100:.3f}%).\n")
         
     def calculate_fitness(self, curr_gen):
-        for individual in self.population:
-            individual.fitness, individual.success = self.fitness_function(individual.tree)
+        
+        # Determine the number of worker processes
+        num_processes = multiprocessing.cpu_count()
+
+        # Initialize the multiprocessing pool with the initializer
+        with multiprocessing.Pool(processes=num_processes, initializer=init_worker, initargs=(self.args, )) as pool:
+            # Extract all trees from the population
+            trees = [individual.tree for individual in self.population]
+
+            # Map the evaluate_fitness function to all trees in parallel
+            results = pool.map(evaluate_fitness, trees)
+            
+        # Process the results
+        for individual, (fitness, success) in zip(self.population, results):
+            
+            individual.fitness = fitness
+            individual.success = success
+            
             if individual.success:
                 print(f"Successful individual found in generation {curr_gen}")
                 print(f"Function: {individual.tree}")
@@ -555,6 +607,9 @@ class GeneticAlgorithmGPRamped:
         
         for gen in range(self.generations):
 
+            # Start timing
+            start_time = time.time()
+            
             # Calculate fitness
             self.calculate_fitness(gen) # Performance runs
             
@@ -615,8 +670,8 @@ class GeneticAlgorithmGPRamped:
         
                 i += 2
                 
-            print(f"Generation {gen + 1}: Checking by distance. Only {self.allowed_mate_by_dist} Individuals can actually  mate -> {self.allowed_mate_by_dist/len(selected) * 100:.3f}\n")
-            print(f"New individuals added from real offspring: {offspring_count} vs added from random (they could'nt mate): {none_count}")
+            # print(f"Generation {gen + 1}: Checking by distance. Only {self.allowed_mate_by_dist} Individuals can actually  mate -> {self.allowed_mate_by_dist/len(selected) * 100:.3f}\n")
+            # print(f"New individuals added from real offspring: {offspring_count} vs added from random (they could'nt mate): {none_count}")
 
             # Check if individual of next population is already successful. No need to recombination as it will always have largest fitness
             self.check_succcess_new_pop(gen+1, next_population)
@@ -653,17 +708,42 @@ class GeneticAlgorithmGPRamped:
                       f"Diversity = {self.diversity_list[gen]:.3f}\n"
                       f"Avg Size = {self.average_size_list[-1]:.3f}\n"
                       f"Avg Depth = {self.average_depth_list[-1]:.3f}\n")
+                
+                # End timing
+                end_time = time.time()
+                elapsed_time = end_time - start_time
+                print(f"\nTime taken to run 10 gen: {elapsed_time:.4f} seconds")
     
         return self.best_fitness_list, self.diversity_list, gen+1
-    
+
+# ---------- Landscape --------- # 
+
+# Define this at the top level of your module
+FUNC_MAP = {
+    '+': gp_math.protected_sum,
+    '-': gp_math.protected_subtract,
+    '*': gp_math.protected_mult,
+    '/': gp_math.protected_divide,
+    'sin': gp_math.protected_sin,
+    'cos': gp_math.protected_cos,
+    'log': gp_math.protected_log
+}
+
 class GPLandscape:
     
-    def __init__(self, args):
+    def __init__(self, args, initialize_pool=True):
         
         self.args = args
         self.target_function = util.select_gp_benchmark(args)
         self.bounds = args.bounds
-        self.data = self.generate_data() # Generate all data points
+        self.generate_data() # Generate all data points
+        
+        if initialize_pool:
+            # Initialize the multiprocessing pool with the initializer
+            self.pool = multiprocessing.Pool(initializer=init_worker, initargs=(self.args, ))
+        else:
+            # No pool initialization to prevent nested pools
+            self.pool = None
     
     def count_nodes(self, node):
         """
@@ -678,93 +758,32 @@ class GPLandscape:
             count += self.count_nodes(child)
         return count
     
-    def evaluate_tree(self, node, x):
-        
-        # Base case checking for error
-        if node is None:
-            return 0.0
-
-        # Check if node is terminal (leave) or not
-        if node.is_terminal():
-            if node.value == 'x':
-                return x  # x is a scalar
-            else:
-                try:
-                    val = float(node.value)
-                    return val
-                except ValueError as e:
-                    return 0.0
-        else:
-            func = node.value
-            args_tree = [self.evaluate_tree(child, x) for child in node.children]
-     
-            try:
-                if func == '+':
-                    result = gp_math.protected_sum(args_tree[0], args_tree[1])
-                elif func == '-':
-                    result = gp_math.protected_subtract(args_tree[0], args_tree[1])
-                elif func == '*':
-                    result = gp_math.protected_mult(args_tree[0], args_tree[1])
-                elif func == '/':
-                    result = gp_math.protected_divide(args_tree[0], args_tree[1])
-                elif func == 'sin':
-                    result = gp_math.protected_sin(args_tree[0])
-                elif func == 'cos':
-                    result = gp_math.protected_cos(args_tree[0])
-                elif func == 'log':
-                    result = gp_math.protected_log(args_tree[0])
-                else:
-                    raise ValueError(f"Undefined function: {func}")
-
-                # Clamp the result to the interval [-1e6, 1e6]
-                # Extracted of paper: Effective Adaptive Mutation Rates for Program Synthesis by Ni, Andrew and Spector, Lee 2024
-                result = np.clip(result, -1e6, 1e6)
-
-                return result
-            except Exception as e:
-
-                return 0.0  # Return 0.0 for any error
-        
     def generate_data(self):
         """
-            Definition
-            -----------
-                Define input vectors (sampled within the search space).
+            Define input vectors (sampled within the search space).
         """
-        x_values = np.arange(self.bounds[0], self.bounds[1] + 0.1, 0.1)  # TODO Include the step size (0.1) as hyper parameters if adding more benchmarks
-        y_values = self.target_function(x_values)
-        data = list(zip(x_values, y_values))
-        return data
-
+        self.x_values = np.arange(self.bounds[0], self.bounds[1] + 0.1, 0.1)  # Include the step size (0.1) as hyperparameters if adding more benchmarks
+        self.y_values = self.target_function(self.x_values)
+        self.data = list(zip(self.x_values, self.y_values))
+    
+    def evaluate_tree_vectorized(self, node, x_array):
+        if node.is_terminal():
+            return x_array if node.value == 'x' else np.full_like(x_array, float(node.value))
+        else:
+            func = FUNC_MAP.get(node.value, lambda a, b: np.zeros_like(a))
+            args = [self.evaluate_tree_vectorized(child, x_array) for child in node.children]
+            return func(*args)
+    
     def symbolic_fitness_function(self, genome):
-        """
-            Definition
-            -----------
-                Calculate the fitness of the individual after evaluating the tree.
-        """
-        total_error = 0.0
-        success = True  # Assume success initially
-        epsilon = 1e-4  # Small threshold for success
-        
-        total_error
-
-        for x, target in self.data:
-
-            try:
-                output = self.evaluate_tree(genome, x)
-                error = output - target
-                
-                # TODO: As used in original Paper
-                total_error += abs(error)
-
-                if abs(error) > epsilon:
-                    success = False  # Error exceeds acceptable threshold
-                    
-            except Exception as e:
-                total_error += 1e6  # Penalize invalid outputs
-                success = False
-                
-        fitness = 1 / (total_error + 1e-6)  # Fitness increases as total error decreases or could return just total error
+        try:
+            outputs = self.evaluate_tree_vectorized(genome, self.x_values)  # Pass entire array
+            errors = outputs - self.y_values
+            total_error = np.sum(np.abs(errors))
+            success = np.all(np.abs(errors) <= 1e-4)
+        except Exception as e:
+            total_error = 1e6
+            success = False
+        fitness = 1 / (total_error + 1e-6)
         return fitness, success
         
 if __name__ == "__main__":
@@ -776,23 +795,35 @@ if __name__ == "__main__":
     gp_landscape = GPLandscape(args)
 
     # -------------------------------- Experiment: Multiple Runs w/ fixed population and fixed mutation rate --------------------------- #
-    
-    term1 = f"genetic_programming/{args.benchmark}/"
-    term2 = "gp_lambda/"
-    
-    if args.inbred_threshold == 1:
-        term3 = f"PopSize:{args.pop_size}_InThres:None_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
-    else:
-        term3 = f"PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
+    try:
+        term1 = f"genetic_programming/{args.benchmark}/"
+        term2 = "gp_lambda/"
         
-    # Text to save files and plot.
-    args.config_plot = term1 + term2 + term3
+        # if args.inbred_threshold == 1:
+        #     term3 = f"PopSize:{args.pop_size}_InThres:None_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
+        # else:
+        #     term3 = f"PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
+            
+        # Text to save files and plot.
+        term3 = f"PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" # TODO 750
+        args.config_plot = term1 + term2 + term3
+            
+        # if args.inbred_threshold == 1:
+        #     print("Running GA with Inbreeding Mating...")
+        #     results_inbreeding = exp.test_multiple_runs_function_gp_ramped(args, gp_landscape, None)
+        #     util.save_accuracy(results_inbreeding, f"{args.config_plot}_inbreeding.npy")
+        # else:
+        #     print("Running GA with NO Inbreeding Mating...")
+        #     results_no_inbreeding = exp.test_multiple_runs_function_gp_ramped(args, gp_landscape, args.inbred_threshold)
+        #     util.save_accuracy(results_no_inbreeding, f"{args.config_plot}_no_inbreeding.npy")
         
-    if args.inbred_threshold == 1:
+        # TODO: Running inbreeding performances only to complete 750
         print("Running GA with Inbreeding Mating...")
         results_inbreeding = exp.test_multiple_runs_function_gp_ramped(args, gp_landscape, None)
         util.save_accuracy(results_inbreeding, f"{args.config_plot}_inbreeding.npy")
-    else:
-        print("Running GA with NO Inbreeding Mating...")
-        results_no_inbreeding = exp.test_multiple_runs_function_gp_ramped(args, gp_landscape, args.inbred_threshold)
-        util.save_accuracy(results_no_inbreeding, f"{args.config_plot}_no_inbreeding.npy")
+        
+    finally:
+        # Ensure that the pool is properly closed
+        if gp_landscape.pool is not None:
+            gp_landscape.pool.close()
+            gp_landscape.pool.join()

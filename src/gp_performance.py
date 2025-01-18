@@ -644,8 +644,8 @@ class GeneticAlgorithmGPRamped:
         
                 i += 2
                 
-            print(f"Generation {gen + 1}: Checking by distance. Only {self.allowed_mate_by_dist} Individuals can actually  mate -> {self.allowed_mate_by_dist/len(selected) * 100:.3f}\n")
-            print(f"New individuals added from real offspring: {offspring_count} vs added from random (they could'nt mate): {none_count}")
+            # print(f"Generation {gen + 1}: Checking by distance. Only {self.allowed_mate_by_dist} Individuals can actually  mate -> {self.allowed_mate_by_dist/len(selected) * 100:.3f}\n")
+            # print(f"New individuals added from real offspring: {offspring_count} vs added from random (they could'nt mate): {none_count}")
 
             # Check if individual of next population is already successful. No need to recombination as it will always have largest fitness
             self.check_succcess_new_pop(gen+1, next_population)
