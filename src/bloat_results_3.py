@@ -707,6 +707,18 @@ def help_count(mutation_parsed, type_run):
 # random_plus_mutation. Total nº Successes overall: 439. Ratio: 33.258% of success
 # intron_plus_mutation. Total nº Successes overall: 548. Ratio: 41.515% of success
 # --------------------------------- #
+def help_count_by_fn(fn, subset):
+    
+    t_order = ['None', 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0]
+    
+    count = 0
+    for idx, i in enumerate(subset):
+        if idx != 0: # Skip None threshol
+            count += i
+            
+    print(f"{fn}: Total nº successes: {count}. Success Ratio {count/150:.3f}.")
+    
+    return count
 
      
 def success_by_threshold_all_sr():
@@ -756,15 +768,23 @@ def success_by_threshold_all_sr():
     parsed_data_collection.append(intron_plus_mutation_parsed)
     help_count(intron_plus_mutation_parsed, "intron_plus_mutation")
     print(f"# --------------------------------- #\n")
-    exit()
+
     
     # Line plots for each metric across thresholds
     fig, axes = plt.subplots(1, 5, figsize=(40, 8), constrained_layout=False)
 
     types_runs = ["Intron Mutation","Random Mutation", "Half-n-Half Mutation", "Random p(0.75) mutation", "Intron p(0.75) mutation"]
     for i, parsed_data in enumerate(parsed_data_collection):
+        print(f"Executing {types_runs[i]}")
         for func in parsed_data['Function'].unique():
             subset = parsed_data[parsed_data['Function'] == func]
+            
+            # Get total nº successes by sr fn
+            count = help_count_by_fn(func, subset['Success'])
+            print()
+            
+            
+            
             axes[i].scatter(
                 subset['Diversity'],
                 subset["Success"],
@@ -776,22 +796,22 @@ def success_by_threshold_all_sr():
         axes[i].set_ylabel("Success")
         axes[i].legend(title="Function")
 
-    # Make sure dir exists
-    figures_dir = os.path.join(os.getcwd(), 'figures')
-    os.makedirs(figures_dir, exist_ok=True)
+    # # Make sure dir exists
+    # figures_dir = os.path.join(os.getcwd(), 'figures')
+    # os.makedirs(figures_dir, exist_ok=True)
     
-    # Save the figure
-    # plot_filename = f"genetic_programming/intron_mut_study/success_by_threshold_all_sr.png"
-    plot_filename = f"genetic_programming/intron_mut_study/TEST.png"
+    # # Save the figure
+    # # plot_filename = f"genetic_programming/intron_mut_study/success_by_threshold_all_sr.png"
+    # plot_filename = f"genetic_programming/intron_mut_study/TEST.png"
 
-    plt.savefig(os.path.join(figures_dir, plot_filename), bbox_inches='tight')
+    # plt.savefig(os.path.join(figures_dir, plot_filename), bbox_inches='tight')
     
 
 if __name__ == "__main__":
     
     # tree_size_by_intron_ratio_comparisons()
-    # success_by_threshold_all_sr()
-    intron_vs_size_with_succ_and_div_2()
+    success_by_threshold_all_sr()
+    # intron_vs_size_with_succ_and_div_2()
     # intron_vs_size_with_succ_and_div()
     
     # div_vs_thres()

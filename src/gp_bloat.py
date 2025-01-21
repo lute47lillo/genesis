@@ -379,9 +379,9 @@ class GeneticAlgorithmGPBloat:
         can_mate_grow = 0
 
         # Custom half-n-half -> 75/25 
-        # half = self.pop_size // 2
+        half = self.pop_size // 2
         # half = int(self.pop_size * 0.80)
-        half = self.pop_size # TODO: This is the gp_lambda performance run
+        # half = self.pop_size # TODO: This is the gp_lambda performance run
         
         # The first half is full initialization
         for i in range(half):
@@ -715,27 +715,25 @@ class GeneticAlgorithmGPBloat:
     
                 if offspring[0] is not None and offspring[1] is not None:
                     
-                    # ---- Dynamic mutation type population ---- #
-                    # if self.mutation_type == "random":
-                    #     # --- Mutate introducing random subtrees --- #
+                    # --- Mutate introducing random subtrees --- #
+                    # self.mutate(offspring[0])
+                    # self.mutate(offspring[1])
+       
+                    # --- Mutate introducing specific introns --- #
+                    # self.mutate_intron(offspring[0])
+                    # self.mutate_intron(offspring[1])
+                    
+                    # ---- Half-n-half mutation type population ---- #
+                    self.mutate(offspring[0])
+                    self.mutate_intron(offspring[1])
+                    
+                    # ---- half-n-half with quartiles mutation type population Random p(0.75) and Intron p(0.25) -> random_plus_... ---- #
+                    # if random.random() <= 0.75:
                     #     self.mutate(offspring[0])
                     #     self.mutate(offspring[1])
                     # else:
-                    #     # --- Mutate introducing specific introns --- #
                     #     self.mutate_intron(offspring[0])
                     #     self.mutate_intron(offspring[1])
-                    
-                    # ---- Half-n-half mutation type population ---- #
-                    # self.mutate(offspring[0])
-                    # self.mutate_intron(offspring[1])
-                    
-                    # ---- half-n-half with quartiles mutation type population Random p(0.75) and Intron p(0.25) -> random_plus_... ---- #
-                    if random.random() <= 0.75:
-                        self.mutate(offspring[0])
-                        self.mutate(offspring[1])
-                    else:
-                        self.mutate_intron(offspring[0])
-                        self.mutate_intron(offspring[1])
                         
                     # ---- half-n-half with quartiles mutation type population Random p(0.25) and Intron p(0.75) -> intron_plus_...---- #
                     # if random.random() > 0.75:

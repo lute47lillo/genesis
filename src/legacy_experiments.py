@@ -108,7 +108,7 @@ def test_dynamic_performance():
 
     sr_dfs = {}
     for sr in sr_fns:
-        print(f"\nSymbolic Regression Function: {sr} with max depth: {max_depth}")
+        print(f"\nSymbolic Regression Function: {sr} with max depth: {10}")
         dict_results = []
         results = {}
 
@@ -434,8 +434,8 @@ def test_fit_sharing_performance(max_depth=10):
         -----------
            
     """
-    sr_fns = ["nguyen1"]#, "nguyen2", "nguyen3", "nguyen4", "nguyen5", "nguyen6", "nguyen7", "nguyen8"]
-    thresholds = [5, 10, 14, "None"]
+    sr_fns = ["nguyen1", "nguyen2", "nguyen3", "nguyen4", "nguyen5", "nguyen6", "nguyen7", "nguyen8"]
+    thresholds = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, "None"]
     sigma_weights = [0.0, 0.1, 0.2, 0.3, 0.5, 0.8]
     keys = []
 
@@ -510,9 +510,9 @@ def test_fit_sharing_performance(max_depth=10):
         data = data[['W', 'T', 'n_successes', 'diversity', 'mean_gen_success', 'composite_score']]
 
         # Save the data to a CSV file. Legend -> ... 
-        # output_file_path = f"{os.getcwd()}/saved_data/sharing/{sr}_sharing_data.csv"
-        # output_df = pd.DataFrame(data)
-        # output_df.to_csv(output_file_path, index=False)
+        output_file_path = f"{os.getcwd()}/saved_data/sharing/{sr}_sharing_data.csv"
+        output_df = pd.DataFrame(data)
+        output_df.to_csv(output_file_path, index=False)
         
     # Combine all DataFrames
     combined_data = pd.concat(dataframes, ignore_index=True)
@@ -525,8 +525,6 @@ def test_fit_sharing_performance(max_depth=10):
     combined_file_path = f"{os.getcwd()}/saved_data/sharing/TEST_combined_sharing_data.csv"
     combined_data.to_csv(combined_file_path, index=False)
         
-    # plot.plot_generation_successes(results, keys, f"genetic_programming/{sr}/sharing/Depth:{max_depth}_gens_vs_runs")
-
     # attributes =["best_fitness", "diversity"]
     # plot.plot_all_sr_in_columns(sr_dfs, sr_fns, attributes, config_plot=f"genetic_programming/{sr}/sharing/Depth:{max_depth}_performance", global_max_length=150)
 
