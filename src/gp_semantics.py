@@ -2,9 +2,9 @@
     Definition
     -----------
     
-        Contains stable version to compute 'basic' mu+lambda runs with HBC or without.
-            - No Bloat or intron computation.
-            - Used to compute performance runs.
+        Contains stable version to compute:
+            - Semantic-Aware Crossover (SAC)
+            - Semantic-based Similarity Crossover (SSC)
 """
 
 import numpy as np
@@ -12,6 +12,7 @@ import copy
 import random
 import util
 import experiments as exp
+import gp_math_semantics
 import gp_math
 
 import multiprocessing
@@ -152,7 +153,7 @@ class Individual:
     def __str__(self):
         return str(self.tree)
 
-class GeneticAlgorithmGPPerformance:
+class GeneticAlgorithmGPSemantics:
     
     def __init__(self, args, mut_rate, inbred_threshold=None):
         
@@ -165,12 +166,211 @@ class GeneticAlgorithmGPPerformance:
         self.max_depth = args.max_depth
         self.initial_depth = args.initial_depth
         self.poulation_success = False
+        self.x_values = np.arange(args.bounds[0], args.bounds[1] + 0.1, 0.1) 
+        
+        # Semantics variables (SSC and SAC)
+        self.low_sensitivity = args.low_sensitivity
+        self.high_sensitivity = args.high_sensitivity
+        self.semantics_type = args.semantics_type
         
         # Trackers
         self.population = []
         self.best_fitness_list = []
         self.diversity_list = []
         
+    # ---------------- Semantics ------------------------- #
+    
+    def compute_subtree_semantics(self, node):
+        """
+            Compute the semantics (vector of outputs) of 'node' for all training x-values
+        """
+        semantics = self.evaluate_semantics_tree(node, self.x_values)    
+        return semantics
+    
+    def semantic_distance(self, node1, node2):
+        """
+        Compute a scalar "distance" between the semantics of two subtrees.
+        By default we use sum of absolute differences (L1 norm). 
+        You could also use L2 norm or MSE, etc.
+        """
+        
+        semantics1 = self.compute_subtree_semantics(node1)
+        semantics2 = self.compute_subtree_semantics(node2)
+        
+        # L1 distance
+        dist = np.sum(np.abs(semantics1 - semantics2))
+        
+        return dist
+    
+    def semantic_aware_crossover(self, parent1, parent2):
+        """
+        Performs Semantic Aware Crossover (SAC) on parent1 and parent2, returning two offspring.
+        Swap subtrees whose semantics are sufficiently different so that new genetic material
+        is introduced and we avoid swapping semantically identical (or near-identical) subtrees
+        
+        We attempt up to 'max_attempts' to find two subtrees whose semantic distance
+        is >= difference_threshold (i.e., sufficiently different).
+        If we cannot find a valid swap, we return (None, None).
+        We only try once
+        """
+        # Optional: Check inbreeding threshold if used in your pipeline
+        if self.inbred_threshold is not None:
+            if not self.can_mate(parent1, parent2, self.inbred_threshold):
+                return None, None
+
+        # Deep copy so that we don't alter the original parents
+        child1 = copy.deepcopy(parent1.tree)
+        child2 = copy.deepcopy(parent2.tree)
+        
+        # Select random nodes (with parents) in each tree
+        parent_node1, node1 = self.select_random_node_with_parent(child1)
+        parent_node2, node2 = self.select_random_node_with_parent(child2)
+
+        if node1 is None or node2 is None:
+            return None, None
+
+        # Check arity constraints before we consider swapping
+        arity1 = parent1.get_function_arity(node1.value)
+        arity2 = parent2.get_function_arity(node2.value)
+        if arity1 != arity2:
+            return None, None
+        
+        # Compute semantic distance
+        dist = self.semantic_distance(node1, node2)
+
+        # For SAC: we only swap if subtrees are "different enough"
+        if dist < self.low_sensitivity:
+            # Not different enough
+            return None, None
+
+        # Attempt the swap
+        if parent_node1 is None:
+            # node1 is root of child1
+            child1 = copy.deepcopy(node2)
+        else:
+            try:
+                idx = parent_node1.children.index(node1)
+                parent_node1.children[idx] = copy.deepcopy(node2)
+            except ValueError:
+                return None, None
+        
+        if parent_node2 is None:
+            # node2 is root of child2
+            child2 = copy.deepcopy(node1)
+        else:
+            try:
+                idx = parent_node2.children.index(node2)
+                parent_node2.children[idx] = copy.deepcopy(node1)
+            except ValueError:
+                return None, None
+
+        # Check depth constraints
+        if self.tree_depth(child1) > self.max_depth or self.tree_depth(child2) > self.max_depth:
+            # Revert to original and continue
+            child1 = copy.deepcopy(parent1.tree)
+            child2 = copy.deepcopy(parent2.tree)
+            return None, None
+
+        # If we made it here, we have a successful swap
+        offspring1 = Individual(
+            self.args,
+            fitness_function=self.fitness_function,
+            tree=child1,
+            init_method="full"
+        )
+        offspring2 = Individual(
+            self.args,
+            fitness_function=self.fitness_function,
+            tree=child2,
+            init_method="full"
+        )
+        return offspring1, offspring2
+    
+    def similarity_based_crossover(self, parent1, parent2):
+        """
+        Swap subtrees whose semantics are similar to encourage incremental refinement or “fine-tuning.”
+        Performs Similarity-Based Crossover (SSC) on parent1 and parent2, returning two offspring.
+        
+        We attempt up to 'max_attempts' to find two subtrees whose semantic distance
+        is <= similarity_threshold (i.e., sufficiently similar).
+        If we cannot find a valid swap, we return (None, None).
+        """
+        # Optional: Check inbreeding threshold if used
+        if self.inbred_threshold is not None:
+            if not self.can_mate(parent1, parent2, self.inbred_threshold):
+                return None, None
+
+        child1 = copy.deepcopy(parent1.tree)
+        child2 = copy.deepcopy(parent2.tree)
+
+        max_attempts = 10
+        for _ in range(max_attempts):
+            parent_node1, node1 = self.select_random_node_with_parent(child1)
+            parent_node2, node2 = self.select_random_node_with_parent(child2)
+
+            if node1 is None or node2 is None:
+                continue
+            
+            arity1 = parent1.get_function_arity(node1.value)
+            arity2 = parent2.get_function_arity(node2.value)
+            if arity1 != arity2:
+                continue
+            
+            # Compute semantic distance
+            dist = self.semantic_distance(node1, node2)
+
+            # For SSC: we only swap if subtrees are "similar enough" but not identical
+            if dist < self.low_sensitivity or dist > self.high_sensitivity:
+                # Not similar enough, try again
+                continue
+            
+            # Attempt the swap
+            if parent_node1 is None:
+                # node1 is root of child1
+                child1 = copy.deepcopy(node2)
+            else:
+                try:
+                    idx = parent_node1.children.index(node1)
+                    parent_node1.children[idx] = copy.deepcopy(node2)
+                except ValueError:
+                    continue
+            
+            if parent_node2 is None:
+                # node2 is root of child2
+                child2 = copy.deepcopy(node1)
+            else:
+                try:
+                    idx = parent_node2.children.index(node2)
+                    parent_node2.children[idx] = copy.deepcopy(node1)
+                except ValueError:
+                    continue
+            
+            # Check depth constraints
+            if self.tree_depth(child1) > self.max_depth or self.tree_depth(child2) > self.max_depth:
+                # Revert and continue
+                child1 = copy.deepcopy(parent1.tree)
+                child2 = copy.deepcopy(parent2.tree)
+                continue
+
+            # If valid swap, generate offspring
+            offspring1 = Individual(
+                self.args,
+                fitness_function=self.fitness_function,
+                tree=child1,
+                init_method="full"
+            )
+            offspring2 = Individual(
+                self.args,
+                fitness_function=self.fitness_function,
+                tree=child2,
+                init_method="full"
+            )
+            return offspring1, offspring2
+        
+        return None, None
+    
+    # ----------------------------------------- #   
+    
     def count_nodes(self, node):
         """
             Definition
@@ -184,17 +384,12 @@ class GeneticAlgorithmGPPerformance:
             count += self.count_nodes(child)
         return count
             
-    def compute_population_size_depth(self):
+    def compute_population_size(self):
         
         # Get Tree sizes for entire population (nº nodes)
         tree_sizes = [self.count_nodes(ind.tree) for ind in self.population]
         average_size = sum(tree_sizes) / len(tree_sizes)
         self.average_size_list.append(average_size)
-        
-        # Get Tree depths for entire population
-        tree_depths = [self.tree_depth(ind.tree) for ind in self.population]
-        average_depth = sum(tree_depths) / len(tree_depths)
-        self.average_depth_list.append(average_depth)  
     
     # ----------------------- Tree ~ Node functions ------------------ #
     
@@ -322,7 +517,7 @@ class GeneticAlgorithmGPPerformance:
         # Add distances for unmatched children
         child_distances += abs(len(node1.children) - len(node2.children))
         return cost + child_distances
-
+    
     # ----------------- General GP Functions ------------------------- #
     
     def initialize_population_half_and_half(self):
@@ -447,8 +642,8 @@ class GeneticAlgorithmGPPerformance:
             arity1 = parent1.get_function_arity(node1.value)
             arity2 = parent2.get_function_arity(node2.value)
             if arity1 != arity2:
-                continue  # Arities don't match, select another pair    
-    
+                continue  # Arities don't match, select another pair
+
             # Swap entire subtrees
             if parent_node1 is None:
                 # node1 is root of child1
@@ -566,9 +761,11 @@ class GeneticAlgorithmGPPerformance:
     
     # ----------------- Main execution loop ------------------------- #
     
-    def run(self, fitness_function):
+    def run(self, fitness_function, evaluate_semantics_tree):
+        
         # Assign fitness function to in class variable
         self.fitness_function = fitness_function
+        self.evaluate_semantics_tree = evaluate_semantics_tree
         
         # Init population
         self.initialize_population_half_and_half() # ramped half-n-half initializaiton
@@ -576,6 +773,8 @@ class GeneticAlgorithmGPPerformance:
         # Initialize lists to store bloat metrics
         self.average_size_list = []
         self.average_depth_list = []
+        
+        print(f"Using Semantics as: {self.semantics_type}.\n")
         
         for gen in range(self.generations):
 
@@ -595,7 +794,7 @@ class GeneticAlgorithmGPPerformance:
             
             # Early Stopping condition if successful individual has been found
             if self.poulation_success == True:
-                return self.best_fitness_list, self.diversity_list, gen + 1
+                return self.best_fitness_list, self.diversity_list, self.average_size_list, gen + 1
     
             # Tournament Selection
             selected = self.tournament_selection()
@@ -618,7 +817,13 @@ class GeneticAlgorithmGPPerformance:
             while i < lambda_pop: 
                 parent1 = selected[i % len(selected)]
                 parent2 = selected[(i + 1) % len(selected)]
-                offspring = self.crossover(parent1, parent2)
+                
+                # For Semantic-Aware Crossover (SAC)
+                if self.semantics_type == "SAC":
+                    offspring = self.semantic_aware_crossover(parent1, parent2)
+                elif self.semantics_type == "SSC":
+                    # Similarity-Based Crossover (SSC)
+                    offspring = self.similarity_based_crossover(parent1, parent2)
     
                 if offspring[0] is not None and offspring[1] is not None:
                     self.mutate(offspring[0])
@@ -655,12 +860,12 @@ class GeneticAlgorithmGPPerformance:
                 self.best_fitness_list.append(best_individual.fitness)
 
                 # Measure diversity
-                diversity = self.measure_diversity(next_population)
+                diversity = self.measure_diversity(next_population, gen+1)
                 self.diversity_list.append(diversity)
                 
                 # Returns 2 + gens because technically we are just shortcutting the crossover of this current generation. So, +1 for 0th-indexed offset, and +1 for skipping some steps.
                 # This added values will have been returned in the next gen loop iteration.
-                return self.best_fitness_list, self.diversity_list, gen + 2
+                return self.best_fitness_list, self.diversity_list, self.average_size_list, gen + 2
             
             # Combine the population (mu+lambda)
             combined_population = next_population[:lambda_pop] + self.population     
@@ -673,20 +878,19 @@ class GeneticAlgorithmGPPerformance:
             # Print progress
             if (gen + 1) % 10 == 0:
                 # Measure Size, Depth statistics
-                self.compute_population_size_depth()                
+                self.compute_population_size()                
            
                 print(f"\nInbreeding threshold set to: {self.inbred_threshold}.")
                 print(f"Generation {gen + 1}: Best Fitness = {best_individual.fitness:.3f}\n"
                       f"Diversity = {self.diversity_list[gen]:.3f}\n"
-                      f"Avg Size = {self.average_size_list[-1]:.3f}\n"
-                      f"Avg Depth = {self.average_depth_list[-1]:.3f}\n")
+                      f"Avg Size = {self.average_size_list[-1]:.3f}\n")
                 
                 # End timing
                 end_time = time.time()
                 elapsed_time = end_time - start_time
                 print(f"\nTime taken to run 10 gen: {elapsed_time:.4f} seconds")
     
-        return self.best_fitness_list, self.diversity_list, gen+1
+        return self.best_fitness_list, self.diversity_list, self.average_size_list, gen+1
 
 # ---------- Landscape --------- # 
 
@@ -708,7 +912,8 @@ class GPLandscape:
         self.args = args
         self.target_function = util.select_gp_benchmark(args)
         self.bounds = args.bounds
-        self.generate_data() # Generate all data points
+        self.x_values = np.arange(self.bounds[0], self.bounds[1] + 0.1, 0.1) 
+        self.y_values = self.target_function(self.x_values)
         
         if initialize_pool:
             # Initialize the multiprocessing pool with the initializer
@@ -730,14 +935,6 @@ class GPLandscape:
             count += self.count_nodes(child)
         return count
     
-    def generate_data(self):
-        """
-            Define input vectors (sampled within the search space).
-        """
-        self.x_values = np.arange(self.bounds[0], self.bounds[1] + 0.1, 0.1)  # Include the step size (0.1) as hyperparameters if adding more benchmarks
-        self.y_values = self.target_function(self.x_values)
-        self.data = list(zip(self.x_values, self.y_values))
-    
     def evaluate_tree_vectorized(self, node, x_array):
         if node.is_terminal():
             return x_array if node.value == 'x' else np.full_like(x_array, float(node.value))
@@ -748,16 +945,65 @@ class GPLandscape:
     
     def symbolic_fitness_function(self, genome):
         try:
-            outputs = self.evaluate_tree_vectorized(genome, self.x_values)  # Pass entire array        
+            outputs = self.evaluate_tree_vectorized(genome, self.x_values)  # Pass entire array
             errors = outputs - self.y_values
             total_error = np.sum(np.abs(errors))
-            success = np.all(np.abs(errors) <= 1e-4)
+            success = np.all(np.abs(errors) <= 1e-4) # REAL 1e-4 HBC, but SSC and SAC work with 0.1
         except Exception as e:
             total_error = 1e6
             success = False
         fitness = 1 / (total_error + 1e-6)
         return fitness, success
+    
+    # ------------- Evaluate Tree Functions ------------- #
+    
+    def evaluate_semantics_tree(self, node, x):
         
+        # Base case checking for error
+        if node is None:
+            return 0.0
+
+        # Check if node is terminal (leave) or not
+        if node.is_terminal():
+            if node.value == 'x':
+                return x  # x is a scalar
+            else:
+                try:
+                    val = float(node.value)
+                    return val
+                except ValueError as e:
+                    return 0.0
+        else:
+            func = node.value
+            args_tree = [self.evaluate_semantics_tree(child, x) for child in node.children]
+     
+            try:
+                if func == '+':
+                    result = gp_math_semantics.protected_sum(args_tree[0], args_tree[1])
+                elif func == '-':
+                    result = gp_math_semantics.protected_subtract(args_tree[0], args_tree[1])
+                elif func == '*':
+                    result = gp_math_semantics.protected_mult(args_tree[0], args_tree[1])
+                elif func == '/':
+                    result = gp_math_semantics.protected_divide(args_tree[0], args_tree[1])
+                elif func == 'sin':
+                    result = gp_math_semantics.protected_sin(args_tree[0])
+                elif func == 'cos':
+                    result = gp_math_semantics.protected_cos(args_tree[0])
+                elif func == 'log':
+                    result = gp_math_semantics.protected_log(args_tree[0])
+                else:
+                    raise ValueError(f"Undefined function: {func}")
+
+                # Clamp the result to the interval [-1e6, 1e6]
+                # Extracted of paper: Effective Adaptive Mutation Rates for Program Synthesis by Ni, Andrew and Spector, Lee 2024
+                result = np.clip(result, -1e6, 1e6)
+
+                return result
+            except Exception as e:
+
+                return 0.0  # Return 0.0 for any error
+
 if __name__ == "__main__":
     
     # Get args
@@ -769,23 +1015,30 @@ if __name__ == "__main__":
     # -------------------------------- Experiment: Multiple Runs w/ fixed population and fixed mutation rate --------------------------- #
     try:
         term1 = f"genetic_programming/{args.benchmark}/"
-        term2 = "gp_lambda/"
+        term2 = "gp_semantics/"
         
         if args.inbred_threshold == 1:
-            term3 = f"PopSize:{args.pop_size}_InThres:None_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
+            if args.semantics_type == "SAC":
+                term3 = f"Semantics:{args.semantics_type}_LowS:{args.low_sensitivity}_InThres:None" 
+            else:
+                term3 = f"Semantics:{args.semantics_type}_LowS:{args.low_sensitivity}_HighS:{args.high_sensitivity}_InThres:None" 
+
         else:
-            term3 = f"PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
-              
+            if args.semantics_type == "SAC":
+                term3 = f"Semantics:{args.semantics_type}_LowS:{args.low_sensitivity}_InThres:{args.inbred_threshold}" 
+            else:
+                term3 = f"Semantics:{args.semantics_type}_LowS:{args.low_sensitivity}_HighS:{args.high_sensitivity}_InThres:{args.inbred_threshold}" 
+                
         # Text to save files and plot.
         args.config_plot = term1 + term2 + term3
-        
+              
         if args.inbred_threshold == 1:
             print("Running GA with Inbreeding Mating...")
-            results_inbreeding = exp.test_multiple_runs_function_gp_based(args, gp_landscape, None)
+            results_inbreeding = exp.test_multiple_runs_function_gp_semantics(args, gp_landscape, None)
             util.save_accuracy(results_inbreeding, f"{args.config_plot}_inbreeding.npy")
         else:
             print("Running GA with NO Inbreeding Mating...")
-            results_no_inbreeding = exp.test_multiple_runs_function_gp_based(args, gp_landscape, args.inbred_threshold)
+            results_no_inbreeding = exp.test_multiple_runs_function_gp_semantics(args, gp_landscape, args.inbred_threshold)
             util.save_accuracy(results_no_inbreeding, f"{args.config_plot}_no_inbreeding.npy")
         
     finally:

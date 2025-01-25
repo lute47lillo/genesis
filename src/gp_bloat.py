@@ -50,11 +50,10 @@ class GeneticAlgorithmGPBloat:
         
         # Then collect them
         intron_lists = util.pack_intron_lists(self.pop_ratio_intron_list, self.avg_ratio_intron_list, self.pop_total_intron_list, self.pop_total_nodes_list)
-        kinship_lists = [] #util.pack_kinship_lists(self.avg_pop_kinship_list, self.clossest_tree_list, self.furthest_tree_list)
         measures_lists = util.pack_measures_lists(self.average_size_list, self.average_depth_list)
         metrics_lists = util.pack_metrics_lists(self.best_fitness_list, self.diversity_list)
         
-        return metrics_lists, measures_lists, intron_lists, kinship_lists
+        return metrics_lists, measures_lists, intron_lists
         
     # -------------------- Intron computations ----------------------- #
     
@@ -365,12 +364,6 @@ class GeneticAlgorithmGPBloat:
         return cost + child_distances
 
     # ----------------- General GP Functions ------------------------- #
-    
-    # def initialize_population(self):
-    #     self.population = []
-    #     for _ in range(self.pop_size):
-    #         individual = Individual(self.args, fitness_function=self.fitness_function)
-    #         self.population.append(individual)
             
     def initialize_population(self):
         print(f"\nInitializing population.")
@@ -379,9 +372,9 @@ class GeneticAlgorithmGPBloat:
         can_mate_grow = 0
 
         # Custom half-n-half -> 75/25 
-        half = self.pop_size // 2
+        # half = self.pop_size // 2
         # half = int(self.pop_size * 0.80)
-        # half = self.pop_size # TODO: This is the gp_lambda performance run
+        half = self.pop_size # TODO: This is the gp_lambda performance run
         
         # The first half is full initialization
         for i in range(half):
@@ -414,7 +407,6 @@ class GeneticAlgorithmGPBloat:
             if individual.success:
                 print(f"Successful individual found in generation {curr_gen}")
                 print(f"Function: {individual.tree}")
-                # self.compute_successful_individual_kinship(individual)
                 self.poulation_success = True
                     
     def tournament_selection(self, k=3):
@@ -679,7 +671,7 @@ class GeneticAlgorithmGPBloat:
             start_time = time.time()
             
             # Collect all metrics
-            metrics_lists, measures_lists, intron_lists, kinship_lists = self.collect_all_stats()
+            metrics_lists, measures_lists, intron_lists = self.collect_all_stats()
             
             # End timing
             end_time = time.time()
@@ -690,7 +682,7 @@ class GeneticAlgorithmGPBloat:
             # Early Stopping condition if successful individual has been found
             if self.poulation_success == True:
                   
-                return metrics_lists, measures_lists, intron_lists, kinship_lists, gen + 1
+                return metrics_lists, measures_lists, intron_lists, gen + 1
     
             # Tournament Selection
             selected = self.tournament_selection()
@@ -783,12 +775,12 @@ class GeneticAlgorithmGPBloat:
                 self.measure_diversity(self.population)
                 
                 # Collect all
-                metrics_lists, measures_lists, intron_lists, kinship_lists = self.collect_all_stats()
+                metrics_lists, measures_lists, intron_lists = self.collect_all_stats()
 
                 # Returns 2 + gens because technically we are just shortcutting the crossover of this current generation. 
                 # So, +1 for 0th-indexed offset, and +1 for skipping some steps.
                 # This added values will have been returned in the next gen loop iteration.
-                return metrics_lists, measures_lists, intron_lists, kinship_lists, gen + 2
+                return metrics_lists, measures_lists, intron_lists, gen + 2
         
             # Print progress
             if (gen + 1) % 10 == 0:
@@ -800,9 +792,9 @@ class GeneticAlgorithmGPBloat:
                       f"Current Mutation Type = {self.mutation_type}\n")
                 
         # Collect all if failed run
-        metrics_lists, measures_lists, intron_lists, kinship_lists = self.collect_all_stats()
+        metrics_lists, measures_lists, intron_lists = self.collect_all_stats()
         
-        return metrics_lists, measures_lists, intron_lists, kinship_lists, gen+1
+        return metrics_lists, measures_lists, intron_lists, gen+1
         
 if __name__ == "__main__":
     

@@ -54,6 +54,13 @@ def set_args():
     # Dynamic Mutation Type
     argparser.add_argument('--mutation_type', type=str, help='Whether the mutation subtrees are intron or random', default='random')     
     
+    # Semantics experiments
+    argparser.add_argument('--semantics_type', type=str, help='Choose the type of semantic crossover used. (SAC, SSC, or None)', default='SAC')    
+    argparser.add_argument('--low_sensitivity', type=float, help='Lower Bound sensitivity for similarity. Used in SAC and SSC', default=0.02)
+    argparser.add_argument('--high_sensitivity', type=float, help='Higher Bound sensitivity for similarity. Used in SSC', default=8)
+ 
+
+    
     # Parse all arguments
     args = argparser.parse_args()
     
@@ -107,10 +114,6 @@ def select_gp_benchmark(args):
 def pack_intron_lists(pop_ration_in, avg_ratio_in, pop_total_in, pop_total_nodes):
     intron_lists = (pop_ration_in, avg_ratio_in, pop_total_in, pop_total_nodes)
     return intron_lists
-
-def pack_kinship_lists(avg_kinship, t_close, t_far):
-    kinship_lists = (avg_kinship, t_close, t_far)
-    return kinship_lists
 
 def pack_measures_lists(average_size_list, average_depth_list):
     measures_lists = (average_size_list, average_depth_list)
@@ -199,14 +202,6 @@ def compute_min_max_fit(population, max_fitness, min_fitness):
         max_fitness = max(max_fitness, individual.fitness)
         
     return max_fitness, min_fitness
-
-def compute_min_max_div(population, max_div, min_div):
-    # Compute min - max diversity for normalization.
-    for individual in population:
-        min_div = min(min_div, individual.diversity)
-        max_div = max(max_div, individual.diversity)
-        
-    return max_div, min_div
             
 def scale_fitness_values(fitness_individual, max_fitness, min_fitness):
     
@@ -217,33 +212,8 @@ def scale_fitness_values(fitness_individual, max_fitness, min_fitness):
         fitness_individual = (fitness_individual - min_fitness) / (max_fitness - min_fitness)
         
     return fitness_individual
-
-def scale_diversity_values(diversity_individual, max_div, min_div):
     
-    # Avoid division by zero
-    if max_div == min_div:
-        diversity_individual = 1.0
-    else:
-        diversity_individual = (diversity_individual - min_div) / (max_div - min_div)
-        
-    return diversity_individual
-    
-# -------------- Plotting helper functions --------------- #
-        
-def create_padded_df(data, metric, run_ids):
-    
-    # Determine the maximum length for the metric across all runs
-    max_length = max(len(run_data[metric]) for run_data in data.values())
-    
-    # Initialize a DataFrame with NaNs
-    df = pd.DataFrame(index=range(max_length), columns=run_ids, dtype=float)
-    
-    # Populate the DataFrame
-    for run_id, run_data in data.items():
-        values = run_data[metric]
-        df[run_id].iloc[:len(values)] = values
-    
-    return df
+# -------------- Plotting and analysis helper functions --------------- #
 
 def pad_sublist(sublist, target_length):
     """
@@ -258,78 +228,11 @@ def pad_sublist(sublist, target_length):
     """
     current_length = len(sublist)
     if current_length < target_length:
-        padding = [sublist[-1]] * (target_length - current_length)
+        padding_value = sublist[-1] if sublist else 0
+        padding = [padding_value] * (target_length - current_length)
         return sublist + padding
     else:
         return sublist
-    
-# Flatten the Data
-def flatten_results_depths(treatment_name, depths):
-    data_df = []
-    for depth in depths:
-        # Load dict data
-        file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/nguyen2/gp_lambda/PopSize:300_InThres:4_Mrates:0.0005_Gens:150_TourSize:15_MaxD:{depth}_InitD:3_{treatment_name}.npy"
-        data = np.load(file_path_name, allow_pickle=True)
-        data_dict = data.item()
-        
-        # Iterate over and create DataFram
-        for run, metrics in data_dict.items():
-            # diversity = metrics['diversity']# TODO: For another plto
-            generation_success = metrics['generation_success']
-            data_df.append({
-                'Treatment': treatment_name,
-                'Depth': depth,
-                'Run': run,
-                'Generation_Success': generation_success
-            })
-    return pd.DataFrame(data_df)
-
-# Flatten the Data
-def flatten_results_thresholds(treatment_name, thresholds):
-    data_df = []
-    for thres in thresholds:
-        # Load dict data
-        file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/nguyen2/gp_lambda/PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:9_InitD:3_{treatment_name}.npy"
-        data = np.load(file_path_name, allow_pickle=True)
-        data_dict = data.item()
-        
-        # Iterate over and create DataFram
-        for run, metrics in data_dict.items():
-            # diversity = metrics['diversity']# TODO: For another plto
-            generation_success = metrics['generation_success']
-            data_df.append({
-                'Treatment': treatment_name,
-                'Thresholds': thres,
-                'Run': run,
-                'Generation_Success': generation_success
-            })
-    return pd.DataFrame(data_df)
-
-def flatten_results_in_max_depth_diversity(bench_name, treatment_name, thresholds, depths, init_depth):
-    data_df = []
-    for thres in thresholds:
-        for depth in depths:
-            # Load dict data
-            file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/{bench_name}/gp_lambda/PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:{depth}_InitD:{init_depth}_{treatment_name}.npy"
-            data = np.load(file_path_name, allow_pickle=True)
-            data_dict = data.item()
-            for run, metrics in data_dict.items():
-                # TODO: If Wanted al values needs to padd:
-                # padded_diversity = [pad_sublist(sublist, target_length) for sublist in metrics['diversity']]
-                # metrics['diversity'] = padded_diversity
-                diversity = metrics['diversity'][-1]
-                generation_success = metrics['generation_success']
-        
-                # Update
-                data_df.append({
-                    'Treatment': treatment_name,
-                    'Max_Depth': depth,
-                    'Inbred_Threshold': thres,
-                    'Run': run,
-                    'Generation_Success': generation_success,
-                    'Diversity': diversity
-                })
-    return pd.DataFrame(data_df)
 
 # Determine Global Maximum Depth
 def get_global_max_depth(*results_dicts):
@@ -340,15 +243,6 @@ def get_global_max_depth(*results_dicts):
             if current_depth > max_depth:
                 max_depth = current_depth
     return max_depth
-
-# Pad 'diversity' Lists
-def pad_diversity_lists(results_dict, target_length):
-    for run in results_dict:
-        original_length = len(results_dict[run]['diversity'])
-        padded_diversity = [pad_sublist(sublist, target_length) for sublist in results_dict[run]['diversity']]
-        results_dict[run]['diversity'] = padded_diversity
-        print(f"Run {run}: Padded Diversity Lengths = {[len(s) for s in results_dict[run]['diversity']]}")
-    return results_dict
 
 # Create DF for all attributes for the given dictionary treatment
 def pad_dict_and_create_df(results, attributes, global_max_length, n_runs):

@@ -1,3 +1,9 @@
+"""
+    Definition
+    -----------
+        Compute fitness sharing figures. Used in Experimental section results.
+"""
+
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -192,10 +198,6 @@ def plot_composite_score_by_function(data):
     
     t_order = ['None', 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0]
 
-    # Convert t_order to string as well
-    # if t_order is not None:
-    #     t_order = [str(t) for t in t_order]
-    
     # Get unique functions
     unique_functions = data['function_name'].unique()
     n_functions = len(unique_functions)

@@ -2,8 +2,7 @@
     Definition
     -----------
     
-        Contains stable version to compute 'basic' mu+lambda runs with inbreeding threshold.
-            - Experimental treatments of diversity + fitness guided selection.
+        Contains stable version to compute HBC mu+lambda runs with fitness sharing.
             - No Bloat or intron computation.
 """
 
@@ -348,7 +347,7 @@ class GeneticAlgorithmGPSharingParallel:
             self.population.append(individual)
         
         # Measure initial diversity and get min~max range 
-        self.measure_diversity(self.population, 0)
+        self.measure_diversity(self.population)
         self.max_fitness, self.min_fitness = util.compute_min_max_fit(self.population, self.max_fitness, self.min_fitness)
         
         # Adjust fitness by sharing factor
@@ -499,7 +498,7 @@ class GeneticAlgorithmGPSharingParallel:
         # Update individual
         individual.tree = mutated_tree
 
-    def measure_diversity(self, population, curr_gen):
+    def measure_diversity(self, population):
         """
             Calculate diversity based on tree structures.
         """
@@ -564,7 +563,7 @@ class GeneticAlgorithmGPSharingParallel:
             self.best_fitness_list.append(best_individual.fitness)
     
             # Measure diversity and progress of sigma share
-            diversity = self.measure_diversity(self.population, gen+1)
+            diversity = self.measure_diversity(self.population)
             self.diversity_list.append(diversity)
             self.sigma_share_list.append(self.sigma_share)
             
@@ -622,7 +621,7 @@ class GeneticAlgorithmGPSharingParallel:
                 self.best_fitness_list.append(best_individual.fitness)
 
                 # Measure diversity
-                diversity = self.measure_diversity(next_population, gen+1)
+                diversity = self.measure_diversity(next_population)
                 self.diversity_list.append(diversity)
                 self.sigma_share_list.append(self.sigma_share)
                 

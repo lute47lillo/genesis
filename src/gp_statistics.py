@@ -18,6 +18,7 @@ def get_gp_statistics(bench_name, depths, thresholds, treatment_name, init_depth
         
     success = 0
     no_suc = 0
+    
     # For all Threshold values
     for thres in thresholds:
         
@@ -30,7 +31,6 @@ def get_gp_statistics(bench_name, depths, thresholds, treatment_name, init_depth
             data = np.load(file_path_name, allow_pickle=True)
             data_dict = data.item()
             for run, metrics in data_dict.items():
-                diversity = metrics['diversity'][-1]
                 generation_success = metrics['generation_success']
                 
                 if generation_success < 150:
@@ -44,15 +44,13 @@ def get_gen_avg_inbreed(bench_name, depths, thresholds, treatment_name):
     """
         Definition
         -----------
-            Inbreeding does not change behavior wrt Inbred Threshold. Therefore, to make a fair comparison, let's average over total Nº of runs per threshold.
+            NOTE: Inbreeding does not change behavior wrt Inbred Threshold file ending terminations.
+            Therefore, to make a fair comparison, let's average over total Nº of runs per threshold.
             That way, for each Threshold we have an avg generation success value to compare against no inbreeding treatment.
-            
-            
     """
 
     thresholds_gens = {}
     min_max_gens = {}
-    
     
     # For all depths
     for depth in depths:
@@ -70,7 +68,6 @@ def get_gen_avg_inbreed(bench_name, depths, thresholds, treatment_name):
             
             # Load dict data
             file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/{bench_name}/gp_lambda/PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:{depth}_InitD:3_{treatment_name}.npy"
-            # file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/{bench_name}/ramped/final_PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:{depth}_InitD:3_{treatment_name}.npy"
 
             data = np.load(file_path_name, allow_pickle=True)
             data_dict = data.item()
@@ -169,320 +166,20 @@ def get_gen_no_inbred(bench_name, depths, thresholds, treatment_name):
         
         
     return threshold_depths, min_max_gens, min_max_gens_depth
-                
-def check_dynamic(srs, depths):
-    
-    # TODO: Will need to re-write if we want to get a better explanation here since None is only for 75 runs, but it should account for 750 if we want to really compare
-    # TODO: This function really serves to tell us what thresholds have solved more per each function in general
-    
-    # Define threshold values
-    thresholds = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 'None'] #TODO: Use maybe dynamoc in appendix: "Dynamic", "Dynamic2"]
-    
-    # Create dict to store plotting values for all sr
-    plot_data = {}
-    
-    for bench_name in srs:
-        
-        print(f"\n{bench_name}")
-        
-        # Create metric to collect
-        results = {}
-        plot_data[bench_name] = {
-                'Threshold': [],
-                'Avg_Gen': [],
-                'Solved': [],
-                'Solved_Percentage': []
-        }
-        for thres in thresholds:
-            results[thres] = {}
-            avg_per_thres = 0
-            solved_per_thres = 0
-    
-            for depth in depths:
-                results[thres][depth] = {
-                    'gens': [],
-                    'solved': int
-                }
-                
-                # Read file. None is the inbreeding condition.
-                if thres == 'None':
-                    file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/{bench_name}/gp_lambda/PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:{depth}_InitD:3_inbreeding.npy"
-                else:
-                    file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/{bench_name}/gp_lambda/PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:{depth}_InitD:3_no_inbreeding.npy"
-                
-                # Load file
-                data = np.load(file_path_name, allow_pickle=True)
-                data_dict = data.item()
-                yes = 0
-                
-                # For each run in each depth count how many solved and the generation.
-                for run, metrics in data_dict.items():
-
-                    generation_success = metrics['generation_success']
-                    
-                    if generation_success < 150:
-                        yes += 1
-                        
-                    results[thres][depth]['gens'].append(generation_success)
-                    results[thres][depth]['solved'] = yes
-
-                # Do the averages per run, to show by threshold value
-                avg_per_thres += np.mean(results[thres][depth]['gens'])
-                solved_per_thres += results[thres][depth]['solved']
-                # print(f"\nThreshold: {thres}. Depth: {depth}. Avg Gen: {np.mean(results[thres][depth]['gens'])}. Solved: {results[thres][depth]['solved']}")
-            
-            avg_per_thres = avg_per_thres / len(depths)
-            percent = (solved_per_thres / (len(depths) * 15)) * 100
-            print(f"\nThreshold: {thres}. Avg Gen per Threshold (all depths): {avg_per_thres:.3f}. Solved: {solved_per_thres} ({percent:.3f}%)")
-            
-            # Collect by bench name
-            plot_data[bench_name]['Threshold'].append(thres)
-            plot_data[bench_name]['Avg_Gen'].append(avg_per_thres)
-            plot_data[bench_name]['Solved'].append(solved_per_thres)
-            plot_data[bench_name]['Solved_Percentage'].append(percent)
-          
-        # convert to dfs
-        
-        # df = pd.DataFrame(plot_data)  
-        
-        # print(df[bench_name]['Threshold'])
-        
-        # # Convert all 'Threshold' to string to treat 'None' as a category
-        # df[bench_name]['Threshold'] = df[bench_name]['Threshold'].astype(str)
-
-        # # Replace 'None' string with a more descriptive label
-        # df[bench_name]['Threshold'] = df[bench_name]['Threshold'].replace('None', 'No Threshold') 
-        # temp_plot(df, bench_name)
-        
-        # Process and plot each benchmark
-    for bench_name, bench_data in plot_data.items():
-        
-        # Convert list of dictionaries to DataFrame
-        df_bench = pd.DataFrame(bench_data)
-        
-        # Convert 'Threshold' to string and handle 'None'
-        # df_bench['Threshold'] = df_bench['Threshold'].astype(str)
-        df_bench['Threshold'] = df_bench['Threshold'].replace('None', 'No Threshold')
-        
-        # Plot
-        temp_plot2(df_bench, bench_name)
-            
-
-def temp_plot(df_bench, bench_name):
-    """
-    Plots Avg Gen and Solved vs. Threshold for a given benchmark.
-
-    Parameters:
-    - df_bench (pd.DataFrame): DataFrame containing 'Threshold', 'Avg_Gen', 'Solved', 'Solved_Percentage'.
-    - bench_name (str): Name of the benchmark.
-    """
-    
-    # Define category order, placing 'No Threshold' at the end
-    sorted_thresholds = sorted(
-        [x for x in df_bench['Threshold'].unique() if x != 'No Threshold'],
-        key=lambda x: int(x) if x.isdigit() else x
-    )
-    if 'No Threshold' in df_bench['Threshold'].unique():
-        sorted_thresholds.append('No Threshold')
-    
-    # Create a mapping from category to numerical position
-    category_to_pos = {category: pos for pos, category in enumerate(sorted_thresholds)}
-    
-    # Map 'Threshold' to numerical positions for plotting
-    df_bench['Threshold_Pos'] = df_bench['Threshold'].map(category_to_pos)
-    
-    # Initialize the plot
-    fig, ax1 = plt.subplots(figsize=(10, 6))
-    
-    # Plot Avg_Gen as a line
-    color = 'tab:blue'
-    ax1.set_xlabel('Threshold')
-    ax1.set_ylabel('Avg Gen per Threshold (all depths)', color=color)
-    ax1.plot(
-        df_bench['Threshold_Pos'],
-        df_bench['Avg_Gen'],
-        color=color,
-        marker='o',
-        label='Avg Gen'
-    )
-    ax1.tick_params(axis='y', labelcolor=color)
-    
-    # Set x-ticks to category labels
-    ax1.set_xticks(list(category_to_pos.values()))
-    ax1.set_xticklabels(list(category_to_pos.keys()), rotation=45)
-    
-    # Create a second y-axis for Solved
-    ax2 = ax1.twinx()
-    color = 'tab:red'
-    ax2.set_ylabel('Solved', color=color)
-    
-    # Plot Solved as a bar chart
-    ax2.bar(
-        df_bench['Threshold_Pos'],
-        df_bench['Solved'],
-        color=color,
-        alpha=0.6,
-        label='Solved'
-    )
-    ax2.tick_params(axis='y', labelcolor=color)
-    
-    # Add percentage labels on top of the bars
-    for idx, row in df_bench.iterrows():
-        pos = row['Threshold_Pos']
-        solved = row['Solved']
-        percent = row['Solved_Percentage']
-        ax2.text(
-            pos,
-            solved + 0.5,  # Adjust the y-position as needed
-            f"{percent:.1f}%",
-            ha='center',
-            color=color,
-            fontsize=8
-        )
-    
-    # Add a title and legends
-    plt.title(f'Avg Gen and Nº Solved vs. Threshold for {bench_name}')
-    fig.tight_layout()  # Adjust layout to prevent clipping
-    
-    # Combine legends from both axes
-    lines, labels = ax1.get_legend_handles_labels()
-    bars, bar_labels = ax2.get_legend_handles_labels()
-    ax1.legend(lines + bars, labels + bar_labels, loc='upper left')
-    
-    # Ensure the 'figures' directory exists
-    figures_dir = os.path.join(os.getcwd(), 'figures')
-    os.makedirs(figures_dir, exist_ok=True)
-    
-    # Determine plot filename
-    plot_filename = f"{bench_name}_no_temp.png"
-    
-    # Save the figure
-    plot_path = os.path.join(figures_dir, plot_filename)
-    plt.savefig(plot_path, bbox_inches='tight')
-    plt.close()  # Close the figure to free memory
-    print(f"Plot saved to {plot_path}")
-    
-import pandas as pd
-import matplotlib.pyplot as plt
-import os
-
-def temp_plot2(df_bench, bench_name):
-    """
-    Plots Avg Gen and Solved vs. Threshold for a given benchmark.
-
-    Parameters:
-    - df_bench (pd.DataFrame): DataFrame containing 'Threshold', 'Avg_Gen', 'Solved', 'Solved_Percentage'.
-    - bench_name (str): Name of the benchmark.
-    """
-    
-    # Define category order, placing 'No Threshold' at the end
-    # Separate numerical and categorical thresholds
-    numerical_thresholds = [th for th in df_bench['Threshold'] if th != 'No Threshold']
-    numerical_thresholds_sorted = sorted(numerical_thresholds, key=lambda x: int(x))
-    
-    if 'No Threshold' in df_bench['Threshold'].unique():
-        sorted_thresholds = numerical_thresholds_sorted + ['No Threshold']
-    else:
-        sorted_thresholds = numerical_thresholds_sorted
-    
-    # Create a mapping from category to numerical position
-    category_to_pos = {category: pos for pos, category in enumerate(sorted_thresholds)}
-    
-    # Map 'Threshold' to numerical positions for plotting
-    df_bench['Threshold_Pos'] = df_bench['Threshold'].map(category_to_pos)
-    
-    # Sort the DataFrame based on 'Threshold_Pos' to ensure correct plotting order
-    df_bench_sorted = df_bench.sort_values('Threshold_Pos')
-    
-    # Initialize the plot
-    fig, ax1 = plt.subplots(figsize=(10, 6))
-    
-    # Plot Avg_Gen as a line
-    color = 'tab:blue'
-    ax1.set_xlabel('Threshold')
-    ax1.set_ylabel('Avg Gen per Threshold (all depths)', color=color)
-    ax1.plot(
-        df_bench_sorted['Threshold_Pos'],
-        df_bench_sorted['Avg_Gen'],
-        color=color,
-        marker='o',
-        label='Avg Gen'
-    )
-    ax1.tick_params(axis='y', labelcolor=color)
-    
-    # Set x-ticks to category labels
-    ax1.set_xticks(list(category_to_pos.values()))
-    ax1.set_xticklabels(list(category_to_pos.keys()), rotation=45)
-    
-    # Create a second y-axis for Solved
-    ax2 = ax1.twinx()
-    color = 'tab:red'
-    ax2.set_ylabel('Solved', color=color)
-    
-    # Plot Solved as a bar chart
-    ax2.bar(
-        df_bench_sorted['Threshold_Pos'],
-        df_bench_sorted['Solved'],
-        color=color,
-        alpha=0.6,
-        label='Solved'
-    )
-    ax2.tick_params(axis='y', labelcolor=color)
-    
-    # Add percentage labels on top of the bars
-    for idx, row in df_bench_sorted.iterrows():
-        pos = row['Threshold_Pos']
-        solved = row['Solved']
-        percent = row['Solved_Percentage']
-        ax2.text(
-            pos,
-            solved + 0.5,  # Adjust the y-position as needed
-            f"{percent:.1f}%",
-            ha='center',
-            color=color,
-            fontsize=8
-        )
-    
-    # Add a title and legends
-    plt.title(f'Avg Gen and Nº Solved vs. Threshold for {bench_name}')
-    fig.tight_layout()  # Adjust layou
-    
-    # Combine legends from both axes
-    lines, labels = ax1.get_legend_handles_labels()
-    bars, bar_labels = ax2.get_legend_handles_labels()
-    ax1.legend(lines + bars, labels + bar_labels, loc='upper left')
-    
-    # Ensure the 'figures' directory exists
-    figures_dir = os.path.join(os.getcwd(), 'figures')
-    os.makedirs(figures_dir, exist_ok=True)
-    
-    # Determine plot filename
-    plot_filename = f"Threshold_AvgByDepths/{bench_name}.png"
-    
-    # Save the figure
-    plot_path = os.path.join(figures_dir, plot_filename)
-    plt.savefig(plot_path, bbox_inches='tight')
-    plt.close()  # Close the figure to free memory
-    print(f"Plot saved to {plot_path}")
-
-
-        
 
 if __name__ == "__main__":
     """
-        Gets the Table 3 of 750 runs performance data.
-        TODO: refactor for clearer reproducibility.
+        Gets the Tables for HBC performance data.
+            - Comparison vs Random subtree crossover.
+            - Comparison between depths and thresholds.
+       
     """
     
     thresholds = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
-    depths = [6, 7, 8, 9, 10] 
-    
-    sr_fns = ["nguyen1", "nguyen2", "nguyen3", "nguyen4", "nguyen5","nguyen6", "nguyen7", "nguyen8"]
+    # depths = [6, 7, 8, 9, 10] # Used to get Supplemental material results
+    depths = [10] # Used to get Main Experiments material results
 
-    
-    # TODO: This is an Experimental checking for dynamical inbreeding threshold
-    check_dynamic(sr_fns, depths)
-    # exit()
+    sr_fns = ["nguyen1", "nguyen2", "nguyen3", "nguyen4", "nguyen5","nguyen6", "nguyen7", "nguyen8"]
     
     for sr in sr_fns:
         
@@ -506,7 +203,6 @@ if __name__ == "__main__":
         for dep, thresholds in no_threshold_results.items():
             # print(f"\nMax Depth: {dep}")
             
-            
             for threshold, value in thresholds.items():
                 
                 # Generation Success Speed convergence count.
@@ -515,9 +211,7 @@ if __name__ == "__main__":
                 else:
                     no_inbreed_quick += 1
                     threshold_gens_counts.append(threshold)
-                    
-                # print(f"Inbreeding: {thresholds_gens[dep]} ~ No Inbreeding: {value}")
-
+                
             # Min-Max range of inbreeding
             (min_d, max_d) = min_max_gens[dep]
             total_min_d += min_d
@@ -528,11 +222,6 @@ if __name__ == "__main__":
             no_total_min_d += no_min_d
             no_total_max_d += no_max_d
             
-        #     print("\nBy Depth Generation Range:")
-        #     print(f"Depth: {dep}")
-        #     print(f"No Inbreeding: {no_min_d:.3f} ~ {no_max_d:.3f}.")
-        #     print(f"Inbreeding: {min_d:.3f} ~ {max_d:.3f}.")
-            
         # Get the global generation range
         print("\nGlobal Generation Range:")
         total_min_d = total_min_d / len(depths)
@@ -542,38 +231,21 @@ if __name__ == "__main__":
         print(f"Inbreeding: {total_min_d:.3f} ~ {total_max_d:.3f}.")
            
         # Get the convergence speed ratio globally
-        total_inb = (inbreed_quick / 50) * 100
-        total_no_in = (no_inbreed_quick / 50) * 100
+        n_combinations = len(depths) * len(thresholds)
+        total_inb = (inbreed_quick / n_combinations) * 100
+        total_no_in = (no_inbreed_quick / n_combinations) * 100
         print(f"\nConvergence Speed Ratio (%):")
         print(f"Inbreeding: {total_inb:.3f}% ({inbreed_quick}) ~ No Inbreeding: {total_no_in:.3f}% ({no_inbreed_quick})\n")
         
-        # TODO: I do not think is too relevant
-        print(f"For a specific Inbreeding Threshold. In how many different maximum depths was no_inbreeding quicker?\n")
-        counter = Counter(threshold_gens_counts)
-        sorted_counts = dict(sorted(counter.items()))
-        for k, v in sorted_counts.items():
-            print(f"Threshold {k}, no_inbreeding quicker in {v} different Max Depths.")
-
-#TODO: Note, there are 750 total different runs. In inbreeding they are divided only by max depth. So, 15 runs * 10 thresholds = 150 runs per depth.
-# Note, Each depth is averaged to get a representative succesful generation average. Comparing that to the 50 combinations of no_inbreeding.
-# Note, so each Depth~Threshold combo has 15 runs that are averaged. That X number is compared against the Y value of the 150 runs per that depth in inbreeding treatment.
-# And there are a total of 50 different comparisons (50 no inbreeding values) paired up with 5 different inbreeding values (1 for each depth)
-# We do this because the inbreeding threshold does not make the inbreeding treatment change at all, is a fixed variable. it all varies for maximum depth.
-
-# Therefore, that is what we see in table 1 in convergence speed.
-# The total number of runs successes does not matter at all in Table 1 because there are 750 total runs per each.
-# TODO: There will be another table where for each depth 150 runs each treatment, what is the convergence, in that we will see how different inbreeding thresholds affect the depth
 
     # ----------- Legacy ------------- #
-    # TODO: this is for normal run -> gp_lambda. Missing 7 and 8
-    # sr_fns = ["nguyen1", "nguyen2", "nguyen3", "nguyen4", "nguyen5", "nguyen6"]#, "nguyen7", "nguyen8"]
-    
-    # TODO: This is for mating-selection -> ramped/final_... missing 6 and one depth of 4 (wip)
-    sr_fns = ["nguyen1", "nguyen2", "nguyen3", "nguyen5", "nguyen6", "nguyen7", "nguyen8"]
+    sr_fns = ["nguyen1", "nguyen2", "nguyen3", "nguyen4", "nguyen5", "nguyen6", "nguyen7", "nguyen8"]
 
     for sr in sr_fns:
         print(sr)
-        depths = [6, 7, 8, 9, 10]
+        # depths = [6, 7, 8, 9, 10] # Used to get Supplemental material results
+        depths = [10] # Used to get Main Experiments material results
+
         thresholds_none = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14] #["None"]
         succes1, no_suc1 = get_gp_statistics(sr, depths, thresholds_none, "inbreeding", 3)
         

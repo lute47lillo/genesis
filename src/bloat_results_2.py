@@ -336,31 +336,13 @@ def intron_vs_size_with_succ_and_div(parsed_data_final, type_run):
     
 if __name__ == "__main__":
     
-    # file_path = f"{os.getcwd()}/saved_data/genetic_programming/symbolic_regression_data_ALL.csv" # Original
-    # file_path = f"{os.getcwd()}/saved_data/genetic_programming/intron_mutation_symbolic_regression_data_ALL.csv" # intron mutations
-    # file_path = f"{os.getcwd()}/saved_data/genetic_programming/half_mut_symbolic_regression_data_ALL.csv" # half intron mutations - half random subtree mutations
-    # file_path = f"{os.getcwd()}/saved_data/genetic_programming/intron_plus_symbolic_regression_data_ALL.csv" # 0.75 intron mutations - 0.25 random subtree mutations
-    # file_path = f"{os.getcwd()}/saved_data/genetic_programming/random_plus_symbolic_regression_data_ALL.csv" # 0.25 intron mutations - 0.75 random subtree mutations
-
-    """
-        NOTE
-            ..._means defines that we are using the MEAN Average intron ratio and the mean average tree size?
-                - Should we use the mean tree size over time? I think that the final tree size is more relevant there, but then the ratio is with respect to each gen.
-                    intron ratio = sum (introns / total nodes) for all individuals in a population divided by N individuals. And that is the intron ratio at gen G.
-                    
-                    So, if we take the average over time for all 15 runs over 150 generations we will have how the population intron ratio has evolved over time. 
-                    
-                    Therefore, we will need to have also the tree size over time. Because what we are plotting is Mean (over gens over runs) Average Tree Size wrt to 
-                    Mean (over gens over runs) of intron ratio of the population. 
-    """
-    
     types = ["random_mut", "intron_mutation", "half_mut", "intron_plus", "random_plus"]
     
     for type_run in types:
         
         # Get File name
-        file_path = f"{os.getcwd()}/saved_data/introns_study/{type_run}_symbolic_regression_data_ALL.csv" 
-        
+        file_path = f"{os.getcwd()}/saved_data/introns_study/{type_run}_symbolic_regression_data_ALL.csv"  # Original
+                
         # Read the file
         intron_tree_formatted_df = df_convert(file_path)
         
@@ -389,7 +371,7 @@ if __name__ == "__main__":
         
         # Get the Success (Diversity) data from the dictionary
         dict_file_path = f"{os.getcwd()}/saved_data/introns_study/{type_run}_succ_div_dict_DIV_AVG.json"
-        
+
         # Read the dictionary back from the file
         with open(dict_file_path, 'r') as f:
             diversity_success_data = json.load(f)
@@ -404,7 +386,7 @@ if __name__ == "__main__":
         final_merged_data = pd.concat([diversity_success_df, reorganized_intron_tree], keys=["Diversity/Success", "Intron/Tree Size"])    
 
         # Get file name of merged data
-        output_file_path = f"{os.getcwd()}/saved_data/introns_study/{type_run}_merged_data_DIV_AVG.csv"
+        output_file_path = f"{os.getcwd()}/saved_data/introns_study/{type_run}_merged_data_DIV_AVG.csv" # Original
 
         # Create the file with the final data
         final_merged_data.to_csv(output_file_path, index=False)
