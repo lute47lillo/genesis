@@ -14,6 +14,24 @@ import util
 import experiments as exp
 import plotting as plot
 import gp_math
+import multiprocessing
+
+# Global variable to hold the GPIntronAnalyzer instance in worker processes
+global_analyzer = None
+
+def init_worker(args):
+    """
+    Initializer function for each worker process.
+    Instantiates a GPIntronAnalyzer and assigns it to the global variable.
+    
+    Parameters:
+    -----------
+    args : Namespace or custom object
+        The arguments required to initialize GPIntronAnalyzer.
+    """
+    global global_analyzer
+    global_analyzer = GPLandscape(args, initialize_pool=False)  # Avoid nested pools
+
 
 # TODO: Testing has its own self-contained classes. So, the iterations can be quick.
 class Node:
@@ -31,16 +49,21 @@ class Node:
             return f"({self.value} {' '.join(str(child) for child in self.children)})"
 
 class Individual:
-    def __init__(self, args, fitness_function=None, tree=None, id=None):
+    def __init__(self, args, fitness_function=None, tree=None, id=None, ancestors=None, generation=0):
         self.args = args
         self.bounds = self.args.bounds
         self.max_depth = self.args.max_depth 
-        self.tree = tree if tree is not None else self.random_tree(depth=self.args.initial_depth) # Initial depth of 6 as in paper
-        # self.diversity = 0
+        self.initial_depth = self.args.initial_depth
+        self.tree = tree if tree is not None else self.random_tree(depth=self.initial_depth) # Initial depth of 6 as in paper
+        self.diversity = 0
         self.id = id if id is not None else np.random.randint(1e9)
+        self.ancestors = ancestors if ancestors is not None else set()
+        self.generation = generation  # Track the generation of the individual
         
         # Init fitness for individual in creation and self.success
         self.fitness, self.success = fitness_function(self.tree) # Computes only the Absolute Error fitness
+        
+        self.sharing_factor = 0
         
     def get_function_arity(self, function):
         arity_dict = {
@@ -73,7 +96,7 @@ class Individual:
     def __str__(self):
         return str(self.tree)
 
-class GeneticAlgorithmGPTesting:
+class GeneticAlgorithmGPSharing:
     
     def __init__(self, args, mut_rate, inbred_threshold=None):
         self.args = args
@@ -89,16 +112,69 @@ class GeneticAlgorithmGPTesting:
         self.diversity_list = []
         
         # TODO: For using diversity in the loss function
-        # self.min_fitness = 0
-        # self.max_fitness = - np.inf
+        self.min_fitness = 0
+        self.max_fitness = - np.inf
         
-        # self.min_div = 0
-        # self.max_div = - np.inf
+        self.min_div = 0
+        self.max_div = - np.inf
         
-        # # TODO: Experimental move around fitness and diversity importance
-        # self.diversity_weight = args.diversity_weight
-        # self.fitness_weight = args.fitness_weight
+        # TODO: Experimental move around fitness and diversity importance
+        self.diversity_weight = args.diversity_weight
+        self.fitness_weight = args.fitness_weight
         
+        # TODO: Experimental for fitness sharing
+        self.sigma_share = args.sigma_share
+        self.sigma_share_weight = args.sigma_share_weight
+        
+    # ------------------------ Fitness sharing ------------------------ #
+    
+    def sharing_function(self, d):
+        """
+            Definition
+            -----------
+                Quantifies how much fitness should be shared between two individuals based on their distance.
+            
+            External Parameters
+            --------------------    
+                - sigma_share (float). Is threshold for how close two individuals must be for their fitness values to influence each other.
+                - d (int). Is a distance between two individuals. Computed from our custom distance metric. Calculated in the measure diversity function.
+        """
+        # print(d, self.sigma_share)
+        if d < self.sigma_share:
+            # print(f"Sharing distance becase d: {d} and sigma share: {self.sigma_share}")
+            return 1 - (d / self.sigma_share)
+        else:
+            return 0
+
+    def calculate_fitness_with_sharing(self, curr_gen):
+        
+        # Compute Absolute Error fitness
+        for individual in self.population:
+            fitness, individual.success = self.fitness_function(individual.tree)
+            
+            # Scale up fitness.
+            fitness = util.scale_fitness_values(fitness, self.max_fitness, self.min_fitness)
+            
+            # Compute final fitness based off sharing
+            if individual.sharing_factor > 0:
+                individual.fitness = fitness / individual.sharing_factor
+            else:
+                individual.fitness = fitness
+            
+            if individual.success:
+                print(f"Successful individual found in generation {curr_gen}")
+                print(f"Function: {individual.tree}")
+                self.poulation_success = True
+
+        # Adjust fitness
+        # for individual in self.population:
+        #     if individual.sharing_factor > 0:
+        #         individual.fitness = individual.fitness / individual.sharing_factor
+        #     else:
+        #         individual.fitness = individual.fitness
+        
+    # ------------------------ Fitness sharing ------------------------ #
+    
     def count_nodes(self, node):
         """
             Definition
@@ -117,12 +193,7 @@ class GeneticAlgorithmGPTesting:
         # Get Tree sizes for entire population (nº nodes)
         tree_sizes = [self.count_nodes(ind.tree) for ind in self.population]
         average_size = sum(tree_sizes) / len(tree_sizes)
-        self.average_size_list.append(average_size)
-        
-        # Get Tree depths for entire population
-        tree_depths = [self.tree_depth(ind.tree) for ind in self.population]
-        average_depth = sum(tree_depths) / len(tree_depths)
-        self.average_depth_list.append(average_depth)  
+        self.average_size_list.append(average_size) 
     
     # ----------------------- Tree ~ Node functions ------------------ #
     
@@ -260,89 +331,55 @@ class GeneticAlgorithmGPTesting:
           
         # Scale-up
         fitness = util.scale_fitness_values(individual.fitness, self.max_fitness, self.min_fitness)
-        # print(f"\nIndividual scaled only fitness: {fitness}. Scaled Diversity: {individual.diversity}")
+       
+        # Adjust fitness by sharing factor
+        # TODO: Might need to adjust fitness like in the div+fit
+        for individual in self.population:
+            if individual.sharing_factor > 0:
+                try:
+                    # print(individual.fitness, individual.sharing_factor)
+                    individual.fitness = fitness / individual.sharing_factor
+                except RuntimeWarning as e:
+                    print(f"RuntimeWarning: {e}")
+            else:
+                individual.fitness = fitness
         
-        # Compute full fitness
-        individual.fitness = (fitness * self.fitness_weight) + (individual.diversity * self.diversity_weight)
-    
-        
-    def compute_individual_div(self, population, individual):
+    def compute_individual_sharing_factor(self, population, individual):
      
-        individual_diversity = 0
+        S_i = 0
         for i in range(len(population)):
             if population[i].id != individual.id:
-                distance = self.compute_trees_distance(population[i].tree, individual.tree)
-                individual_diversity += distance
+                # Compute fitness sharing dist for later calculation
+                distance = self.compute_trees_distance(population[i].tree, individual.tree)                
+                sh = self.sharing_function(distance)
+                S_i += sh
         
-        # Assign diversity to specific individual, after scaling it
-        individual.diversity = util.scale_diversity_values(individual_diversity, self.max_div, self.min_div)
-        # print(f"\nNew individual diver: {individual.diversity }")
+        # Assign diversity to specific individual.
+        individual.sharing_factor = S_i
 
     # ----------------- General GP Functions ------------------------- #
     
     def initialize_population(self):
-        print(f"\nInitializing population.")
+        print(f"\nInitializing population with fitness sharing and inital sigma share of {self.sigma_share}, weighted per gen as {self.sigma_share_weight}.")
         self.population = []
-        can_mate =0
         for _ in range(self.pop_size):
-            
             individual = Individual(self.args, fitness_function=self.fitness_function)
-            indiv_total_nodes = self.count_nodes(individual.tree)
-            # if indiv_total_nodes >= 14:
-            #     can_mate += 1
             self.population.append(individual)
-            
-        # print(f"Starting with MaxDepth: {self.max_depth} and initDepth: {self.initial_depth}. Out of {self.pop_size}, only {can_mate} Individuals can mate.")
         
-        # # Measure initial diversity and get min~max range 
-        # self.measure_diversity(self.population, 0)
-        # self.max_div, self.min_div = util.compute_min_max_div(self.population, self.max_div, self.min_div)
-        # # print(f"Inital min_div: {self.min_div} and max_div: {self.max_div}")
+        # Measure initial diversity and get min~max range 
+        self.measure_diversity(self.population, 0)
+        self.max_fitness, self.min_fitness = util.compute_min_max_fit(self.population, self.max_fitness, self.min_fitness)
         
-        # # Get min~max range for Absolute Error fitness values
-        # self.max_fitness, self.min_fitness = util.compute_min_max_fit(self.population, self.max_fitness, self.min_fitness)
-        # # print(f"Inital min_fit: {self.min_fitness} and max_fit: {self.max_fitness}")
-        
-        # # Scale population
-        # print(f"Scaling population.\n")
-        # for i, ind in enumerate(self.population):
-        #     ind.diversity = util.scale_diversity_values(ind.diversity, self.max_div, self.min_div)
-        #     fitness = util.scale_fitness_values(ind.fitness, self.max_fitness, self.min_fitness)
-        
-        #     # Compute full fitness
-        #     ind.fitness = (fitness * self.fitness_weight) + (ind.diversity * self.diversity_weight)
-            # print(f"\n({i}) - Combined fitness: {ind.fitness}. Abs. Error fitness: {fitness}. Diversity: {ind.diversity}.")
-            
-    def calculate_fitness_diversity(self, curr_gen):
-        
-        # TODO: Diversity used in fitness
-        for i, individual in enumerate(self.population):
-            
-            # Compute Absolute Error fitness
-            fitness, individual.success = self.fitness_function(individual.tree)
-
-            # Scale up fitness and diversity.
-            fitness = util.scale_fitness_values(fitness, self.max_fitness, self.min_fitness)
-            # print(f"Individual scaled only fitness: {fitness}. Scaled Diversity: {individual.diversity}")
-            
-            # Compute weighted fitness
-            individual.fitness = (fitness * self.fitness_weight) + (individual.diversity * self.diversity_weight)
-            # print(f"\n({i}) - Combined fitness: {individual.fitness}. Abs. Error fitness: {fitness}. Diversity: {individual.diversity}.")
-            
-            # Check for success
-            if individual.success:
-                print(f"Successful individual found in generation {curr_gen}")
-                print(f"Function: {individual.tree}")
-                self.poulation_success = True
-        
-    def calculate_fitness(self, curr_gen):
+        # Adjust fitness by sharing factor
         for individual in self.population:
-            individual.fitness, individual.success = self.fitness_function(individual.tree)
-            if individual.success:
-                print(f"Successful individual found in generation {curr_gen}")
-                print(f"Function: {individual.tree}")
-                self.poulation_success = True
-                
+            fitness = util.scale_fitness_values(individual.fitness, self.max_fitness, self.min_fitness)
+
+            if individual.sharing_factor > 0: # If 0 then Individual is sufficiently different from all other individuals in the population
+                individual.fitness = fitness / individual.sharing_factor
+            else:
+                individual.fitness = fitness
+            
+           
     def check_succcess_new_pop(self, curr_gen, next_population):
         for individual in next_population:
             if individual.success:
@@ -385,7 +422,6 @@ class GeneticAlgorithmGPTesting:
             if not self.can_mate(parent1, parent2, self.inbred_threshold): # If distance(p1, p2) >= inbred_thres then skip bc [not False ==  True]
                 return None, None
 
-   
         # Clone parents to avoid modifying originals
         child1 = copy.deepcopy(parent1.tree)
         child2 = copy.deepcopy(parent2.tree)
@@ -453,18 +489,22 @@ class GeneticAlgorithmGPTesting:
         offspring1 = Individual(
             self.args,
             fitness_function=self.fitness_function,
-            tree=child1
+            tree=child1,
+            ancestors=parent1.ancestors.union(parent2.ancestors, {parent1.id, parent2.id}),
+            generation=parent1.generation + 1
         )
-        # self.compute_individual_div(self.population, offspring1)
-        # self.compute_individual_fit(offspring1)
+        self.compute_individual_sharing_factor(self.population, offspring1)
+        self.compute_individual_fit(offspring1)
         
         offspring2 = Individual(
             self.args,
             fitness_function=self.fitness_function,
-            tree=child2
+            tree=child2,
+            ancestors=parent1.ancestors.union(parent2.ancestors, {parent1.id, parent2.id}),
+            generation=parent1.generation + 1
         )
-        # self.compute_individual_div(self.population, offspring2)
-        # self.compute_individual_fit(offspring2)
+        self.compute_individual_sharing_factor(self.population, offspring2)
+        self.compute_individual_fit(offspring2)
         
         return offspring1, offspring2
     
@@ -515,25 +555,33 @@ class GeneticAlgorithmGPTesting:
         
         # Iterate pairwise for all individuals in the population.
         for i in range(len(population)):
-            # individual_diversity = 0
-
+            individual_diversity = 0
+            S_i = 0
             for j in range(len(population)):
                 if population[i].id != population[j].id:
+                    
+                    # Compute custom distance metric for diversity
                     distance = self.compute_trees_distance(population[i].tree, population[j].tree)
-                    # individual_diversity += distance
+                    individual_diversity += distance
                     total_distance += distance
                     count += 1
-                
-            # # Scale if generation is more than 1 and Assign diversity to specific individual
-            # if curr_gen != 0:
-            #     population[i].diversity = util.scale_diversity_values(individual_diversity, self.max_div, self.min_div)
-            # else:
-            #     # Assign diversity to specific individual
-            #     population[i].diversity = individual_diversity
+                    
+                    # Compute fitness sharing dist for later calculation
+                    sh = self.sharing_function(distance)
+                    S_i += sh
             
+            # Assign sharing factor to individual.
+            # print(f"({i}) - Sharing factor: {S_i}")
+            population[i].sharing_factor = S_i
+            population[i].diversity = individual_diversity
+            
+        # How many comparisons, it goes i- > j and j->i so is double of C(300 over 2)
         if count == 0:
             return 0
         diversity = total_distance / count
+        
+        # Set sigma share for next iteration to be:
+        self.sigma_share = self.sigma_share_weight * diversity
         return diversity
     
     # ----------------- Main execution loop ------------------------- #
@@ -547,25 +595,26 @@ class GeneticAlgorithmGPTesting:
         
         # Initialize lists to store bloat metrics
         self.average_size_list = []
-        self.average_depth_list = []
+        self.sigma_share_list = []
         
         for gen in range(self.generations):
 
             # Calculate fitness
-            # self.calculate_fitness_diversity(gen) # Duv+fit runs
-            self.calculate_fitness(gen) # Performance runs
+            self.calculate_fitness_with_sharing(gen)
             
             # Update best fitness list
             best_individual = max(self.population, key=lambda ind: ind.fitness)
             self.best_fitness_list.append(best_individual.fitness)
     
-            # Measure diversity
+            # Measure diversity and progress of sigma share
             diversity = self.measure_diversity(self.population, gen+1)
             self.diversity_list.append(diversity)
+            self.sigma_share_list.append(self.sigma_share)
             
             # Early Stopping condition if successful individual has been found
             if self.poulation_success == True:
-                return self.best_fitness_list, self.diversity_list, gen + 1
+               
+                return self.best_fitness_list, self.diversity_list, self.sigma_share_list, gen + 1
     
             # Selection
             selected = self.tournament_selection()
@@ -594,14 +643,14 @@ class GeneticAlgorithmGPTesting:
                     else:
                         # Introduce new random individuals to maintain population size if inbreeding is not allowed
                         new_individual = Individual(self.args, fitness_function=self.fitness_function)
-                        # self.compute_individual_div(self.population, new_individual)
-                        # self.compute_individual_fit(new_individual)
+                        self.compute_individual_sharing_factor(self.population, new_individual)
+                        self.compute_individual_fit(new_individual)
                         next_population.append(new_individual)
                                                 
                         if len(next_population) < self.pop_size:
                             new_individual = Individual(self.args, fitness_function=self.fitness_function)
-                            # self.compute_individual_div(self.population, new_individual) 
-                            # self.compute_individual_fit(new_individual)
+                            self.compute_individual_sharing_factor(self.population, new_individual) 
+                            self.compute_individual_fit(new_individual)
                             next_population.append(new_individual)
         
                 i += 2
@@ -618,10 +667,11 @@ class GeneticAlgorithmGPTesting:
                 # Measure diversity
                 diversity = self.measure_diversity(next_population, gen+1)
                 self.diversity_list.append(diversity)
+                self.sigma_share_list.append(self.sigma_share)
                 
                 # Returns 2 + gens because technically we are just shortcutting the crossover of this current generation. So, +1 for 0th-indexed offset, and +1 for skipping some steps.
                 # This added values will have been returned in the next gen loop iteration.
-                return self.best_fitness_list, self.diversity_list, gen + 2
+                return self.best_fitness_list, self.diversity_list, self.sigma_share_list, gen + 2
             
             # Combine the population (mu+lambda)
             combined_population = next_population[:lambda_pop] + self.population     
@@ -631,42 +681,34 @@ class GeneticAlgorithmGPTesting:
             self.population = combined_population[:self.pop_size]
             self.pop_size = len(self.population)
             
-            # Re-compute min - max fitness for normalization. TODO: Do not ocmpute if Performance type
-            # self.max_fitness, self.min_fitness = util.compute_min_max_fit(self.population, self.max_fitness, self.min_fitness)
-            # self.max_div, self.min_div = util.compute_min_max_div(self.population, self.max_div, self.min_div)
+            # Re-compute min - max fitness for normalization
+            self.max_fitness, self.min_fitness = util.compute_min_max_fit(self.population, self.max_fitness, self.min_fitness)
             
-            # print(f"Generation {gen + 1}: Best Individual nodes = {self.count_nodes(best_individual.tree)}.\n")
-            can_mate = 0
+            # print(f"Generation {gen + 1}: Sigma Share: {self.sigma_share}. Diversity: {diversity}. Best Individual Fitness = {best_individual.fitness:.3f}.\n")
         
-            # Get Tree sizes for entire population (nº nodes)
-            tree_sizes = [self.count_nodes(ind.tree) for ind in self.population]
-            for ts in tree_sizes:
-                if ts >= 14:
-                    can_mate +=  1
-                    
-            print(f"Generation {gen + 1}: Only {can_mate} Individuals can mate -> {can_mate/self.pop_size * 100:.3f}")
-            
             # Print progress
             if (gen + 1) % 10 == 0:
+                
                 # Measure Size, Depth statistics
                 self.compute_population_size_depth()
-                
+           
                 print(f"\nInbreeding threshold set to: {self.inbred_threshold}.")
                 print(f"Generation {gen + 1}: Best Fitness = {best_individual.fitness:.3f}\n"
                       f"Diversity = {self.diversity_list[gen]:.3f}\n"
-                      f"Avg Size = {self.average_size_list[-1]:.3f}\n"
-                      f"Avg Depth = {self.average_depth_list[-1]:.3f}\n")
+                      f"Sigma Share: {self.sigma_share_list[gen]:.3f}\n"
+                      f"Avg Size = {self.average_size_list[-1]:.3f}\n")
     
-        return self.best_fitness_list, self.diversity_list, gen+1
+        return self.best_fitness_list, self.diversity_list, self.sigma_share_list, gen+1
     
 class GPLandscape:
     
-    def __init__(self, args):
+    def __init__(self, args, initialize_pool=True):
         
         self.args = args
         self.target_function = util.select_gp_benchmark(args)
         self.bounds = args.bounds
         self.data = self.generate_data() # Generate all data points
+
     
     def count_nodes(self, node):
         """
@@ -748,8 +790,6 @@ class GPLandscape:
         total_error = 0.0
         success = True  # Assume success initially
         epsilon = 1e-4  # Small threshold for success
-        
-        total_error
 
         for x, target in self.data:
 
@@ -781,32 +821,21 @@ if __name__ == "__main__":
     # -------------------------------- Experiment: Multiple Runs w/ fixed population and fixed mutation rate --------------------------- #
     
     term1 = f"genetic_programming/{args.benchmark}/"
-    
-    # ---- Diversity + fitness selection #
-    # term2 = "diversity/"
+    term2 = "sharing/"
 
-    # if args.inbred_threshold == 1:
-    #     term3 = f"FW:{args.fitness_weight}_DW:{args.diversity_weight}_PopSize:{args.pop_size}_InThres:None_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
-    # else:
-    #     term3 = f"FW:{args.fitness_weight}_DW:{args.diversity_weight}_PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
-        
-    # ---- Diversity + fitness selection ----- # -> Used for table 1 performance
-    term2 = "gp_lambda/"
     if args.inbred_threshold == 1:
-        term3 = f"PopSize:{args.pop_size}_InThres:None_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
+        term3 = f"SigmaShare:{args.sigma_share_weight}_PopSize:{args.pop_size}_InThres:None_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
     else:
-        term3 = f"PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
+        term3 = f"SigmaShare:{args.sigma_share_weight}_PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
         
     # Text to save files and plot.
     args.config_plot = term1 + term2 + term3
         
     if args.inbred_threshold == 1:
         print("Running GA with Inbreeding Mating...")
-        results_inbreeding = exp.test_multiple_runs_function_gp(args, gp_landscape, None)
+        results_inbreeding = exp.test_multiple_runs_function_sharing(args, gp_landscape, None)
         util.save_accuracy(results_inbreeding, f"{args.config_plot}_inbreeding.npy")
     else:
         print("Running GA with NO Inbreeding Mating...")
-        results_no_inbreeding = exp.test_multiple_runs_function_gp(args, gp_landscape, args.inbred_threshold)
+        results_no_inbreeding = exp.test_multiple_runs_function_sharing(args, gp_landscape, args.inbred_threshold)
         util.save_accuracy(results_no_inbreeding, f"{args.config_plot}_no_inbreeding.npy")
-
-    

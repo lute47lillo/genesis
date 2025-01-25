@@ -4,9 +4,9 @@ import torch
 import os
 import pandas as pd
 import benchmark_factory as bf
-from sympy import symbols, sympify, simplify, expand
-import sympy
+from gp_node import Node
 import random
+import copy
 
 def set_seed(seed):
     torch.manual_seed(seed)
@@ -37,10 +37,29 @@ def set_args():
     argparser.add_argument('--intron_fraction', type=float, help='Fraction of the population to compute introns from.', default=1.0) # intron_fraction
 
     # Genetic Programming variables
-    argparser.add_argument('--max_depth', type=int, help='GP Tree maximum depth', default=15)
+    argparser.add_argument('--max_depth', type=int, help='GP Tree maximum depth', default=10)
     argparser.add_argument('--initial_depth', type=int, help='GP Tree maximum depth', default=3) 
     argparser.add_argument('--fitness_weight', type=float, help='Proportional importance weight in the total fitness calculation for abs. error fitness', default=1.0)
-    argparser.add_argument('--diversity_weight', type=float, help='Proportional importance weight in the total fitness calculation for diversity', default=0.0)
+    argparser.add_argument('--diversity_weight', type=float, help='Proportional importance weight in the total fitness calculation for diversity', default=0.0) 
+    
+    # Fitness Sharing Experiment variables
+    argparser.add_argument('--sigma_share', type=float, help='The sharing radius. It determines how far the sharing effect extends.', default=3)
+    argparser.add_argument('--sigma_share_weight', type=float, help='Percentage of Diversity as distance metric to  be used to calculate sigma share. ss = ss_weight * ss', default=0.2)
+    
+    # Dynamic threshold variables
+    argparser.add_argument('--slope_threshold', type=int, help='Type of increase of inbreeding threhsold. 1 or -1', default=1)
+    argparser.add_argument('--gen_change', type=int, help='Generation X at which changin rate of change of threshold', default=25) 
+    argparser.add_argument('--linear_type', type=str, help='Whether the change is abrupt or continuous', default='continuous') 
+    
+    # Dynamic Mutation Type
+    argparser.add_argument('--mutation_type', type=str, help='Whether the mutation subtrees are intron or random', default='random')     
+    
+    # Semantics experiments
+    argparser.add_argument('--semantics_type', type=str, help='Choose the type of semantic crossover used. (SAC, SSC, or None)', default='SAC')    
+    argparser.add_argument('--low_sensitivity', type=float, help='Lower Bound sensitivity for similarity. Used in SAC and SSC', default=0.02)
+    argparser.add_argument('--high_sensitivity', type=float, help='Higher Bound sensitivity for similarity. Used in SSC', default=8)
+ 
+
     
     # Parse all arguments
     args = argparser.parse_args()
@@ -96,10 +115,6 @@ def pack_intron_lists(pop_ration_in, avg_ratio_in, pop_total_in, pop_total_nodes
     intron_lists = (pop_ration_in, avg_ratio_in, pop_total_in, pop_total_nodes)
     return intron_lists
 
-def pack_kinship_lists(avg_kinship, t_close, t_far):
-    kinship_lists = (avg_kinship, t_close, t_far)
-    return kinship_lists
-
 def pack_measures_lists(average_size_list, average_depth_list):
     measures_lists = (average_size_list, average_depth_list)
     return measures_lists
@@ -107,6 +122,75 @@ def pack_measures_lists(average_size_list, average_depth_list):
 def pack_metrics_lists(best_fitness_list, diversity_list):
     metrics_lists = (best_fitness_list, diversity_list)
     return metrics_lists
+
+def subtree_yields_one():
+    """
+    Returns a subtree guaranteed to yield 1 for all x.
+    Useful as an intron in multiplication or division contexts.
+    """
+    patterns = []
+    
+    # 1) Direct one
+    patterns.append(Node(1.0))
+    
+    # 2) cos(0)
+    patterns.append(Node('cos', [Node(0.0)]))
+    
+    # 3) Node / Node (identical)
+    #   Create a small subtree for the child, then duplicate it.
+    
+    child = None
+    while True:
+        candidate = small_random_terminal_subtree()
+        # If candidate can evaluate to 0, it might cause division by zero issues
+        # But let's allow 'x' or 1.0. If candidate is Node(0.0), let's regenerate.
+        if not (isinstance(candidate.value, float) and candidate.value == 0.0):
+            child = candidate
+            break
+    
+    child_copy = copy.deepcopy(child)
+    patterns.append(Node('/', [child, child_copy]))  # e.g. x / x or 1 / 1
+    
+    return np.random.choice(patterns)
+
+def subtree_yields_zero():
+    """
+    Returns a subtree guaranteed to yield 0 for all x.
+    Useful as an intron in addition or subtraction contexts.
+    """
+    patterns = []
+    
+    # 1) Direct zero
+    patterns.append(Node(0.0))
+    
+    # 2) sin(0)
+    patterns.append(Node('sin', [Node(0.0)]))
+    
+    # 3) log(1.0)
+    patterns.append(Node('log', [Node(1.0)]))
+    
+    # 4) Node - Node (identical)
+    #   We'll create a small subtree for the child, then duplicate it.
+    child = small_random_terminal_subtree()
+    child_copy = copy.deepcopy(child)
+    patterns.append(Node('-', [child, child_copy]))  # e.g. x - x
+    
+    return np.random.choice(patterns)
+
+def small_random_terminal_subtree():
+    """
+    Returns a Node that is either:
+      - Node('x'), or
+      - Node(0.0), or
+      - Node(1.0).
+    """
+    choice = np.random.choice(['x', '0', '1'])
+    if choice == 'x':
+        return Node('x')
+    elif choice == '0':
+        return Node(0.0)
+    else:
+        return Node(1.0)
 
 # ---------------------- Diversity in fitness ---------------- #
 
@@ -118,14 +202,6 @@ def compute_min_max_fit(population, max_fitness, min_fitness):
         max_fitness = max(max_fitness, individual.fitness)
         
     return max_fitness, min_fitness
-
-def compute_min_max_div(population, max_div, min_div):
-    # Compute min - max diversity for normalization.
-    for individual in population:
-        min_div = min(min_div, individual.diversity)
-        max_div = max(max_div, individual.diversity)
-        
-    return max_div, min_div
             
 def scale_fitness_values(fitness_individual, max_fitness, min_fitness):
     
@@ -136,33 +212,8 @@ def scale_fitness_values(fitness_individual, max_fitness, min_fitness):
         fitness_individual = (fitness_individual - min_fitness) / (max_fitness - min_fitness)
         
     return fitness_individual
-
-def scale_diversity_values(diversity_individual, max_div, min_div):
     
-    # Avoid division by zero
-    if max_div == min_div:
-        diversity_individual = 1.0
-    else:
-        diversity_individual = (diversity_individual - min_div) / (max_div - min_div)
-        
-    return diversity_individual
-    
-# -------------- Plotting helper functions --------------- #
-        
-def create_padded_df(data, metric, run_ids):
-    
-    # Determine the maximum length for the metric across all runs
-    max_length = max(len(run_data[metric]) for run_data in data.values())
-    
-    # Initialize a DataFrame with NaNs
-    df = pd.DataFrame(index=range(max_length), columns=run_ids, dtype=float)
-    
-    # Populate the DataFrame
-    for run_id, run_data in data.items():
-        values = run_data[metric]
-        df[run_id].iloc[:len(values)] = values
-    
-    return df
+# -------------- Plotting and analysis helper functions --------------- #
 
 def pad_sublist(sublist, target_length):
     """
@@ -177,78 +228,11 @@ def pad_sublist(sublist, target_length):
     """
     current_length = len(sublist)
     if current_length < target_length:
-        padding = [sublist[-1]] * (target_length - current_length)
+        padding_value = sublist[-1] if sublist else 0
+        padding = [padding_value] * (target_length - current_length)
         return sublist + padding
     else:
         return sublist
-    
-# Flatten the Data
-def flatten_results_depths(treatment_name, depths):
-    data_df = []
-    for depth in depths:
-        # Load dict data
-        file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/nguyen2/gp_lambda/PopSize:300_InThres:4_Mrates:0.0005_Gens:150_TourSize:15_MaxD:{depth}_InitD:3_{treatment_name}.npy"
-        data = np.load(file_path_name, allow_pickle=True)
-        data_dict = data.item()
-        
-        # Iterate over and create DataFram
-        for run, metrics in data_dict.items():
-            # diversity = metrics['diversity']# TODO: For another plto
-            generation_success = metrics['generation_success']
-            data_df.append({
-                'Treatment': treatment_name,
-                'Depth': depth,
-                'Run': run,
-                'Generation_Success': generation_success
-            })
-    return pd.DataFrame(data_df)
-
-# Flatten the Data
-def flatten_results_thresholds(treatment_name, thresholds):
-    data_df = []
-    for thres in thresholds:
-        # Load dict data
-        file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/nguyen2/gp_lambda/PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:9_InitD:3_{treatment_name}.npy"
-        data = np.load(file_path_name, allow_pickle=True)
-        data_dict = data.item()
-        
-        # Iterate over and create DataFram
-        for run, metrics in data_dict.items():
-            # diversity = metrics['diversity']# TODO: For another plto
-            generation_success = metrics['generation_success']
-            data_df.append({
-                'Treatment': treatment_name,
-                'Thresholds': thres,
-                'Run': run,
-                'Generation_Success': generation_success
-            })
-    return pd.DataFrame(data_df)
-
-def flatten_results_in_max_depth_diversity(bench_name, treatment_name, thresholds, depths, init_depth):
-    data_df = []
-    for thres in thresholds:
-        for depth in depths:
-            # Load dict data
-            file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/{bench_name}/gp_lambda/PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:{depth}_InitD:{init_depth}_{treatment_name}.npy"
-            data = np.load(file_path_name, allow_pickle=True)
-            data_dict = data.item()
-            for run, metrics in data_dict.items():
-                # TODO: If Wanted al values needs to padd:
-                # padded_diversity = [pad_sublist(sublist, target_length) for sublist in metrics['diversity']]
-                # metrics['diversity'] = padded_diversity
-                diversity = metrics['diversity'][-1]
-                generation_success = metrics['generation_success']
-        
-                # Update
-                data_df.append({
-                    'Treatment': treatment_name,
-                    'Max_Depth': depth,
-                    'Inbred_Threshold': thres,
-                    'Run': run,
-                    'Generation_Success': generation_success,
-                    'Diversity': diversity
-                })
-    return pd.DataFrame(data_df)
 
 # Determine Global Maximum Depth
 def get_global_max_depth(*results_dicts):
@@ -259,15 +243,6 @@ def get_global_max_depth(*results_dicts):
             if current_depth > max_depth:
                 max_depth = current_depth
     return max_depth
-
-# Pad 'diversity' Lists
-def pad_diversity_lists(results_dict, target_length):
-    for run in results_dict:
-        original_length = len(results_dict[run]['diversity'])
-        padded_diversity = [pad_sublist(sublist, target_length) for sublist in results_dict[run]['diversity']]
-        results_dict[run]['diversity'] = padded_diversity
-        print(f"Run {run}: Padded Diversity Lengths = {[len(s) for s in results_dict[run]['diversity']]}")
-    return results_dict
 
 # Create DF for all attributes for the given dictionary treatment
 def pad_dict_and_create_df(results, attributes, global_max_length, n_runs):
@@ -306,4 +281,75 @@ def pad_dict_and_create_df(results, attributes, global_max_length, n_runs):
     return df
 
 
+# ---------------- Result printing and visualization -------------- #
+def compute_composite_score_for_eval(sr_dfs, sr, results, suc_w=2, div_w=0, gen_w=-1):
+    """
+        Definition
+        ------------
+            Computes and ranks the different hyperparameter combination for a given experiment based off 3 metrics:
+                - Total successful runs.
+                - Diversity
+                - Mean Generation Success (speed of convergence)
+                
+        Parameters
+        -------------
+            - sr_dfs (dict): Contains the diversity and best_fitness parameters ready to be accessed per SR function
+            - sr (str): The SR function.
+            - results (dict): Contains the statistical metrics.
+            - suc_w, div_w, gen_w (int): The weigth of each of the metrics to compute the composite score.
+    """
+# Extract keys and diversity lists
+    keys = sr_dfs[sr]['diversity'][2]                # List of keys
+    diversity_lists = sr_dfs[sr]['diversity'][1]    # List of diversity lists
 
+    # Prepare data for DataFrame
+    data = []
+    for i, key in enumerate(keys):
+        diversity_list = diversity_lists[i]
+        try:
+            diversity_value = diversity_list[-1][-1]  # Last element of the last sublist
+        except IndexError:
+            diversity_value = float('-inf')  # Handle empty lists if necessary
+        n_successes = results[key]['n_successes']
+        mean_gen_success = np.mean(results[key]['generation_successes'])
+        
+        data.append({
+            'key': key,
+            'n_successes': n_successes,
+            'diversity': round(diversity_value, 2),
+            'mean_gen_success': round(mean_gen_success, 2)
+        })
+
+    # Create DataFrame
+    df = pd.DataFrame(data)
+
+    # Define Weights. Playing with these tells me different interpretations. 
+    # Example: With 0 diversity, we can observe the pattern of how diversity is spread when the other two are the important things
+    # And then for the top-3 best, and top-3 worse we can plot the evolution of diversity to see how it might go up then down.
+    weights = {
+        'n_successes': suc_w,
+        'diversity': div_w,
+        'mean_gen_success': gen_w  # Negative weight because lower is better
+    }
+
+    # Calculate Composite Score
+    df['composite_score'] = (
+        df['n_successes'] * weights['n_successes'] +
+        df['diversity'] * weights['diversity'] +
+        df['mean_gen_success'] * weights['mean_gen_success']
+    )
+    df['composite_score'] = round(df['composite_score'], 3)
+
+    # Sort DataFrame based on Composite Score
+    df_sorted = df.sort_values(
+        by='composite_score',
+        ascending=False
+    ).reset_index(drop=True)
+
+    # Display the sorted DataFrame
+    print(f"\nUsing weights -> SucW: {suc_w}. DivW: {div_w}. GenW: {gen_w}")
+    print("Sorted Results Based on Composite Score:")
+    print(df_sorted[['key', 'n_successes', 'diversity', 'mean_gen_success', 'composite_score']])
+    
+    return df_sorted
+        

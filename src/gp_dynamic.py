@@ -2,8 +2,8 @@
     Definition
     -----------
     
-        Contains stable version to compute 'basic' mu+lambda runs with inbreeding threshold.
-            - Experimental treatments of diversity + fitness guided selection.
+        Contains stable version to compute Dynamic mu+lambda runs with inbreeding threshold.
+            - Inbreeding Threshold is set to half the diversity at each generation.
             - No Bloat or intron computation.
 """
 
@@ -31,12 +31,13 @@ class Node:
             return f"({self.value} {' '.join(str(child) for child in self.children)})"
 
 class Individual:
-    def __init__(self, args, fitness_function=None, tree=None, id=None):
+    def __init__(self, args, fitness_function=None, tree=None, id=None, ancestors=None, generation=0):
         self.args = args
         self.bounds = self.args.bounds
         self.max_depth = self.args.max_depth 
-        self.tree = tree if tree is not None else self.random_tree(depth=self.args.initial_depth) # Initial depth of 6 as in paper
-        # self.diversity = 0
+        self.initial_depth = self.args.initial_depth
+        self.tree = tree if tree is not None else self.random_tree(depth=self.initial_depth) # Initial depth of 6 as in paper
+        self.diversity = 0
         self.id = id if id is not None else np.random.randint(1e9)
         
         # Init fitness for individual in creation and self.success
@@ -73,7 +74,7 @@ class Individual:
     def __str__(self):
         return str(self.tree)
 
-class GeneticAlgorithmGPTesting:
+class GeneticAlgorithmGPDynamic:
     
     def __init__(self, args, mut_rate, inbred_threshold=None):
         self.args = args
@@ -87,17 +88,6 @@ class GeneticAlgorithmGPTesting:
         self.population = []
         self.best_fitness_list = []
         self.diversity_list = []
-        
-        # TODO: For using diversity in the loss function
-        # self.min_fitness = 0
-        # self.max_fitness = - np.inf
-        
-        # self.min_div = 0
-        # self.max_div = - np.inf
-        
-        # # TODO: Experimental move around fitness and diversity importance
-        # self.diversity_weight = args.diversity_weight
-        # self.fitness_weight = args.fitness_weight
         
     def count_nodes(self, node):
         """
@@ -251,89 +241,17 @@ class GeneticAlgorithmGPTesting:
         child_distances += abs(len(node1.children) - len(node2.children))
         return cost + child_distances
     
-    def compute_individual_fit(self, individual):
-        """
-            Definition
-            ------------
-                Helper function that is only used after offspring is created, or when new random individuals are added to the population.
-        """
-          
-        # Scale-up
-        fitness = util.scale_fitness_values(individual.fitness, self.max_fitness, self.min_fitness)
-        # print(f"\nIndividual scaled only fitness: {fitness}. Scaled Diversity: {individual.diversity}")
-        
-        # Compute full fitness
-        individual.fitness = (fitness * self.fitness_weight) + (individual.diversity * self.diversity_weight)
-    
-        
-    def compute_individual_div(self, population, individual):
-     
-        individual_diversity = 0
-        for i in range(len(population)):
-            if population[i].id != individual.id:
-                distance = self.compute_trees_distance(population[i].tree, individual.tree)
-                individual_diversity += distance
-        
-        # Assign diversity to specific individual, after scaling it
-        individual.diversity = util.scale_diversity_values(individual_diversity, self.max_div, self.min_div)
-        # print(f"\nNew individual diver: {individual.diversity }")
-
     # ----------------- General GP Functions ------------------------- #
     
     def initialize_population(self):
         print(f"\nInitializing population.")
         self.population = []
-        can_mate =0
         for _ in range(self.pop_size):
-            
             individual = Individual(self.args, fitness_function=self.fitness_function)
-            indiv_total_nodes = self.count_nodes(individual.tree)
-            # if indiv_total_nodes >= 14:
-            #     can_mate += 1
             self.population.append(individual)
-            
-        # print(f"Starting with MaxDepth: {self.max_depth} and initDepth: {self.initial_depth}. Out of {self.pop_size}, only {can_mate} Individuals can mate.")
         
-        # # Measure initial diversity and get min~max range 
-        # self.measure_diversity(self.population, 0)
-        # self.max_div, self.min_div = util.compute_min_max_div(self.population, self.max_div, self.min_div)
-        # # print(f"Inital min_div: {self.min_div} and max_div: {self.max_div}")
-        
-        # # Get min~max range for Absolute Error fitness values
-        # self.max_fitness, self.min_fitness = util.compute_min_max_fit(self.population, self.max_fitness, self.min_fitness)
-        # # print(f"Inital min_fit: {self.min_fitness} and max_fit: {self.max_fitness}")
-        
-        # # Scale population
-        # print(f"Scaling population.\n")
-        # for i, ind in enumerate(self.population):
-        #     ind.diversity = util.scale_diversity_values(ind.diversity, self.max_div, self.min_div)
-        #     fitness = util.scale_fitness_values(ind.fitness, self.max_fitness, self.min_fitness)
-        
-        #     # Compute full fitness
-        #     ind.fitness = (fitness * self.fitness_weight) + (ind.diversity * self.diversity_weight)
-            # print(f"\n({i}) - Combined fitness: {ind.fitness}. Abs. Error fitness: {fitness}. Diversity: {ind.diversity}.")
-            
-    def calculate_fitness_diversity(self, curr_gen):
-        
-        # TODO: Diversity used in fitness
-        for i, individual in enumerate(self.population):
-            
-            # Compute Absolute Error fitness
-            fitness, individual.success = self.fitness_function(individual.tree)
-
-            # Scale up fitness and diversity.
-            fitness = util.scale_fitness_values(fitness, self.max_fitness, self.min_fitness)
-            # print(f"Individual scaled only fitness: {fitness}. Scaled Diversity: {individual.diversity}")
-            
-            # Compute weighted fitness
-            individual.fitness = (fitness * self.fitness_weight) + (individual.diversity * self.diversity_weight)
-            # print(f"\n({i}) - Combined fitness: {individual.fitness}. Abs. Error fitness: {fitness}. Diversity: {individual.diversity}.")
-            
-            # Check for success
-            if individual.success:
-                print(f"Successful individual found in generation {curr_gen}")
-                print(f"Function: {individual.tree}")
-                self.poulation_success = True
+        # Measure initial diversity and get min~max range 
+        self.measure_diversity(self.population, 0)
         
     def calculate_fitness(self, curr_gen):
         for individual in self.population:
@@ -385,7 +303,6 @@ class GeneticAlgorithmGPTesting:
             if not self.can_mate(parent1, parent2, self.inbred_threshold): # If distance(p1, p2) >= inbred_thres then skip bc [not False ==  True]
                 return None, None
 
-   
         # Clone parents to avoid modifying originals
         child1 = copy.deepcopy(parent1.tree)
         child2 = copy.deepcopy(parent2.tree)
@@ -455,16 +372,12 @@ class GeneticAlgorithmGPTesting:
             fitness_function=self.fitness_function,
             tree=child1
         )
-        # self.compute_individual_div(self.population, offspring1)
-        # self.compute_individual_fit(offspring1)
         
         offspring2 = Individual(
             self.args,
             fitness_function=self.fitness_function,
             tree=child2
         )
-        # self.compute_individual_div(self.population, offspring2)
-        # self.compute_individual_fit(offspring2)
         
         return offspring1, offspring2
     
@@ -515,21 +428,17 @@ class GeneticAlgorithmGPTesting:
         
         # Iterate pairwise for all individuals in the population.
         for i in range(len(population)):
-            # individual_diversity = 0
+            individual_diversity = 0
 
             for j in range(len(population)):
                 if population[i].id != population[j].id:
                     distance = self.compute_trees_distance(population[i].tree, population[j].tree)
-                    # individual_diversity += distance
+                    individual_diversity += distance
                     total_distance += distance
                     count += 1
                 
-            # # Scale if generation is more than 1 and Assign diversity to specific individual
-            # if curr_gen != 0:
-            #     population[i].diversity = util.scale_diversity_values(individual_diversity, self.max_div, self.min_div)
-            # else:
-            #     # Assign diversity to specific individual
-            #     population[i].diversity = individual_diversity
+            # Assign diversity to specific individual
+            population[i].diversity = individual_diversity
             
         if count == 0:
             return 0
@@ -549,11 +458,13 @@ class GeneticAlgorithmGPTesting:
         self.average_size_list = []
         self.average_depth_list = []
         
+        # Initialize Dynamic Inbred Threshold
+        self.inbred_threshold_list = []
+        
         for gen in range(self.generations):
 
             # Calculate fitness
-            # self.calculate_fitness_diversity(gen) # Duv+fit runs
-            self.calculate_fitness(gen) # Performance runs
+            self.calculate_fitness(gen)
             
             # Update best fitness list
             best_individual = max(self.population, key=lambda ind: ind.fitness)
@@ -565,7 +476,7 @@ class GeneticAlgorithmGPTesting:
             
             # Early Stopping condition if successful individual has been found
             if self.poulation_success == True:
-                return self.best_fitness_list, self.diversity_list, gen + 1
+                return self.best_fitness_list, self.diversity_list, self.inbred_threshold_list, gen + 1
     
             # Selection
             selected = self.tournament_selection()
@@ -594,14 +505,10 @@ class GeneticAlgorithmGPTesting:
                     else:
                         # Introduce new random individuals to maintain population size if inbreeding is not allowed
                         new_individual = Individual(self.args, fitness_function=self.fitness_function)
-                        # self.compute_individual_div(self.population, new_individual)
-                        # self.compute_individual_fit(new_individual)
                         next_population.append(new_individual)
                                                 
                         if len(next_population) < self.pop_size:
                             new_individual = Individual(self.args, fitness_function=self.fitness_function)
-                            # self.compute_individual_div(self.population, new_individual) 
-                            # self.compute_individual_fit(new_individual)
                             next_population.append(new_individual)
         
                 i += 2
@@ -621,7 +528,7 @@ class GeneticAlgorithmGPTesting:
                 
                 # Returns 2 + gens because technically we are just shortcutting the crossover of this current generation. So, +1 for 0th-indexed offset, and +1 for skipping some steps.
                 # This added values will have been returned in the next gen loop iteration.
-                return self.best_fitness_list, self.diversity_list, gen + 2
+                return self.best_fitness_list, self.diversity_list, self.inbred_threshold_list, gen + 2
             
             # Combine the population (mu+lambda)
             combined_population = next_population[:lambda_pop] + self.population     
@@ -631,33 +538,26 @@ class GeneticAlgorithmGPTesting:
             self.population = combined_population[:self.pop_size]
             self.pop_size = len(self.population)
             
-            # Re-compute min - max fitness for normalization. TODO: Do not ocmpute if Performance type
-            # self.max_fitness, self.min_fitness = util.compute_min_max_fit(self.population, self.max_fitness, self.min_fitness)
-            # self.max_div, self.min_div = util.compute_min_max_div(self.population, self.max_div, self.min_div)
+            # Recompute the Inbreeding Threshold based off diversity of the population
+            halving = int(diversity / 2)
+            self.inbred_threshold = halving
+            self.inbred_threshold_list.append(self.inbred_threshold)
+            print(f"\nDynamic Inbreeding threshold set to: {self.inbred_threshold}.")
             
-            # print(f"Generation {gen + 1}: Best Individual nodes = {self.count_nodes(best_individual.tree)}.\n")
-            can_mate = 0
-        
-            # Get Tree sizes for entire population (nº nodes)
-            tree_sizes = [self.count_nodes(ind.tree) for ind in self.population]
-            for ts in tree_sizes:
-                if ts >= 14:
-                    can_mate +=  1
-                    
-            print(f"Generation {gen + 1}: Only {can_mate} Individuals can mate -> {can_mate/self.pop_size * 100:.3f}")
+            # print(f"Generation {gen + 1}: Best Individual Fitness = {best_individual.fitness:.3f}.\n")
             
             # Print progress
             if (gen + 1) % 10 == 0:
                 # Measure Size, Depth statistics
                 self.compute_population_size_depth()
-                
-                print(f"\nInbreeding threshold set to: {self.inbred_threshold}.")
+        
                 print(f"Generation {gen + 1}: Best Fitness = {best_individual.fitness:.3f}\n"
                       f"Diversity = {self.diversity_list[gen]:.3f}\n"
+                      f"Inbred Threshold = {self.inbred_threshold_list[gen]:.3f}\n"
                       f"Avg Size = {self.average_size_list[-1]:.3f}\n"
                       f"Avg Depth = {self.average_depth_list[-1]:.3f}\n")
     
-        return self.best_fitness_list, self.diversity_list, gen+1
+        return self.best_fitness_list, self.diversity_list, self.inbred_threshold_list, gen+1
     
 class GPLandscape:
     
@@ -781,17 +681,8 @@ if __name__ == "__main__":
     # -------------------------------- Experiment: Multiple Runs w/ fixed population and fixed mutation rate --------------------------- #
     
     term1 = f"genetic_programming/{args.benchmark}/"
-    
-    # ---- Diversity + fitness selection #
-    # term2 = "diversity/"
+    term2 = "dynamic/"
 
-    # if args.inbred_threshold == 1:
-    #     term3 = f"FW:{args.fitness_weight}_DW:{args.diversity_weight}_PopSize:{args.pop_size}_InThres:None_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
-    # else:
-    #     term3 = f"FW:{args.fitness_weight}_DW:{args.diversity_weight}_PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
-        
-    # ---- Diversity + fitness selection ----- # -> Used for table 1 performance
-    term2 = "gp_lambda/"
     if args.inbred_threshold == 1:
         term3 = f"PopSize:{args.pop_size}_InThres:None_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
     else:
@@ -802,11 +693,11 @@ if __name__ == "__main__":
         
     if args.inbred_threshold == 1:
         print("Running GA with Inbreeding Mating...")
-        results_inbreeding = exp.test_multiple_runs_function_gp(args, gp_landscape, None)
+        results_inbreeding = exp.test_multiple_runs_function_dynamic(args, gp_landscape, None)
         util.save_accuracy(results_inbreeding, f"{args.config_plot}_inbreeding.npy")
     else:
         print("Running GA with NO Inbreeding Mating...")
-        results_no_inbreeding = exp.test_multiple_runs_function_gp(args, gp_landscape, args.inbred_threshold)
+        results_no_inbreeding = exp.test_multiple_runs_function_dynamic(args, gp_landscape, args.inbred_threshold)
         util.save_accuracy(results_no_inbreeding, f"{args.config_plot}_no_inbreeding.npy")
-
     
+  

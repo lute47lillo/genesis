@@ -12,7 +12,6 @@ import copy
 import random
 import util
 import experiments as exp
-import plotting as plot
 import gp_math
 
 # TODO: Testing has its own self-contained classes. So, the iterations can be quick.
@@ -31,13 +30,19 @@ class Node:
             return f"({self.value} {' '.join(str(child) for child in self.children)})"
 
 class Individual:
-    def __init__(self, args, fitness_function=None, tree=None, id=None):
+    def __init__(self, args, fitness_function=None, tree=None, id=None, init_method="full"):
         self.args = args
         self.bounds = self.args.bounds
         self.max_depth = self.args.max_depth 
-        self.tree = tree if tree is not None else self.random_tree(depth=self.args.initial_depth) # Initial depth of 6 as in paper
-        # self.diversity = 0
+        self.init_method = init_method
         self.id = id if id is not None else np.random.randint(1e9)
+        
+        if tree is not None:
+            self.tree = tree
+        elif self.init_method == "grow":
+            self.tree = self.grow_tree(depth=self.args.initial_depth)
+        elif self.init_method == "full":
+            self.tree = self.full_tree(depth=self.args.initial_depth)
         
         # Init fitness for individual in creation and self.success
         self.fitness, self.success = fitness_function(self.tree) # Computes only the Absolute Error fitness
@@ -53,29 +58,69 @@ class Individual:
             'log': 1
         }
         return arity_dict.get(function, 0)
-    
-    def random_tree(self, depth):
-    
+        
+    def full_tree(self, depth):
+        """
+            Definition
+            -----------
+                In the "full" method, all the nodes at each level (except the leaves at the maximum depth) are function (non-terminal) nodes
+                and all leaves at the maximum depth are terminal nodes. This creates "bushy" and more balanced trees.
+                
+                    1. At every level of the tree (except the deepest level), we place a function (internal) node.
+                    2. Only at the maximum depth do we place terminal nodes (leaves).
+                    
+                    Therefore, the number of nodes in a "full" tree depends heavily on the arity (the number of children) of the chosen function nodes.
+                    Theoretical maximum nº of nodes is given by 2^(max_depth+1) - 1. Ex: Max Depth = 3. Then 15 is maximum.
+        """
         if depth == 0:
             # Return a terminal node
             terminal = np.random.choice(['x', '1.0'])
-            if terminal == '1.0':
-                return Node(1.0)
-            else:
-                return Node('x')
+            return Node(1.0 if terminal == '1.0' else 'x')
         else:
-            # Return a function node with appropriate arity
+            # Choose a function node
             function = np.random.choice(['+', '-', '*', '/', 'sin', 'cos', 'log'])
             arity = self.get_function_arity(function)
-            children = [self.random_tree(depth - 1) for _ in range(arity)]
+            
+            # Ensure all nodes at this level are expanded to full depth (non-terminal if possible)
+            children = [self.full_tree(depth - 1) for _ in range(arity)]
+            return Node(function, children)
+        
+    def grow_tree(self, depth):
+        """
+            Definition
+            -----------
+                At each node (except at maximum depth), randomly decide whether it will be a function node or a terminal node.
+                If picks a terminal before reaching the maximum depth, that branch stops growing, resulting in irregularly shaped trees.
+                Over many generated individuals, this leads to a variety of shapes and sizes rather than only "full" shapes.
+        """
+        
+        # If we are at max depth, we must choose a terminal
+        if depth == 0:
+            terminal = np.random.choice(['x', '1.0'])
+            return Node(1.0 if terminal == '1.0' else 'x')
+
+        # Otherwise, randomly decide whether to select a function or terminal
+        # Let's say there's a 50% chance of choosing a function node and a 50% chance of choosing a terminal node
+        # You can adjust this probability as needed
+        if np.random.rand() < 0.5:
+            # Choose a terminal (end branch early)
+            terminal = np.random.choice(['x', '1.0'])
+            return Node(1.0 if terminal == '1.0' else 'x')
+        else:
+            # Choose a function node and recurse for children
+            function = np.random.choice(['+', '-', '*', '/', 'sin', 'cos', 'log'])
+            arity = self.get_function_arity(function)
+            children = [self.grow_tree(depth - 1) for _ in range(arity)]
             return Node(function, children)
     
     def __str__(self):
         return str(self.tree)
 
-class GeneticAlgorithmGPTesting:
+class GeneticAlgorithmGPRamped:
     
     def __init__(self, args, mut_rate, inbred_threshold=None):
+        
+        # Variables
         self.args = args
         self.pop_size = args.pop_size
         self.generations = args.generations
@@ -84,20 +129,11 @@ class GeneticAlgorithmGPTesting:
         self.max_depth = args.max_depth
         self.initial_depth = args.initial_depth
         self.poulation_success = False
+        
+        # Trackers
         self.population = []
         self.best_fitness_list = []
         self.diversity_list = []
-        
-        # TODO: For using diversity in the loss function
-        # self.min_fitness = 0
-        # self.max_fitness = - np.inf
-        
-        # self.min_div = 0
-        # self.max_div = - np.inf
-        
-        # # TODO: Experimental move around fitness and diversity importance
-        # self.diversity_weight = args.diversity_weight
-        # self.fitness_weight = args.fitness_weight
         
     def count_nodes(self, node):
         """
@@ -280,60 +316,40 @@ class GeneticAlgorithmGPTesting:
 
     # ----------------- General GP Functions ------------------------- #
     
-    def initialize_population(self):
+    def initialize_population_half_and_half(self):
         print(f"\nInitializing population.")
         self.population = []
-        can_mate =0
-        for _ in range(self.pop_size):
-            
-            individual = Individual(self.args, fitness_function=self.fitness_function)
+        can_mate_full = 0
+        can_mate_grow = 0
+
+        # Custom half-n-half -> 75/25 
+        # half = self.pop_size // 2
+        # half = int(self.pop_size * 0.80)
+        half = self.pop_size # TODO: This is the gp_lambda performance run
+        
+        # The first half is full initialization
+        for i in range(half):
+            individual = Individual(self.args, fitness_function=self.fitness_function, init_method="full") # Usually full
             indiv_total_nodes = self.count_nodes(individual.tree)
-            # if indiv_total_nodes >= 14:
-            #     can_mate += 1
+            if self.inbred_threshold is not None and indiv_total_nodes >= self.inbred_threshold:
+                can_mate_full += 1
             self.population.append(individual)
             
-        # print(f"Starting with MaxDepth: {self.max_depth} and initDepth: {self.initial_depth}. Out of {self.pop_size}, only {can_mate} Individuals can mate.")
-        
-        # # Measure initial diversity and get min~max range 
-        # self.measure_diversity(self.population, 0)
-        # self.max_div, self.min_div = util.compute_min_max_div(self.population, self.max_div, self.min_div)
-        # # print(f"Inital min_div: {self.min_div} and max_div: {self.max_div}")
-        
-        # # Get min~max range for Absolute Error fitness values
-        # self.max_fitness, self.min_fitness = util.compute_min_max_fit(self.population, self.max_fitness, self.min_fitness)
-        # # print(f"Inital min_fit: {self.min_fitness} and max_fit: {self.max_fitness}")
-        
-        # # Scale population
-        # print(f"Scaling population.\n")
-        # for i, ind in enumerate(self.population):
-        #     ind.diversity = util.scale_diversity_values(ind.diversity, self.max_div, self.min_div)
-        #     fitness = util.scale_fitness_values(ind.fitness, self.max_fitness, self.min_fitness)
-        
-        #     # Compute full fitness
-        #     ind.fitness = (fitness * self.fitness_weight) + (ind.diversity * self.diversity_weight)
-            # print(f"\n({i}) - Combined fitness: {ind.fitness}. Abs. Error fitness: {fitness}. Diversity: {ind.diversity}.")
-            
-    def calculate_fitness_diversity(self, curr_gen):
-        
-        # TODO: Diversity used in fitness
-        for i, individual in enumerate(self.population):
-            
-            # Compute Absolute Error fitness
-            fitness, individual.success = self.fitness_function(individual.tree)
+            # print(f"Full ({i}) - individual total nodes: {indiv_total_nodes}")
 
-            # Scale up fitness and diversity.
-            fitness = util.scale_fitness_values(fitness, self.max_fitness, self.min_fitness)
-            # print(f"Individual scaled only fitness: {fitness}. Scaled Diversity: {individual.diversity}")
+        # The second half is grow (random) initialization
+        for j in range(self.pop_size - half):
+            individual = Individual(self.args, fitness_function=self.fitness_function, init_method="grow")
+            indiv_total_nodes = self.count_nodes(individual.tree)
+            if self.inbred_threshold is not None and indiv_total_nodes >= self.inbred_threshold:
+                can_mate_grow += 1
+            self.population.append(individual)
             
-            # Compute weighted fitness
-            individual.fitness = (fitness * self.fitness_weight) + (individual.diversity * self.diversity_weight)
-            # print(f"\n({i}) - Combined fitness: {individual.fitness}. Abs. Error fitness: {fitness}. Diversity: {individual.diversity}.")
+            # print(f"Grow ({j}) - individual total nodes: {indiv_total_nodes}")
             
-            # Check for success
-            if individual.success:
-                print(f"Successful individual found in generation {curr_gen}")
-                print(f"Function: {individual.tree}")
-                self.poulation_success = True
+        print(f"\nStarting with MaxDepth: {self.max_depth} and initDepth: {self.initial_depth}. Out of {self.pop_size}.")
+        print(f"Grow: {can_mate_grow} Individuals can mate. Full: {can_mate_full} Individuals can mate.")
+        print(f"Total: {(can_mate_grow + can_mate_full)} ({(can_mate_grow + can_mate_full) / self.pop_size * 100:.3f}%).\n")
         
     def calculate_fitness(self, curr_gen):
         for individual in self.population:
@@ -357,6 +373,25 @@ class GeneticAlgorithmGPTesting:
             winner = max(participants, key=lambda ind: ind.fitness)
             selected.append(winner)
         return selected
+    
+    def mating_selection(self, selected):
+        can_selected = []
+        
+        # Select only individuals with nº nodes > inbred_threshold value
+        if self.inbred_threshold is not None:
+                can_mate_selected = 0
+                
+                for ind in selected:
+                    tree_size = self.count_nodes(ind.tree)
+        
+                    if tree_size >= self.inbred_threshold:
+                        can_mate_selected +=  1
+                        can_selected.append(ind)
+                            
+        else:
+            can_selected = selected
+    
+        return can_selected
     
     def crossover(self, parent1, parent2):
         """
@@ -385,7 +420,8 @@ class GeneticAlgorithmGPTesting:
             if not self.can_mate(parent1, parent2, self.inbred_threshold): # If distance(p1, p2) >= inbred_thres then skip bc [not False ==  True]
                 return None, None
 
-   
+        self.allowed_mate_by_dist += 1
+        
         # Clone parents to avoid modifying originals
         child1 = copy.deepcopy(parent1.tree)
         child2 = copy.deepcopy(parent2.tree)
@@ -401,8 +437,6 @@ class GeneticAlgorithmGPTesting:
             if node1 is None or node2 is None:
                 continue  # Try again
 
-            # TODO: Currenlty enforcnig that the parents need to have the same arity. 
-            # TODO: In the future we could deal with different arities by removing, adding nodes rather than swapping entire subtrees
             # Check if both nodes have the same arity
             arity1 = parent1.get_function_arity(node1.value)
             arity2 = parent2.get_function_arity(node2.value)
@@ -453,18 +487,16 @@ class GeneticAlgorithmGPTesting:
         offspring1 = Individual(
             self.args,
             fitness_function=self.fitness_function,
-            tree=child1
+            tree=child1,
+            init_method="full"
         )
-        # self.compute_individual_div(self.population, offspring1)
-        # self.compute_individual_fit(offspring1)
         
         offspring2 = Individual(
             self.args,
             fitness_function=self.fitness_function,
-            tree=child2
+            tree=child2, 
+            init_method="full"
         )
-        # self.compute_individual_div(self.population, offspring2)
-        # self.compute_individual_fit(offspring2)
         
         return offspring1, offspring2
     
@@ -480,7 +512,7 @@ class GeneticAlgorithmGPTesting:
             return  # Cannot mutate without a node
 
         # Replace the subtree with a new random subtree
-        new_subtree = individual.random_tree(self.initial_depth) 
+        new_subtree = individual.full_tree(self.initial_depth) 
         
         # Ensure that the new_subtree has the correct arity
         required_children = individual.get_function_arity(new_subtree.value)
@@ -515,21 +547,12 @@ class GeneticAlgorithmGPTesting:
         
         # Iterate pairwise for all individuals in the population.
         for i in range(len(population)):
-            # individual_diversity = 0
-
             for j in range(len(population)):
                 if population[i].id != population[j].id:
                     distance = self.compute_trees_distance(population[i].tree, population[j].tree)
                     # individual_diversity += distance
                     total_distance += distance
                     count += 1
-                
-            # # Scale if generation is more than 1 and Assign diversity to specific individual
-            # if curr_gen != 0:
-            #     population[i].diversity = util.scale_diversity_values(individual_diversity, self.max_div, self.min_div)
-            # else:
-            #     # Assign diversity to specific individual
-            #     population[i].diversity = individual_diversity
             
         if count == 0:
             return 0
@@ -543,7 +566,8 @@ class GeneticAlgorithmGPTesting:
         self.fitness_function = fitness_function
         
         # Init population
-        self.initialize_population()
+        # self.initialize_population()
+        self.initialize_population_half_and_half() # ramped half-n-half initializaiton
         
         # Initialize lists to store bloat metrics
         self.average_size_list = []
@@ -552,7 +576,6 @@ class GeneticAlgorithmGPTesting:
         for gen in range(self.generations):
 
             # Calculate fitness
-            # self.calculate_fitness_diversity(gen) # Duv+fit runs
             self.calculate_fitness(gen) # Performance runs
             
             # Update best fitness list
@@ -567,8 +590,11 @@ class GeneticAlgorithmGPTesting:
             if self.poulation_success == True:
                 return self.best_fitness_list, self.diversity_list, gen + 1
     
-            # Selection
+            # Tournament Selection
             selected = self.tournament_selection()
+            
+            # Mating selection
+            can_selected = self.mating_selection(selected)
     
             # Crossover and Mutation
             next_population = []
@@ -577,34 +603,49 @@ class GeneticAlgorithmGPTesting:
             # Lambda (parent+children)
             lambda_pop = self.pop_size * 2
             
-            while i < lambda_pop: 
-                parent1 = selected[i % len(selected)]
-                parent2 = selected[(i + 1) % len(selected)]
-                offspring = self.crossover(parent1, parent2)
+            # Start metrics for debugging
+            self.allowed_mate_by_dist = 0 # Reset to 0 on every generation
+            offspring_count = 0
+            none_count = 0
+            
+            # Evolutionary recombination
+            while i < lambda_pop:     
+                
+                if len(can_selected) > 2:
+       
+                    # TODO: Only crossover those that have at least more nodes than what can be used.
+                    parent1 = can_selected[i % len(can_selected)]
+                    parent2 = can_selected[(i + 1) % len(can_selected)]
+                    offspring = self.crossover(parent1, parent2)
+               
+                else: # There is not a single one that ca be mated
+                    offspring = [None, None]
     
                 if offspring[0] is not None and offspring[1] is not None:
                     self.mutate(offspring[0])
                     self.mutate(offspring[1])
                     next_population.extend(offspring)
+                    offspring_count += 1
+
                 else:
+                    none_count += 1
                     # Append parents if Inbreeding is allowed
                     if self.inbred_threshold is None: 
                         next_population.append(copy.deepcopy(parent1))
                         next_population.append(copy.deepcopy(parent2))
                     else:
                         # Introduce new random individuals to maintain population size if inbreeding is not allowed
-                        new_individual = Individual(self.args, fitness_function=self.fitness_function)
-                        # self.compute_individual_div(self.population, new_individual)
-                        # self.compute_individual_fit(new_individual)
+                        new_individual = Individual(self.args, fitness_function=self.fitness_function, init_method="full")
                         next_population.append(new_individual)
                                                 
                         if len(next_population) < self.pop_size:
-                            new_individual = Individual(self.args, fitness_function=self.fitness_function)
-                            # self.compute_individual_div(self.population, new_individual) 
-                            # self.compute_individual_fit(new_individual)
+                            new_individual = Individual(self.args, fitness_function=self.fitness_function, init_method="full")
                             next_population.append(new_individual)
         
                 i += 2
+                
+            # print(f"Generation {gen + 1}: Checking by distance. Only {self.allowed_mate_by_dist} Individuals can actually  mate -> {self.allowed_mate_by_dist/len(selected) * 100:.3f}\n")
+            # print(f"New individuals added from real offspring: {offspring_count} vs added from random (they could'nt mate): {none_count}")
 
             # Check if individual of next population is already successful. No need to recombination as it will always have largest fitness
             self.check_succcess_new_pop(gen+1, next_population)
@@ -631,26 +672,11 @@ class GeneticAlgorithmGPTesting:
             self.population = combined_population[:self.pop_size]
             self.pop_size = len(self.population)
             
-            # Re-compute min - max fitness for normalization. TODO: Do not ocmpute if Performance type
-            # self.max_fitness, self.min_fitness = util.compute_min_max_fit(self.population, self.max_fitness, self.min_fitness)
-            # self.max_div, self.min_div = util.compute_min_max_div(self.population, self.max_div, self.min_div)
-            
-            # print(f"Generation {gen + 1}: Best Individual nodes = {self.count_nodes(best_individual.tree)}.\n")
-            can_mate = 0
-        
-            # Get Tree sizes for entire population (nº nodes)
-            tree_sizes = [self.count_nodes(ind.tree) for ind in self.population]
-            for ts in tree_sizes:
-                if ts >= 14:
-                    can_mate +=  1
-                    
-            print(f"Generation {gen + 1}: Only {can_mate} Individuals can mate -> {can_mate/self.pop_size * 100:.3f}")
-            
             # Print progress
             if (gen + 1) % 10 == 0:
                 # Measure Size, Depth statistics
-                self.compute_population_size_depth()
-                
+                self.compute_population_size_depth()                
+           
                 print(f"\nInbreeding threshold set to: {self.inbred_threshold}.")
                 print(f"Generation {gen + 1}: Best Fitness = {best_individual.fitness:.3f}\n"
                       f"Diversity = {self.diversity_list[gen]:.3f}\n"
@@ -781,32 +807,23 @@ if __name__ == "__main__":
     # -------------------------------- Experiment: Multiple Runs w/ fixed population and fixed mutation rate --------------------------- #
     
     term1 = f"genetic_programming/{args.benchmark}/"
+    term2 = "ramped/"
     
-    # ---- Diversity + fitness selection #
-    # term2 = "diversity/"
-
-    # if args.inbred_threshold == 1:
-    #     term3 = f"FW:{args.fitness_weight}_DW:{args.diversity_weight}_PopSize:{args.pop_size}_InThres:None_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
-    # else:
-    #     term3 = f"FW:{args.fitness_weight}_DW:{args.diversity_weight}_PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
-        
-    # ---- Diversity + fitness selection ----- # -> Used for table 1 performance
-    term2 = "gp_lambda/"
     if args.inbred_threshold == 1:
-        term3 = f"PopSize:{args.pop_size}_InThres:None_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
+        term3 = f"final_PopSize:{args.pop_size}_InThres:None_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
     else:
-        term3 = f"PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
+        term3 = f"final_PopSize:{args.pop_size}_InThres:{args.inbred_threshold}_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
         
     # Text to save files and plot.
     args.config_plot = term1 + term2 + term3
         
     if args.inbred_threshold == 1:
         print("Running GA with Inbreeding Mating...")
-        results_inbreeding = exp.test_multiple_runs_function_gp(args, gp_landscape, None)
+        results_inbreeding = exp.test_multiple_runs_function_gp_ramped(args, gp_landscape, None)
         util.save_accuracy(results_inbreeding, f"{args.config_plot}_inbreeding.npy")
     else:
         print("Running GA with NO Inbreeding Mating...")
-        results_no_inbreeding = exp.test_multiple_runs_function_gp(args, gp_landscape, args.inbred_threshold)
+        results_no_inbreeding = exp.test_multiple_runs_function_gp_ramped(args, gp_landscape, args.inbred_threshold)
         util.save_accuracy(results_no_inbreeding, f"{args.config_plot}_no_inbreeding.npy")
 
     
