@@ -43,7 +43,6 @@ def protected_log_array(a):
     
 def protected_sin(a):
     if a is None or not np.isfinite(a):
-        print(f"A is none: {a}, or not finite: {np.isfinite}")
         return 0.0
     return np.sin(a)
 
@@ -68,7 +67,6 @@ def protected_cos(a):
     
     if a is None or not np.isfinite(a):
         return 0.0
-    print(np.cos(a))
     return np.cos(a)
 
 def protected_subtract(a, b):

@@ -396,9 +396,9 @@ class GeneticAlgorithmGPBloat:
             
             # print(f"Grow ({j}) - individual total nodes: {indiv_total_nodes}")
             
-        print(f"\nStarting with MaxDepth: {self.max_depth} and initDepth: {self.initial_depth}. Out of {self.pop_size}.")
-        print(f"Grow: {can_mate_grow} Individuals can mate. Full: {can_mate_full} Individuals can mate.")
-        print(f"Total: {(can_mate_grow + can_mate_full)} ({(can_mate_grow + can_mate_full) / self.pop_size * 100:.3f}%).\n")
+        # print(f"\nStarting with MaxDepth: {self.max_depth} and initDepth: {self.initial_depth}. Out of {self.pop_size}.")
+        # print(f"Grow: {can_mate_grow} Individuals can mate. Full: {can_mate_full} Individuals can mate.")
+        # print(f"Total: {(can_mate_grow + can_mate_full)} ({(can_mate_grow + can_mate_full) / self.pop_size * 100:.3f}%).\n")
         
     
     def calculate_fitness(self, curr_gen):

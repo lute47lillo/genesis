@@ -783,8 +783,6 @@ def success_by_threshold_all_sr():
             count = help_count_by_fn(func, subset['Success'])
             print()
             
-            
-            
             axes[i].scatter(
                 subset['Diversity'],
                 subset["Success"],
