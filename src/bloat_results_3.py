@@ -2,8 +2,12 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import os
-import re
 from bloat_results_2 import merge_DS_with_IT
+from matplotlib.colors import Normalize
+import matplotlib as mpl
+import matplotlib
+matplotlib.rcParams['pdf.fonttype'] = 42
+matplotlib.rcParams['ps.fonttype'] = 42
 
 """
     Definition
@@ -304,8 +308,8 @@ def intron_vs_size_with_succ_and_div():
     plot_filename = f"genetic_programming/intron_mut_study/ALL_comparison_intron_vs_size_with_succ_and_div.png"
     plt.savefig(os.path.join(figures_dir, plot_filename), bbox_inches='tight')
     
-sns.set_style("darkgrid")
 def intron_vs_size_with_succ_and_div_2():
+    
     # ------------------------------------------------------------------------
     # 1. Load and parse all dataframes as you did
     # ------------------------------------------------------------------------
@@ -357,131 +361,17 @@ def intron_vs_size_with_succ_and_div_2():
 
     vmin = all_data['Diversity'].min()
     vmax = all_data['Diversity'].max()
-
-    # ------------------------------------------------------------------------
-    # 3. Plot subplots with consistent hue_norm and no separate legend
-    # ------------------------------------------------------------------------
-    # fig, axes = plt.subplots(2, 3, figsize=(24, 12), sharey=True)
-    # # Common keyword arguments
-    # scatter_kwargs = {
-    #     'x': 'Intron Ratio',
-    #     'y': 'Tree Size',
-    #     'hue': 'Diversity',
-    #     'palette': 'viridis',
-    #     'hue_norm': (vmin, vmax),  # ensure same color scale
-    #     'size': 'Success',
-    #     'sizes': (20, 200),
-    #     'alpha': 0.8,
-    #     'legend': False  # we'll create one colorbar later
-    # }
-
-    # # Subplot 1
-    # sns.scatterplot(data=intron_mutation_parsed, ax=axes[0][0], **scatter_kwargs)
-    # axes[0][0].set_title("Intron Subtree Mutations")
-    # axes[0][0].set_xlabel("Intron Ratio")
-    # axes[0][0].set_ylabel("Tree Size")
-
-    # # Subplot 2
-    # sns.scatterplot(data=random_mutation_parsed, ax=axes[0][1], **scatter_kwargs)
-    # axes[0][1].set_title("Random Subtree Mutations")
-    # axes[0][1].set_xlabel("Intron Ratio")
-
-    # # Subplot 3
-    # sns.scatterplot(data=half_mutation_parsed, ax=axes[0][2], **scatter_kwargs)
-    # axes[0][2].set_title("Half-n-Half Subtree Mutations")
-    # axes[0][2].set_xlabel("Intron Ratio")
-
-    # # Subplot 4
-    # sns.scatterplot(data=random_plus_mutation_parsed, ax=axes[1][0], **scatter_kwargs)
-    # axes[1][0].set_title("Random p(0.75) Subtree Mutations")
-    # axes[1][0].set_xlabel("Intron Ratio")
-
-    # # Subplot 5
-    # sns.scatterplot(data=intron_plus_mutation_parsed, ax=axes[1][1], **scatter_kwargs)
-    # axes[1][1].set_title("Intron p(0.75) Subtree Mutations")
-    # axes[1][1].set_xlabel("Intron Ratio")
-
-    # plt.tight_layout()
-
-    # # ------------------------------------------------------------------------
-    # # 4. Create a single colorbar for "Diversity"
-    # # ------------------------------------------------------------------------
-    # # Make a scalar mappable using the same colormap and norm:
-    # from matplotlib.colors import Normalize
-    # import matplotlib as mpl
     
-    # x_min = all_data['Intron Ratio'].min()
-    # x_max = all_data['Intron Ratio'].max()
-
-    # for ax in axes[0]:
-    #     ax.set_xlim([x_min, x_max])
-        
-    # for ax in axes[1]:
-    #     ax.set_xlim([x_min, x_max])
-
-
-    # norm = Normalize(vmin=vmin, vmax=vmax)
-    # sm = mpl.cm.ScalarMappable(cmap="viridis", norm=norm)
-    # sm.set_array([])  # required for older matplotlib so colorbar knows the range
-
-    # # Now create the colorbar on the figure, spanning all subplots:
-    # cbar = fig.colorbar(sm, ax=axes.ravel().tolist(), shrink=0.7, label="Diversity", pad=0.02)
-    # # You could also configure the size scale legend similarly, or handle it differently.
-    # # -------------------------------------------
-    # # 4) Create a dummy plot to get size handles
-    # # -------------------------------------------
-    # # We do a separate (invisible) figure+axes so we can get
-    # # the auto-generated legend for "Success" (the size).
-    # # Note we omit hue so we only get the size legend items.
-    # dummy_fig, dummy_ax = plt.subplots()
-    # dummy_scatter = sns.scatterplot(
-    #     data=all_data,
-    #     x='Intron Ratio',
-    #     y='Tree Size',
-    #     size='Success',
-    #     # If you want the circles in a specific color, do color='k' or 'gray'
-    #     color='black',  
-    #     sizes=(20, 200),
-    #     alpha=0.8,      # invisible markers
-    #     legend='full', # or 'full'
-    #     ax=dummy_ax
-    # )
-    # # Capture the handles & labels from the dummy's legend
-    # handles, labels = dummy_ax.get_legend_handles_labels()
-
-    # # We no longer need the dummy figure
-    # plt.close(dummy_fig)
-
-    # # -------------------------------------------
-    # # 5) Add a single size legend to the main fig
-    # # -------------------------------------------
-    # # You can pick a location (e.g., 'upper right', 'center right', etc.)
-    # fig.legend(
-    #     handles,
-    #     labels,
-    #     loc='lower center',
-    #     bbox_to_anchor=(0.45, -0.05),  # shift downward by 0.2
-    #     ncol=len(labels),
-    #     title='Success'
-    # )
-
-    # # Adjust the layout so there's room at the bottom
-    # # plt.subplots_adjust(bottom=0.2)
-
-    # # ------------------------------------------------------------------------
-    # # 5. Save figure
-    # # ------------------------------------------------------------------------
-    # figures_dir = os.path.join(os.getcwd(), 'figures')
-    # os.makedirs(figures_dir, exist_ok=True)
-
-    # plot_filename = "genetic_programming/intron_mut_study/ALL_vertical_comparison_intron_vs_size_with_succ_and_div_DIV_AVG.png"
-    # plt.savefig(os.path.join(figures_dir, plot_filename), bbox_inches='tight')
+    sns.set_style("darkgrid")
     
     # Adjust the subplot grid to have a blank space in the second row
     fig, axes = plt.subplots(
-        2, 3, figsize=(22, 12),
+        2, 3, figsize=(24, 18),
         sharey=True,
-        gridspec_kw={"height_ratios": [1, 1]}  # Reduce height of the second row
+        gridspec_kw={"height_ratios": [1, 1],
+                    "hspace": 0.2,  # Reduced from default
+                    "wspace": 0.05   # Reduced from default  # Reduce height of the second row
+        }
     )
 
     # Common keyword arguments
@@ -499,54 +389,53 @@ def intron_vs_size_with_succ_and_div_2():
 
     # Subplot 1: Intron Subtree Mutations
     sns.scatterplot(data=intron_mutation_parsed, ax=axes[0][0], **scatter_kwargs)
-    axes[0][0].set_title("Intron Subtree Mutations")
-    axes[0][0].set_xlabel("Intron Ratio")
-    axes[0][0].set_ylabel("Tree Size")
+    axes[0][0].set_title("Intron Subtree Mutations", fontsize=17)
+    axes[0][0].set_xlabel("Intron Ratio", fontsize=15)
+    axes[0][0].set_ylabel("Tree Size", fontsize=15)
+    axes[0][0].tick_params(axis='both', which='major', labelsize=15)
 
     # Subplot 2: Random Subtree Mutations
     sns.scatterplot(data=random_mutation_parsed, ax=axes[0][1], **scatter_kwargs)
-    axes[0][1].set_title("Random Subtree Mutations")
-    axes[0][1].set_xlabel("Intron Ratio")
+    axes[0][1].set_title("Random Subtree Mutations", fontsize=17)
+    axes[0][1].set_xlabel("Intron Ratio", fontsize=15)
+    axes[0][1].tick_params(axis='both', which='major', labelsize=15)
 
     # Subplot 3: Half-n-Half Subtree Mutations
     sns.scatterplot(data=half_mutation_parsed, ax=axes[0][2], **scatter_kwargs)
-    axes[0][2].set_title("Half-n-Half Subtree Mutations")
-    axes[0][2].set_xlabel("Intron Ratio")
+    axes[0][2].set_title("Half-n-Half Subtree Mutations", fontsize=17)
+    axes[0][2].set_xlabel("Intron Ratio", fontsize=15)
+    axes[0][2].tick_params(axis='both', which='major', labelsize=15)
 
     # Subplot 4: Random p(0.75) Subtree Mutations (centered in row 2)
     sns.scatterplot(data=random_plus_mutation_parsed, ax=axes[1][0], **scatter_kwargs)
-    axes[1][0].set_title("Random p(0.75) Subtree Mutations")
-    axes[1][0].set_xlabel("Intron Ratio")
+    axes[1][0].set_title("Random p(0.75) Subtree Mutations", fontsize=17)
+    axes[1][0].set_xlabel("Intron Ratio", fontsize=15)
+    axes[1][0].set_ylabel("Tree Size", fontsize=15)
+    axes[1][0].tick_params(axis='both', which='major', labelsize=15)
 
     # Subplot 5: Intron p(0.75) Subtree Mutations (centered in row 2)
     sns.scatterplot(data=intron_plus_mutation_parsed, ax=axes[1][1], **scatter_kwargs)
-    axes[1][1].set_title("Intron p(0.75) Subtree Mutations")
-    axes[1][1].set_xlabel("Intron Ratio")
+    axes[1][1].set_title("Intron p(0.75) Subtree Mutations", fontsize=17)
+    axes[1][1].set_xlabel("Intron Ratio", fontsize=15)
+    axes[1][1].tick_params(axis='both', which='major', labelsize=15)
 
     # Remove the empty subplot in the second row
     fig.delaxes(axes[1][2])
 
-    # Adjust spacing to center the second row
-    # fig.subplots_adjust(hspace=0.5, wspace=0.4)
-
     # Center the subplots in the second row
     axes[1][0].set_position([
-        axes[0][0].get_position().x0 +0.15,  # Align x0 with the first column
+        axes[0][0].get_position().x0 +0.13,  # Align x0 with the first column
         axes[1][0].get_position().y0,  # Keep the y0 position
         axes[0][0].get_position().width,  # Match width with the first column
         axes[1][0].get_position().height  # Match height
     ])
 
     axes[1][1].set_position([
-        axes[0][1].get_position().x0+0.15,  # Align x0 with the second column
+        axes[0][1].get_position().x0+0.14,  # Align x0 with the second column
         axes[1][1].get_position().y0,  # Keep the y0 position
         axes[0][1].get_position().width,  # Match width with the second column
         axes[1][1].get_position().height  # Match height
     ])
-
-    # Create the shared colorbar
-    from matplotlib.colors import Normalize
-    import matplotlib as mpl
     
     x_min = all_data['Intron Ratio'].min()
     x_max = all_data['Intron Ratio'].max()
@@ -557,13 +446,23 @@ def intron_vs_size_with_succ_and_div_2():
     for ax in axes[1]:
         ax.set_xlim([x_min, x_max])
 
+    # Create the shared colorbar
     norm = Normalize(vmin=vmin, vmax=vmax)
     sm = mpl.cm.ScalarMappable(cmap="viridis", norm=norm)
     sm.set_array([])
+    
+    cbar = fig.colorbar(
+        sm, 
+        ax=axes.ravel().tolist(), 
+        orientation='horizontal',           # *** Set orientation to horizontal ***
+        fraction=0.05,                     # *** Adjust fraction for size ***
+        pad=0.05,                          # *** Adjust pad to position below subplots ***
+        label="Diversity",
+    )
+    cbar.set_label("Diversity", fontsize=17) 
+    cbar.ax.tick_params(labelsize=15) 
 
-    cbar = fig.colorbar(sm, ax=axes.ravel().tolist(), shrink=0.7, label="Diversity", pad=0.02)
-
-    # Add size legend for success
+    # # Add size legend for success
     dummy_fig, dummy_ax = plt.subplots()
     dummy_scatter = sns.scatterplot(
         data=all_data,
@@ -582,19 +481,45 @@ def intron_vs_size_with_succ_and_div_2():
     fig.legend(
         handles,
         labels,
-        loc='lower center',
-        bbox_to_anchor=(0.45, 0.01),
+        loc='upper center',
+        bbox_to_anchor=(0.5, 0.96),
         ncol=len(labels),
-        title='Success'
+        title='Success',
+        title_fontsize=15,
+        fontsize=14
     )
+    
+    # Adjust layout to make room for the legends and colorbar
 
     # Save the adjusted plot
-    # plt.tight_layout()
     figures_dir = os.path.join(os.getcwd(), 'figures')
     os.makedirs(figures_dir, exist_ok=True)
     
-    plot_filename = "genetic_programming/intron_mut_study/Adjusted_intron_vs_size_with_succ_and_div.png"
-    plt.savefig(os.path.join(figures_dir, plot_filename), bbox_inches='tight')
+    # Normal visualization save
+    plot_filename = "genetic_programming/intron_mut_study/Adjusted_intron_vs_size_with_succ_and_div_600dpi.jpg"
+    plt.savefig(os.path.join(figures_dir, plot_filename), dpi=600, bbox_inches='tight')
+    
+    # # Define the filename with .tif extension
+    # plot_filename_tif_300 = "genetic_programming/intron_mut_study/Adjusted_intron_vs_size_with_succ_and_div_300dpi.tif"
+    # plot_filename_tif_600 = "genetic_programming/intron_mut_study/Adjusted_intron_vs_size_with_succ_and_div_600dpi.tif"
+
+    # # Save the figure at 300 DPI
+    # plt.savefig(
+    #     os.path.join(figures_dir, plot_filename_tif_300), 
+    #     format='tif',
+    #     dpi=300,                           # Set DPI to 300
+    #     bbox_inches='tight'
+    # )
+
+    # # Save the figure at 600 DPI (optional)
+    # plt.savefig(
+    #     os.path.join(figures_dir, plot_filename_tif_600), 
+    #     format='tif',
+    #     dpi=600,                           # Set DPI to 600
+    #     bbox_inches='tight'
+    # )
+
+    # plt.close(fig)
     
 def div_vs_thres():
 
@@ -808,8 +733,8 @@ def success_by_threshold_all_sr():
 if __name__ == "__main__":
     
     # tree_size_by_intron_ratio_comparisons()
-    success_by_threshold_all_sr()
-    # intron_vs_size_with_succ_and_div_2()
+    # success_by_threshold_all_sr()
+    intron_vs_size_with_succ_and_div_2()
     # intron_vs_size_with_succ_and_div()
     
     # div_vs_thres()

@@ -6,6 +6,9 @@ import numpy as np
 import re
 np.set_printoptions(threshold=np.inf)
 import json
+import matplotlib
+matplotlib.rcParams['pdf.fonttype'] = 42
+matplotlib.rcParams['ps.fonttype'] = 42
 
 # ----- Helper functions to create Merged DATA for plotting in bloat_results_3.py ----- #
 
@@ -411,6 +414,6 @@ if __name__ == "__main__":
         # thres_impact_analysis(success, diversity, intron_ratio, tree_size, type_run)
         # intron_corr_impact(success, diversity, intron_ratio, type_run)
         # intron_diversity_by_fn(diversity, intron_ratio, type_run)
-        # intron_vs_size_with_succ_and_div(parsed_data_final, type_run)
+        intron_vs_size_with_succ_and_div(parsed_data_final, type_run)
 
 
