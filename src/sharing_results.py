@@ -8,9 +8,12 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import os
+import matplotlib
+matplotlib.rcParams['pdf.fonttype'] = 42
+matplotlib.rcParams['ps.fonttype'] = 42
 
 # Reload the combined dataset
-combined_file_path = f"{os.getcwd()}/saved_data/sharing/TEST_combined_sharing_data.csv"
+combined_file_path = f"{os.getcwd()}/saved_data/sharing/combined_sharing_data.csv"
 combined_data = pd.read_csv(combined_file_path)
 
 # Function to summarize metrics by grouping
@@ -59,6 +62,8 @@ def plot_successes_vs_diversity_indiv(data):
     """
     Scatter plots of number of successes vs diversity, arranged in a 4x4 grid with a shared legend.
     """
+    sns.set_style("darkgrid")
+    
     # Get unique function names
     unique_functions = data['function_name'].unique()
     n_functions = len(unique_functions)
@@ -68,7 +73,7 @@ def plot_successes_vs_diversity_indiv(data):
     n_rows = (n_functions + n_cols - 1) // n_cols  # Calculate rows needed for the grid
 
     # Create subplots
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(20, 5 * n_rows), sharex=True, sharey=True)
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(18, 6 * n_rows), sharex=True, sharey=True)
 
     # Flatten axes for easier iteration (handles cases with fewer plots)
     axes = axes.flatten()
@@ -91,7 +96,7 @@ def plot_successes_vs_diversity_indiv(data):
             legend='full' if i == 0 else False,
             ax=ax
         )
-        ax.set_title(f'{func}')
+        ax.set_title(f'{func}', fontsize=15)
         ax.set_xlabel('Diversity', fontsize=15)
         ax.set_ylabel('Successes', fontsize=15)
         ax.tick_params(axis='both', which='major', labelsize=15) 
@@ -103,13 +108,11 @@ def plot_successes_vs_diversity_indiv(data):
             # Remove individual legends
             ax.legend_.remove()
 
-
     # Remove unused subplots
     for ax in axes[len(unique_functions):]:
         ax.set_visible(False)
 
     # Add shared legend
-    # handles, labels = axes[0].get_legend_handles_labels()  # Get legend info from the first plot
     fig.legend(
         handles,
         labels,
@@ -118,9 +121,8 @@ def plot_successes_vs_diversity_indiv(data):
         ncol=6,
         title='Sigma Share Weight (W)',
         title_fontsize=15,
-        fontsize=14
+        fontsize=16
     )
-  
 
     plt.tight_layout()
 
@@ -129,8 +131,8 @@ def plot_successes_vs_diversity_indiv(data):
     os.makedirs(figures_dir, exist_ok=True)
 
     # Save the figure
-    plot_filename = f"genetic_programming/sharing/successes_vs_diversity_indiv.png"
-    plt.savefig(os.path.join(figures_dir, plot_filename), bbox_inches='tight')
+    plot_filename = f"genetic_programming/sharing/successes_vs_diversity_indiv_600dpi.jpg"
+    plt.savefig(os.path.join(figures_dir, plot_filename), dpi=600, bbox_inches='tight')
 
 
 
@@ -246,10 +248,13 @@ def avg_succ_rate_by_fn(data):
         hue="W",
         palette="coolwarm"
     )
-    plt.title("Average Success Rates Across Functions, Grouped by W", fontsize=14)
-    plt.xlabel("Function Name", fontsize=12)
-    plt.ylabel("Average Success Rate", fontsize=12)
-    plt.legend(title="W (Fitness Sharing)", fontsize=10, loc="upper right")
+    # plt.title("Average Success Rates Across Functions, Grouped by W", fontsize=14)
+    plt.xlabel("", fontsize=15)
+    plt.ylabel("Average Success Rate", fontsize=15)
+    plt.legend(title="W (Fitness Sharing)", fontsize=17, loc="upper right")
+    plt.xticks(fontsize=15)
+    plt.yticks(fontsize=15)
+    # axes[0][0].tick_params(axis='both', which='major', labelsize=15)
     plt.grid(axis="y", linestyle="--", alpha=0.7)
     plt.tight_layout()
     
@@ -258,8 +263,8 @@ def avg_succ_rate_by_fn(data):
     os.makedirs(figures_dir, exist_ok=True)
     
     # Save the figure
-    plot_filename = f"genetic_programming/sharing/avg_succ_rate_by_fn.png"
-    plt.savefig(os.path.join(figures_dir, plot_filename), bbox_inches='tight')
+    plot_filename = f"genetic_programming/sharing/avg_succ_rate_by_fn_600dpi.jpg"
+    plt.savefig(os.path.join(figures_dir, plot_filename), dpi=600, bbox_inches='tight')
 
 if __name__ == "__main__":
     # Analyze combined data
@@ -275,5 +280,5 @@ if __name__ == "__main__":
     # plot_successes_vs_diversity(combined_data)
     # plot_composite_score(combined_data)
     # plot_mean_gen_success(combined_data)
-    # plot_successes_vs_diversity_indiv(combined_data)
-    avg_succ_rate_by_fn(combined_data)
+    plot_successes_vs_diversity_indiv(combined_data)
+    # avg_succ_rate_by_fn(combined_data)

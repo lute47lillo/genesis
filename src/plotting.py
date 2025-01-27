@@ -386,8 +386,8 @@ def plot_all_sr_in_columns(sr_dfs, sr_fns, attributes, config_plot, global_max_l
     os.makedirs(figures_dir, exist_ok=True)
     
     # Save the figure
-    plot_filename = f"{config_plot}_{'_'.join(attributes)}_vs_generations.png"
-    plt.savefig(os.path.join(figures_dir, plot_filename), bbox_inches='tight')
+    plot_filename = f"{config_plot}_{'_'.join(attributes)}_vs_generations.jpg"
+    plt.savefig(os.path.join(figures_dir, plot_filename), dpi=600, bbox_inches='tight')
     
     # Close the plot to free up memory
     plt.close()
@@ -409,7 +409,8 @@ if __name__ == "__main__":
     succ_div_dict.update({"Function": sr_fns})
     
     # Iterate over all functions to get values, file with other attributes and plot.
-    types = ["random_mut", "intron_mutation", "half_mut", "intron_plus", "random_plus"]
+    # types = ["random_mut", "intron_mutation", "half_mut", "intron_plus", "random_plus"]
+    types = ["half_mut"]
     
     for type_run in types:
         
@@ -467,8 +468,8 @@ if __name__ == "__main__":
             dict_file_path = f"{os.getcwd()}/saved_data/introns_study/{type_run}_succ_div_dict_DIV_AVG.json"
 
             # Write the dictionary to a file
-            with open(dict_file_path, 'w') as f:
-                json.dump(succ_div_dict, f)
+            # with open(dict_file_path, 'w') as f:
+            #     json.dump(succ_div_dict, f)
                 
             # Gather data to plot for all SR
             sr_dfs[sr] = {
@@ -496,10 +497,10 @@ if __name__ == "__main__":
 
 
         # Save the data to a CSV file. Legend -> ... _ALL means that mean values have been included
-        output_file_path = f"{os.getcwd()}/saved_data/introns_study/{type_run}_symbolic_regression_data_ALL.csv"
-        columns = ["Function", "Threshold", "Intron Ratio", "Average Tree Size", "Diversity", "Mean Intron Ratio", "Mean Average Tree Size", "Mean Diversity"]
-        output_df = pd.DataFrame(output_data, columns=columns)
-        output_df.to_csv(output_file_path, index=False)
+        # output_file_path = f"{os.getcwd()}/saved_data/introns_study/{type_run}_symbolic_regression_data_ALL.csv"
+        # columns = ["Function", "Threshold", "Intron Ratio", "Average Tree Size", "Diversity", "Mean Intron Ratio", "Mean Average Tree Size", "Mean Diversity"]
+        # output_df = pd.DataFrame(output_data, columns=columns)
+        # output_df.to_csv(output_file_path, index=False)
         
         # Plot 
         attributes =["diversity", "pop_intron_ratio", "avg_tree_size"]

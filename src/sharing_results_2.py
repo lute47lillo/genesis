@@ -104,7 +104,7 @@ def test_fit_sharing_performance():
     combined_data['T'] = combined_data['T'].fillna('None')
 
     # Save the combined data for future use
-    combined_file_path = f"{os.getcwd()}/saved_data/sharing/TEST_combined_sharing_data.csv"
+    combined_file_path = f"{os.getcwd()}/saved_data/sharing/combined_sharing_data.csv"
     combined_data.to_csv(combined_file_path, index=False)
         
     # attributes =["best_fitness", "diversity"]
@@ -114,6 +114,6 @@ if __name__ == "__main__":
      
     # -------- Fitness Sharing ------- #
     print("\nFitness Sharing")
-    test_fit_sharing_performance(10)
+    test_fit_sharing_performance()
     
     
