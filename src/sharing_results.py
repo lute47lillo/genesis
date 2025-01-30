@@ -73,7 +73,12 @@ def plot_successes_vs_diversity_indiv(data):
     n_rows = (n_functions + n_cols - 1) // n_cols  # Calculate rows needed for the grid
 
     # Create subplots
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(18, 6 * n_rows), sharex=True, sharey=True)
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(20, 6 * n_rows), sharex=True, sharey=True,
+                             gridspec_kw={
+                            #  "height_ratios": [1, 1],
+                            "hspace": 0.07,  # Reduced from default
+                            "wspace": 0.11   # Reduced from default  # Reduce height of the second row
+                            })
 
     # Flatten axes for easier iteration (handles cases with fewer plots)
     axes = axes.flatten()
@@ -91,15 +96,15 @@ def plot_successes_vs_diversity_indiv(data):
             style='W',
             hue="W",
             palette='viridis',
-            s=100,
+            s=170,
             alpha=0.8,
             legend='full' if i == 0 else False,
             ax=ax
         )
-        ax.set_title(f'{func}', fontsize=15)
-        ax.set_xlabel('Diversity', fontsize=15)
-        ax.set_ylabel('Successes', fontsize=15)
-        ax.tick_params(axis='both', which='major', labelsize=15) 
+        ax.set_title(f'{func}', fontsize=20)
+        ax.set_xlabel('Diversity', fontsize=20)
+        ax.set_ylabel('Successes', fontsize=20)
+        ax.tick_params(axis='both', which='major', labelsize=23) 
         
         #  Extract handles and labels from the first plot only
         if i ==0:
@@ -120,8 +125,8 @@ def plot_successes_vs_diversity_indiv(data):
         bbox_to_anchor=(0.5, -0.06),
         ncol=6,
         title='Sigma Share Weight (W)',
-        title_fontsize=15,
-        fontsize=16
+        title_fontsize=20,
+        fontsize=22
     )
 
     plt.tight_layout()
@@ -276,9 +281,5 @@ if __name__ == "__main__":
 
 
     # # Generate plots
-    # plot_composite_score_by_function(combined_data)
-    # plot_successes_vs_diversity(combined_data)
-    # plot_composite_score(combined_data)
-    # plot_mean_gen_success(combined_data)
     plot_successes_vs_diversity_indiv(combined_data)
-    # avg_succ_rate_by_fn(combined_data)
+    avg_succ_rate_by_fn(combined_data)

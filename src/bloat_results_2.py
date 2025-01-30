@@ -414,6 +414,6 @@ if __name__ == "__main__":
         # thres_impact_analysis(success, diversity, intron_ratio, tree_size, type_run)
         # intron_corr_impact(success, diversity, intron_ratio, type_run)
         # intron_diversity_by_fn(diversity, intron_ratio, type_run)
-        intron_vs_size_with_succ_and_div(parsed_data_final, type_run)
+        # intron_vs_size_with_succ_and_div(parsed_data_final, type_run)
 
 

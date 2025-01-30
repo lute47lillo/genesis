@@ -8,6 +8,7 @@ import seaborn as sns
 import matplotlib
 from matplotlib.ticker import FormatStrFormatter
 from collections import defaultdict
+import json
 
 matplotlib.rcParams['pdf.fonttype'] = 42
 matplotlib.rcParams['ps.fonttype'] = 42
@@ -417,8 +418,7 @@ if __name__ == "__main__":
     succ_div_dict.update({"Function": sr_fns})
     
     # Iterate over all functions to get values, file with other attributes and plot.
-    # types = ["random_mut", "intron_mutation", "half_mut", "intron_plus", "random_plus"]
-    types = ["half_mut"]#, "intron_mutation"]
+    types = ["random_mut", "intron_mutation", "half_mut", "intron_plus", "random_plus"]
     
     for type_run in types:
         
@@ -474,11 +474,11 @@ if __name__ == "__main__":
                 succ_div_dict[thres] = threshold_temp[idx]
                 
             # Write to a file the success - diversity dictionary - Specify file paths
-            # dict_file_path = f"{os.getcwd()}/saved_data/introns_study/{type_run}_succ_div_dict_DIV_AVG.json"
+            dict_file_path = f"{os.getcwd()}/saved_data/introns_study/{type_run}_succ_div_dict_DIV_AVG.json"
 
             # Write the dictionary to a file
-            # with open(dict_file_path, 'w') as f:
-            #     json.dump(succ_div_dict, f)
+            with open(dict_file_path, 'w') as f:
+                json.dump(succ_div_dict, f)
                 
             # Gather data to plot for all SR
             sr_dfs[sr] = {
@@ -487,35 +487,35 @@ if __name__ == "__main__":
                 'avg_tree_size': collect_plot_values(dict_results, 'Inbred Threshold', bloat_thresholds, 'avg_tree_size', n_runs=15)
                 }
             
-            # for idx, thres in enumerate(bloat_thresholds):
+            for idx, thres in enumerate(bloat_thresholds):
 
-            #     # Extract final values
-            #     intron_ratio = sr_dfs[sr]['pop_intron_ratio'][1][idx][0][-1]
-            #     avg_tree_size = sr_dfs[sr]['avg_tree_size'][1][idx][0][-1]
-            #     diversity = sr_dfs[sr]['diversity'][1][idx][0][-1]
-            #     mean_gen_success = gen_succ[sr][idx]
+                # Extract final values
+                intron_ratio = sr_dfs[sr]['pop_intron_ratio'][1][idx][0][-1]
+                avg_tree_size = sr_dfs[sr]['avg_tree_size'][1][idx][0][-1]
+                diversity = sr_dfs[sr]['diversity'][1][idx][0][-1]
+                mean_gen_success = gen_succ[sr][idx]
                 
-            #     # Extract mean values
-            #     mean_intron_ratio = np.mean(sr_dfs[sr]['pop_intron_ratio'][1][idx][0])
-            #     mean_avg_tree_size = np.mean(sr_dfs[sr]['avg_tree_size'][1][idx][0])
-            #     mean_diversity = np.mean(sr_dfs[sr]['diversity'][1][idx][0])
+                # Extract mean values
+                mean_intron_ratio = np.mean(sr_dfs[sr]['pop_intron_ratio'][1][idx][0])
+                mean_avg_tree_size = np.mean(sr_dfs[sr]['avg_tree_size'][1][idx][0])
+                mean_diversity = np.mean(sr_dfs[sr]['diversity'][1][idx][0])
                 
-            #     print(f"Threshold: {thres}. \
-            #           Total nº success: {succ_div_dict[thres][sr_idx][:2]}. \
-            #           Average gen success: {mean_gen_success:.3f}.\
-            #           Average diversity: {mean_diversity:.3f}. \
-            #           Average intron ratio: {mean_intron_ratio:.3f}. \
-            #           Average tree size: {mean_avg_tree_size:.3f}.\n")
+                print(f"Threshold: {thres}. \
+                      Total nº success: {succ_div_dict[thres][sr_idx][:2]}. \
+                      Average gen success: {mean_gen_success:.3f}.\
+                      Average diversity: {mean_diversity:.3f}. \
+                      Average intron ratio: {mean_intron_ratio:.3f}. \
+                      Average tree size: {mean_avg_tree_size:.3f}.\n")
                 
                 # Append to the output data
-                # output_data.append((sr, thres, intron_ratio, avg_tree_size, diversity, mean_intron_ratio, mean_avg_tree_size, mean_diversity))
+                output_data.append((sr, thres, intron_ratio, avg_tree_size, diversity, mean_intron_ratio, mean_avg_tree_size, mean_diversity))
 
 
         # Save the data to a CSV file. Legend -> ... _ALL means that mean values have been included
-        # output_file_path = f"{os.getcwd()}/saved_data/introns_study/{type_run}_symbolic_regression_data_ALL.csv"
-        # columns = ["Function", "Threshold", "Intron Ratio", "Average Tree Size", "Diversity", "Mean Intron Ratio", "Mean Average Tree Size", "Mean Diversity"]
-        # output_df = pd.DataFrame(output_data, columns=columns)
-        # output_df.to_csv(output_file_path, index=False)
+        output_file_path = f"{os.getcwd()}/saved_data/introns_study/{type_run}_symbolic_regression_data_ALL.csv"
+        columns = ["Function", "Threshold", "Intron Ratio", "Average Tree Size", "Diversity", "Mean Intron Ratio", "Mean Average Tree Size", "Mean Diversity"]
+        output_df = pd.DataFrame(output_data, columns=columns)
+        output_df.to_csv(output_file_path, index=False)
         
         # Plot 
         attributes =["diversity", "pop_intron_ratio", "avg_tree_size"]

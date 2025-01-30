@@ -886,25 +886,6 @@ def success_by_threshold_all_sr():
         axes[i].set_ylabel("Success")
         axes[i].legend(title="Function")
 
-    # # Make sure dir exists
-    # figures_dir = os.path.join(os.getcwd(), 'figures')
-    # os.makedirs(figures_dir, exist_ok=True)
-    
-    # # Save the figure
-    # # plot_filename = f"genetic_programming/intron_mut_study/success_by_threshold_all_sr.png"
-    # plot_filename = f"genetic_programming/intron_mut_study/TEST.png"
-
-    # plt.savefig(os.path.join(figures_dir, plot_filename), bbox_inches='tight')
-    
-
 if __name__ == "__main__":
     
-    # tree_size_by_intron_ratio_comparisons()
-    # success_by_threshold_all_sr()
-    # intron_vs_size_with_succ_and_div_2()
     intron_vs_size_with_succ_and_div_1_row()
-    # intron_vs_size_with_succ_and_div()
-    
-    # div_vs_thres()
-   
-    
