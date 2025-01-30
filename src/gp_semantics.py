@@ -286,42 +286,18 @@ class GeneticAlgorithmGPSemantics:
         )
         return offspring1, offspring2
     
-    def similarity_based_crossover(self, parent1, parent2):
-        """
-        Swap subtrees whose semantics are similar to encourage incremental refinement or “fine-tuning.”
-        Performs Similarity-Based Crossover (SSC) on parent1 and parent2, returning two offspring.
+    def crossover_ssc_valid(self, child1, child2, node1, node2, parent1, parent2, parent_node1, parent_node2):
         
-        We attempt up to 'max_attempts' to find two subtrees whose semantic distance
-        is <= similarity_threshold (i.e., sufficiently similar).
-        If we cannot find a valid swap, we return (None, None).
-        """
-        # Optional: Check inbreeding threshold if used
-        if self.inbred_threshold is not None:
-            if not self.can_mate(parent1, parent2, self.inbred_threshold):
-                return None, None
-
-        child1 = copy.deepcopy(parent1.tree)
-        child2 = copy.deepcopy(parent2.tree)
-
-        max_attempts = 10
-        for _ in range(max_attempts):
-            parent_node1, node1 = self.select_random_node_with_parent(child1)
-            parent_node2, node2 = self.select_random_node_with_parent(child2)
-
+        crosssover_max_attempts = 10
+        for _ in range(crosssover_max_attempts):
+            
+            # Once is valid
             if node1 is None or node2 is None:
                 continue
             
             arity1 = parent1.get_function_arity(node1.value)
             arity2 = parent2.get_function_arity(node2.value)
             if arity1 != arity2:
-                continue
-            
-            # Compute semantic distance
-            dist = self.semantic_distance(node1, node2)
-
-            # For SSC: we only swap if subtrees are "similar enough" but not identical
-            if dist < self.low_sensitivity or dist > self.high_sensitivity:
-                # Not similar enough, try again
                 continue
             
             # Attempt the swap
@@ -368,6 +344,45 @@ class GeneticAlgorithmGPSemantics:
             return offspring1, offspring2
         
         return None, None
+    
+    def similarity_based_crossover(self, parent1, parent2):
+        """
+        Swap subtrees whose semantics are similar to encourage incremental refinement or “fine-tuning.”
+        Performs Similarity-Based Crossover (SSC) on parent1 and parent2, returning two offspring.
+        
+        We attempt up to 'max_attempts' to find two subtrees whose semantic distance
+        is <= similarity_threshold (i.e., sufficiently similar).
+        If we cannot find a valid swap, we return (None, None).
+        """
+        # Optional: Check inbreeding threshold if used
+        if self.inbred_threshold is not None:
+            if not self.can_mate(parent1, parent2, self.inbred_threshold):
+                return None, None
+
+        child1 = copy.deepcopy(parent1.tree)
+        child2 = copy.deepcopy(parent2.tree)
+
+        # For some attempts, try to get similar enough individuals.
+        max_attempts = 3
+        for _ in range(max_attempts):
+            parent_node1, node1 = self.select_random_node_with_parent(child1)
+            parent_node2, node2 = self.select_random_node_with_parent(child2)
+            
+            # Compute semantic distance
+            dist = self.semantic_distance(node1, node2)
+
+            # For SSC: we only swap if subtrees are "similar enough" but not identical
+            if dist < self.low_sensitivity or dist > self.high_sensitivity:
+                # Not similar enough, try again
+                continue
+            else:
+                # Similar enough. Do, crossover
+                return self.crossover_ssc_valid(child1, child2,node1, node2, parent1, parent2, parent_node1, parent_node2)
+            
+        # Pick two new subtrees and cross them over
+        parent_node1, node1 = self.select_random_node_with_parent(child1)
+        parent_node2, node2 = self.select_random_node_with_parent(child2)
+        return self.crossover_ssc_valid(child1, child2, node1, node2, parent1, parent2, parent_node1, parent_node2)
     
     # ----------------------------------------- #   
     
@@ -860,7 +875,7 @@ class GeneticAlgorithmGPSemantics:
                 self.best_fitness_list.append(best_individual.fitness)
 
                 # Measure diversity
-                diversity = self.measure_diversity(next_population, gen+1)
+                diversity = self.measure_diversity(next_population)
                 self.diversity_list.append(diversity)
                 
                 # Returns 2 + gens because technically we are just shortcutting the crossover of this current generation. So, +1 for 0th-indexed offset, and +1 for skipping some steps.

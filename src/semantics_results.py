@@ -23,33 +23,38 @@ def compute_success(results_inbreeding, temp_runs=15):
             
     avg_gen = avg_gen / n_runs
     
-    # Pad all sublists in diversity_no_inbreeding
-    attr = [results_inbreeding[run]['avg_tree_size'] for run in range(n_runs)] # (15, 151) 
-    max_length_attr = max(len(sublist) for sublist in attr if len(sublist) != 0)         
-    attr_padded = [util.pad_sublist(sublist, max_length_attr) for sublist in attr]
+    # Pad all sublists in diversity_no_inbreeding avg_tree_size avg_tree_depth
+    try:
+        attr = [results_inbreeding[run]['avg_tree_size'] for run in range(n_runs)] # (15, 151) 
+        max_length_attr = max(len(sublist) for sublist in attr if len(sublist) != 0)         
+        attr_padded = [util.pad_sublist(sublist, max_length_attr) for sublist in attr]
 
-    # Update results_no_inbreeding with padded diversity lists
-    for run in range(n_runs):
-        results_inbreeding[run]['avg_tree_size'] = attr_padded[run]
-    
-    attr_size = [results_inbreeding[run]['avg_tree_size'] for run in range(n_runs)] # (15, 151)  
-    final_average_tree_size = np.mean(np.mean(np.array(attr_size), axis=0))
-
-    # ---------------------------------------- #
-    
-    # Collect diversity data
-    diversity_print = [results_inbreeding[run]['diversity'] for run in range(n_runs)]
-    max_length_attr_div = max(len(sublist) for sublist in diversity_print)
-    attr_div_padded = [util.pad_sublist(sublist, max_length_attr_div) for sublist in diversity_print]
+        # Update results_no_inbreeding with padded diversity lists
+        for run in range(n_runs):
+            results_inbreeding[run]['avg_tree_size'] = attr_padded[run]
         
-    for run in range(n_runs):
-        results_inbreeding[run]['diversity'] = attr_div_padded[run]   
-          
-    attr_div = [results_inbreeding[run]['diversity'] for run in range(n_runs)]
-    final_average_div = np.mean(np.mean(np.array(attr_div), axis=0))
+        attr_size = [results_inbreeding[run]['avg_tree_size'] for run in range(n_runs)] # (15, 151)  
+        final_average_tree_size = np.mean(np.mean(np.array(attr_size), axis=0))
 
-    # Put as 1 value
-    suc_div_thresh = f"{count} ({final_average_div})"
+        # ---------------------------------------- #
+        
+        # Collect diversity data
+        diversity_print = [results_inbreeding[run]['diversity'] for run in range(n_runs)]
+        max_length_attr_div = max(len(sublist) for sublist in diversity_print)
+        attr_div_padded = [util.pad_sublist(sublist, max_length_attr_div) for sublist in diversity_print]
+            
+        for run in range(n_runs):
+            results_inbreeding[run]['diversity'] = attr_div_padded[run]   
+            
+        attr_div = [results_inbreeding[run]['diversity'] for run in range(n_runs)]
+        final_average_div = np.mean(np.mean(np.array(attr_div), axis=0))
+
+        # Put as 1 value
+        suc_div_thresh = f"{count} ({final_average_div})"
+    except KeyError as e:
+        suc_div_thresh = f"0.0 (N/A)"
+        final_average_tree_size = 0.0
+        
     
     return suc_div_thresh, final_average_tree_size
 
@@ -60,10 +65,9 @@ if __name__ == "__main__":
     print("\nSemantics Study")
     attributes = ['diversity', 'avg_tree_size']
     sr_fns = ["nguyen1", "nguyen2", "nguyen3", "nguyen4", "nguyen5", "nguyen6", "nguyen7", "nguyen8"]
-    thresholds = ["None", 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+    thresholds = ["None"]#, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
     low_sensitivities=[0.02, 0.04, 0.06, 0.08]
     high_sensitivities=[8.0, 10.0, 12.0]
-   
     
     # Create the final diversity dict by threshold where 'Thresh': [succ (div), ...]
     succ_div_dict = {}

@@ -1,5 +1,4 @@
 """
-    Author: Lute Lillo
     
     Definition
     ------------

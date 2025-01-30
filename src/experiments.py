@@ -2,11 +2,46 @@ from gp_bloat import GeneticAlgorithmGPBloat  # Run Intron Study and bloat exper
 from gp_sharing_parallel import GeneticAlgorithmGPSharingParallel # Run Fitness sharing experiments
 from gp_base import GeneticAlgorithmGPPerformance # Run performance-vanilla experiments
 from gp_semantics import GeneticAlgorithmGPSemantics
+from afpo_gp_base import GeneticAlgorithmGPAFPO
 import util as util
 import numpy as np
 import random
 
 # ----------------------------------- Genetic Programming Performance -------------------------- #
+
+def test_multiple_runs_function_gp_based_afpo(args, landscape, inbred_threshold):
+    
+    # Initialize GP-based GA for Any given function
+    results = {}
+    for run in range(args.exp_num_runs):
+        # Reset the seed for every run
+        util.set_seed(random.randint(0, 999999))
+       
+        # TODO: Running 750 performance algorithms
+        print(f"Running experiment nº: {run}")
+        ga_gp = GeneticAlgorithmGPAFPO(
+            args=args,
+            mut_rate=args.mutation_rate,
+            inbred_threshold=inbred_threshold  # Adjust based on inbreeding prevention
+        )
+        # Run GP-based GA for Given Function
+        best_fitness_list, diversity_list, best_percent_list, random_list, gen_success = ga_gp.run(landscape.symbolic_fitness_function)
+        
+        results[run] = {
+                'best_fitness': best_fitness_list,
+                'diversity': diversity_list, 
+                'best_percents': best_percent_list,
+                'randoms': random_list,
+                'generation_success': gen_success
+            }
+        
+        # print(f"The length of the list: {len(best_percent_list)}.\n")
+        # print(f"The list:\n{best_percent_list}\n")
+        print(f"On Average. {np.mean(random_list)} are randomly introduced.\n")  
+        print(f"Avg. Fitness Offspring {np.mean(best_percent_list)*100:.3f}%. Avg. Fitness Parent {np.abs(100-(np.mean(best_percent_list)*100)):.3f}%. Avg. Diversity {np.mean(diversity_list):.3f}. Generation Success: {gen_success}.")
+
+    return results
+
 
 def test_multiple_runs_function_gp_based(args, landscape, inbred_threshold):
     
@@ -24,15 +59,18 @@ def test_multiple_runs_function_gp_based(args, landscape, inbred_threshold):
             inbred_threshold=inbred_threshold  # Adjust based on inbreeding prevention
         )
         # Run GP-based GA for Given Function
-        best_fitness_list, diversity_list, gen_success = ga_gp.run(landscape.symbolic_fitness_function)
+        best_fitness_list, diversity_list, best_percent_list, gen_success = ga_gp.run(landscape.symbolic_fitness_function)
         
         results[run] = {
                 'best_fitness': best_fitness_list,
                 'diversity': diversity_list, 
+                'best_percents': best_percent_list,
                 'generation_success': gen_success
             }
         
-        print(f"Population Size {args.pop_size} & Mutation Rate: {args.mutation_rate}: Best Fitness {best_fitness_list[-1]:.3f} ~ Best Diversity {diversity_list[-1]:.3f}")
+        # print(f"The length of the list: {len(best_percent_list)}.\n")
+        # print(f"The list:\n{best_percent_list}\n")
+        print(f"Avg. Fitness Offspring {np.mean(best_percent_list)*100:.3f}%. Avg. Fitness Parent {np.abs(100-(np.mean(best_percent_list)*100)):.3f}%. Avg. Diversity {np.mean(diversity_list):.3f}. Generation Success: {gen_success}.")
 
     return results
 

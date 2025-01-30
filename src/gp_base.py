@@ -360,7 +360,32 @@ class GeneticAlgorithmGPPerformance:
         print(f"Grow: {can_mate_grow} Individuals can mate. Full: {can_mate_full} Individuals can mate.")
         print(f"Total: {(can_mate_grow + can_mate_full)} ({(can_mate_grow + can_mate_full) / self.pop_size * 100:.3f}%).\n")
         
+    def calculate_fitness_metrics(self):
+        
+        # Measure % offspring vs parents was better fitness-wise
+        count_offspring = len(self.best_offspring_list)
+        count_parent = len(self.best_parent_list)
+        total_count_off_parent = count_offspring + count_parent
+        
+        # Check percentages
+        off_pcent = count_offspring/total_count_off_parent if count_offspring !=0 else 0
+        par_cent = count_parent/total_count_off_parent if count_parent != 0 else 0
+        
+        # Get metrics for offspring
+        mean_off = np.mean(self.best_offspring_list) if len(self.best_offspring_list) > 0 else 0
+        median_off = np.median(self.best_offspring_list) if len(self.best_offspring_list) > 0 else 0
+        std_off = np.std(self.best_offspring_list) if len(self.best_offspring_list) > 0 else 0
+        
+        # Get metrics for parents
+        mean_par = np.mean(self.best_parent_list) if len(self.best_parent_list) > 0 else 0
+        median_par = np.median(self.best_parent_list) if len(self.best_parent_list) > 0 else 0
+        std_par = np.std(self.best_parent_list) if len(self.best_parent_list) > 0 else 0
+        
+        return (off_pcent, par_cent), (mean_off, median_off, std_off), (mean_par, median_par, std_par)
+        
     def calculate_fitness(self, curr_gen):
+        
+        population_fitness = []
         
         # Determine the number of worker processes
         num_processes = multiprocessing.cpu_count()
@@ -376,8 +401,12 @@ class GeneticAlgorithmGPPerformance:
         # Process the results
         for individual, (fitness, success) in zip(self.population, results):
             
+            # Gather individual stats
             individual.fitness = fitness
             individual.success = success
+            
+            # Get population fitness
+            population_fitness.append(individual.fitness)
             
             if individual.success:
                 print(f"Successful individual found in generation {curr_gen}")
@@ -425,8 +454,6 @@ class GeneticAlgorithmGPPerformance:
         if self.inbred_threshold is not None:
             if not self.can_mate(parent1, parent2, self.inbred_threshold): # If distance(p1, p2) >= inbred_thres then skip bc [not False ==  True]
                 return None, None
-
-        self.allowed_mate_by_dist += 1
         
         # Clone parents to avoid modifying originals
         child1 = copy.deepcopy(parent1.tree)
@@ -577,13 +604,22 @@ class GeneticAlgorithmGPPerformance:
         self.average_size_list = []
         self.average_depth_list = []
         
+        # TODO: Experiment of % of offspring better or worse than parents.
+        self.best_percents = []
+        
         for gen in range(self.generations):
 
             # Start timing
             start_time = time.time()
             
+            # TODO: Experiment of % of offspring better or worse than parents.
+            self.best_offspring_list = []
+            self.best_parent_list = []
+            
             # Calculate fitness
             self.calculate_fitness(gen) # Performance runs
+            
+            # print(f"\nGen: {gen+1}. Fitness values. Mean: {pop_mean}. Median: {pop_median}. Std: {pop_std}.\n")
             
             # Update best fitness list
             best_individual = max(self.population, key=lambda ind: ind.fitness)
@@ -595,7 +631,14 @@ class GeneticAlgorithmGPPerformance:
             
             # Early Stopping condition if successful individual has been found
             if self.poulation_success == True:
-                return self.best_fitness_list, self.diversity_list, gen + 1
+                # Measure % offspring vs parents was better fitness-wise
+                percents, off_metrics, par_metrics = self.calculate_fitness_metrics()
+                self.best_percents.append(percents[0])
+                print(f"SUCCESSFUL Gen {gen+1}. Fitness-wise.\n"
+                    f"Offspring {(percents[0])*100:.3f}%. Parent {(percents[1])*100:.3f}%.\n"
+                    f"Offspring. Mean: {off_metrics[0]:.4f}. Median: {off_metrics[1]:.4f}. Std: {off_metrics[2]:.4f}.\n"
+                    f"Parents.   Mean: {par_metrics[0]:.4f}. Median: {par_metrics[1]:.4f}. Std: {par_metrics[2]:.4f}.")              
+                return self.best_fitness_list, self.diversity_list, self.best_percents, gen + 1
     
             # Tournament Selection
             selected = self.tournament_selection()
@@ -603,18 +646,11 @@ class GeneticAlgorithmGPPerformance:
             # Crossover and Mutation
             next_population = []
             i = 0
-            
+        
             # Lambda (parent+children)
             lambda_pop = self.pop_size * 2
             
-            # Start metrics for debugging
-            self.allowed_mate_by_dist = 0 # Reset to 0 on every generation
-            offspring_count = 0
-            none_count = 0
-            
-            # Lambda (parent+children)
-            lambda_pop = self.pop_size * 2
-            
+            # NOTE: ORIGINAL
             while i < lambda_pop: 
                 parent1 = selected[i % len(selected)]
                 parent2 = selected[(i + 1) % len(selected)]
@@ -623,10 +659,17 @@ class GeneticAlgorithmGPPerformance:
                 if offspring[0] is not None and offspring[1] is not None:
                     self.mutate(offspring[0])
                     self.mutate(offspring[1])
+                    
+                    best_offspring = max(offspring[0].fitness, offspring[1].fitness)
+                    best_parent = max(parent1.fitness, parent2.fitness)
+                    
+                    if best_offspring > best_parent:
+                        self.best_offspring_list.append(best_offspring)
+                    elif best_offspring < best_parent:
+                        self.best_parent_list.append(best_parent)
+                    
                     next_population.extend(offspring)
-                    offspring_count += 1
                 else:
-                    none_count += 1
                     # Append parents if Inbreeding is allowed
                     if self.inbred_threshold is None: 
                         next_population.append(copy.deepcopy(parent1))
@@ -641,10 +684,7 @@ class GeneticAlgorithmGPPerformance:
                             next_population.append(new_individual)
         
                 i += 2
-                
-            # print(f"Generation {gen + 1}: Checking by distance. Only {self.allowed_mate_by_dist} Individuals can actually  mate -> {self.allowed_mate_by_dist/len(selected) * 100:.3f}\n")
-            # print(f"New individuals added from real offspring: {offspring_count} vs added from random (they could'nt mate): {none_count}")
-
+                        
             # Check if individual of next population is already successful. No need to recombination as it will always have largest fitness
             self.check_succcess_new_pop(gen+1, next_population)
             
@@ -658,9 +698,17 @@ class GeneticAlgorithmGPPerformance:
                 diversity = self.measure_diversity(next_population)
                 self.diversity_list.append(diversity)
                 
+                # Measure % offspring vs parents was better fitness-wise
+                percents, off_metrics, par_metrics = self.calculate_fitness_metrics()
+                self.best_percents.append(percents[0])
+                print(f"SUCCESSFUL Gen {gen+2}. Fitness-wise.\n"
+                    f"Offspring {(percents[0])*100:.3f}%. Parent {(percents[1])*100:.3f}%.\n"
+                    f"Offspring. Mean: {off_metrics[0]:.4f}. Median: {off_metrics[1]:.4f}. Std: {off_metrics[2]:.4f}.\n"
+                    f"Parents.   Mean: {par_metrics[0]:.4f}. Median: {par_metrics[1]:.4f}. Std: {par_metrics[2]:.4f}.")
+                
                 # Returns 2 + gens because technically we are just shortcutting the crossover of this current generation. So, +1 for 0th-indexed offset, and +1 for skipping some steps.
                 # This added values will have been returned in the next gen loop iteration.
-                return self.best_fitness_list, self.diversity_list, gen + 2
+                return self.best_fitness_list, self.diversity_list, self.best_percents, gen + 2
             
             # Combine the population (mu+lambda)
             combined_population = next_population[:lambda_pop] + self.population     
@@ -669,6 +717,10 @@ class GeneticAlgorithmGPPerformance:
             # Update the population
             self.population = combined_population[:self.pop_size]
             self.pop_size = len(self.population)
+            
+            # Update the count of percents
+            percents, off_metrics, par_metrics = self.calculate_fitness_metrics()
+            self.best_percents.append(percents[0])
             
             # Print progress
             if (gen + 1) % 10 == 0:
@@ -681,12 +733,27 @@ class GeneticAlgorithmGPPerformance:
                       f"Avg Size = {self.average_size_list[-1]:.3f}\n"
                       f"Avg Depth = {self.average_depth_list[-1]:.3f}\n")
                 
+                # Measure % offspring vs parents was better fitness-wise
+                print(f"Gen: {gen+1} generation. Fitness-wise.\n"
+                    f"Offspring {(percents[0])*100:.3f}%. Parent {(percents[1])*100:.3f}%.\n"
+                    f"Offspring. Mean: {off_metrics[0]:.4f}. Median: {off_metrics[1]:.4f}. Std: {off_metrics[2]:.4f}.\n"
+                    f"Parents.   Mean: {par_metrics[0]:.4f}. Median: {par_metrics[1]:.4f}. Std: {par_metrics[2]:.4f}.")               
+                
                 # End timing
                 end_time = time.time()
                 elapsed_time = end_time - start_time
                 print(f"\nTime taken to run 10 gen: {elapsed_time:.4f} seconds")
-    
-        return self.best_fitness_list, self.diversity_list, gen+1
+                
+        # Measure % offspring vs parents was better fitness-wise
+        # Measure % offspring vs parents was better fitness-wise
+        percents, off_metrics, par_metrics = self.calculate_fitness_metrics()
+        self.best_percents.append(percents[0])
+        print(f"UNSUCCESSFUL gen {gen+1}. Fitness-wise.\n"
+            f"Offspring {(percents[0])*100:.3f}%. Parent {(percents[1])*100:.3f}%.\n"
+            f"Offspring. Mean: {off_metrics[0]:.4f}. Median: {off_metrics[1]:.4f}. Std: {off_metrics[2]:.4f}.\n"
+            f"Parents.   Mean: {par_metrics[0]:.4f}. Median: {par_metrics[1]:.4f}. Std: {par_metrics[2]:.4f}.")
+        
+        return self.best_fitness_list, self.diversity_list, self.best_percents, gen+1
 
 # ---------- Landscape --------- # 
 
@@ -769,7 +836,9 @@ if __name__ == "__main__":
     # -------------------------------- Experiment: Multiple Runs w/ fixed population and fixed mutation rate --------------------------- #
     try:
         term1 = f"genetic_programming/{args.benchmark}/"
-        term2 = "gp_lambda/"
+        term2 = "gp_lambda/" # NOTE: Stored runs for pure performance results reported in the table
+        # term2 = "gp_fit_study/" # NOTE: Stored runs usef in the offspring positive rate vs parents experiment
+        # term2 = "gp_multiple" # NOTE: Stored runs that allow multiple attempts at finding suitable mates using HBC
         
         if args.inbred_threshold == 1:
             term3 = f"PopSize:{args.pop_size}_InThres:None_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 

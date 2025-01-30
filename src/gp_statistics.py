@@ -3,9 +3,9 @@
 """
 import os
 import numpy as np
-from collections import Counter
-import matplotlib.pyplot as plt
 import pandas as pd
+import pandas as pd
+from scipy.stats import fisher_exact
 
 treatments = ["inbreeding", "no_inbreeding"]
 
@@ -176,7 +176,6 @@ if __name__ == "__main__":
     """
     
     thresholds = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
-    # depths = [6, 7, 8, 9, 10] # Used to get Supplemental material results
     depths = [10] # Used to get Main Experiments material results
 
     sr_fns = ["nguyen1", "nguyen2", "nguyen3", "nguyen4", "nguyen5","nguyen6", "nguyen7", "nguyen8"]
@@ -187,8 +186,8 @@ if __name__ == "__main__":
         no_inbreed_quick = 0
         
         print(f"\n{sr}")
-        thresholds_gens, min_max_gens = get_gen_avg_inbreed(sr, depths, thresholds, "inbreeding")
         no_threshold_results, no_min_max_gens, no_min_max_gens_depth = get_gen_no_inbred(sr, depths, thresholds, "no_inbreeding")
+        thresholds_gens, min_max_gens = get_gen_avg_inbreed(sr, depths, thresholds, "inbreeding")
         
         # Metrics for range.
         total_min_d = 0
@@ -259,3 +258,5 @@ if __name__ == "__main__":
         n_combs_none = len(depths)*len(thresholds_none)*15
         print(f"For a total of {n_combs_none} experimental runs")
         print(f"Inbreeding success: {succes1}. Success rate: {(succes1/n_combs_none)*100:.2f}%\n")
+        
+    
