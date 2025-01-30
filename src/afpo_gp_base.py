@@ -332,10 +332,7 @@ class GeneticAlgorithmGPAFPO:
         can_mate_full = 0
         can_mate_grow = 0
 
-        # Custom half-n-half -> 75/25 
-        # half = self.pop_size // 2
-        # half = int(self.pop_size * 0.80)
-        half = self.pop_size # TODO: This is the gp_lambda performance run
+        half = self.pop_size # Adding all as full. Empirically found to work better.
         
         # The first half is full initialization
         for i in range(half):
@@ -345,7 +342,6 @@ class GeneticAlgorithmGPAFPO:
                 can_mate_full += 1
             self.population.append(individual)
             
-            # print(f"Full ({i}) - individual total nodes: {indiv_total_nodes}")
 
         # The second half is grow (random) initialization
         for j in range(self.pop_size - half):
@@ -355,11 +351,9 @@ class GeneticAlgorithmGPAFPO:
                 can_mate_grow += 1
             self.population.append(individual)
             
-            # print(f"Grow ({j}) - individual total nodes: {indiv_total_nodes}")
-            
-        print(f"\nStarting with MaxDepth: {self.max_depth} and initDepth: {self.initial_depth}. Out of {self.pop_size}.")
-        print(f"Grow: {can_mate_grow} Individuals can mate. Full: {can_mate_full} Individuals can mate.")
-        print(f"Total: {(can_mate_grow + can_mate_full)} ({(can_mate_grow + can_mate_full) / self.pop_size * 100:.3f}%).\n")
+        # print(f"\nStarting with MaxDepth: {self.max_depth} and initDepth: {self.initial_depth}. Out of {self.pop_size}.")
+        # print(f"Grow: {can_mate_grow} Individuals can mate. Full: {can_mate_full} Individuals can mate.")
+        # print(f"Total: {(can_mate_grow + can_mate_full)} ({(can_mate_grow + can_mate_full) / self.pop_size * 100:.3f}%).\n")
         
     def calculate_fitness_metrics(self):
         
@@ -413,9 +407,7 @@ class GeneticAlgorithmGPAFPO:
                 print(f"Successful individual found in generation {curr_gen}")
                 print(f"Function: {individual.tree}")
                 self.poulation_success = True
-                
-        return np.mean(population_fitness), np.median(population_fitness), np.std(population_fitness)
-                
+                                
     def check_succcess_new_pop(self, curr_gen, next_population):
         for individual in next_population:
             if individual.success:
@@ -616,14 +608,12 @@ class GeneticAlgorithmGPAFPO:
             # Start timing
             start_time = time.time()
             
-            # TODO: Experiment of % of offspring better or worse than parents.
+            # Experiment of % of offspring better or worse than parents.
             self.best_offspring_list = []
             self.best_parent_list = []
             
             # Calculate fitness
-            pop_mean, pop_median, pop_std = self.calculate_fitness(gen) # Performance runs
-            
-            # print(f"\nGen: {gen+1}. Fitness values. Mean: {pop_mean}. Median: {pop_median}. Std: {pop_std}.\n")
+            self.calculate_fitness(gen) # Performance runs
             
             # Update best fitness list
             best_individual = max(self.population, key=lambda ind: ind.fitness)
@@ -638,10 +628,6 @@ class GeneticAlgorithmGPAFPO:
                 # Measure % offspring vs parents was better fitness-wise
                 percents, off_metrics, par_metrics = self.calculate_fitness_metrics()
                 self.best_percents.append(percents[0])
-                # print(f"SUCCESSFUL Gen {gen+1}. Fitness-wise.\n"
-                #     f"Offspring {(percents[0])*100:.3f}%. Parent {(percents[1])*100:.3f}%.\n"
-                #     f"Offspring. Mean: {off_metrics[0]:.4f}. Median: {off_metrics[1]:.4f}. Std: {off_metrics[2]:.4f}.\n"
-                #     f"Parents.   Mean: {par_metrics[0]:.4f}. Median: {par_metrics[1]:.4f}. Std: {par_metrics[2]:.4f}.")              
                 return self.best_fitness_list, self.diversity_list, self.best_percents, self.random_list, gen + 1
     
             # Tournament Selection
@@ -714,11 +700,7 @@ class GeneticAlgorithmGPAFPO:
                 # Measure % offspring vs parents was better fitness-wise
                 percents, off_metrics, par_metrics = self.calculate_fitness_metrics()
                 self.best_percents.append(percents[0])
-                # print(f"SUCCESSFUL Gen {gen+2}. Fitness-wise.\n"
-                #     f"Offspring {(percents[0])*100:.3f}%. Parent {(percents[1])*100:.3f}%.\n"
-                #     f"Offspring. Mean: {off_metrics[0]:.4f}. Median: {off_metrics[1]:.4f}. Std: {off_metrics[2]:.4f}.\n"
-                #     f"Parents.   Mean: {par_metrics[0]:.4f}. Median: {par_metrics[1]:.4f}. Std: {par_metrics[2]:.4f}.")
-                
+
                 # Returns 2 + gens because technically we are just shortcutting the crossover of this current generation. So, +1 for 0th-indexed offset, and +1 for skipping some steps.
                 # This added values will have been returned in the next gen loop iteration.
                 return self.best_fitness_list, self.diversity_list, self.best_percents, self.random_list, gen + 2
@@ -763,14 +745,9 @@ class GeneticAlgorithmGPAFPO:
                 print(f"\nTime taken to run 10 gen: {elapsed_time:.4f} seconds")
                 
         # Measure % offspring vs parents was better fitness-wise
-        # Measure % offspring vs parents was better fitness-wise
         percents, off_metrics, par_metrics = self.calculate_fitness_metrics()
         self.best_percents.append(percents[0])
-        # print(f"UNSUCCESSFUL gen {gen+1}. Fitness-wise.\n"
-        #     f"Offspring {(percents[0])*100:.3f}%. Parent {(percents[1])*100:.3f}%.\n"
-        #     f"Offspring. Mean: {off_metrics[0]:.4f}. Median: {off_metrics[1]:.4f}. Std: {off_metrics[2]:.4f}.\n"
-        #     f"Parents.   Mean: {par_metrics[0]:.4f}. Median: {par_metrics[1]:.4f}. Std: {par_metrics[2]:.4f}.")
-        
+  
         return self.best_fitness_list, self.diversity_list, self.best_percents, self.random_list, gen+1
 
 # ---------- Landscape --------- # 
@@ -854,9 +831,7 @@ if __name__ == "__main__":
     # -------------------------------- Experiment: Multiple Runs w/ fixed population and fixed mutation rate --------------------------- #
     try:
         term1 = f"genetic_programming/{args.benchmark}/"
-        # term2 = "gp_lambda/"
         term2 = "gp_afpo/"
-        # term2 = "gp_multiple/"
         
         if args.inbred_threshold == 1:
             term3 = f"RandomInjection_{args.random_injection}_PopSize:{args.pop_size}_InThres:None_Mrates:{args.mutation_rate}_Gens:{args.generations}_TourSize:{args.tournament_size}_MaxD:{args.max_depth}_InitD:{args.initial_depth}" 
