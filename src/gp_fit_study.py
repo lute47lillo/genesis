@@ -6,6 +6,9 @@ import seaborn as sns
 from plotting import collect_plot_values
 from collections import defaultdict
 import scipy.stats as stats
+import matplotlib
+matplotlib.rcParams['pdf.fonttype'] = 42
+matplotlib.rcParams['ps.fonttype'] = 42
 
 def get_gp_statistics_fit_study(bench_name, thres, folder_name):
     """
