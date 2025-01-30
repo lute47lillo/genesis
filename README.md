@@ -26,6 +26,21 @@ GECCO 2025 submission
 
     Note: The bash script is modifiable. If you do not have access to running sbatch files. Then, you can simply change the file to which bloat_jobs.sh file is sending the hyperparameters for the experiment and you could run them.
 
+  Plots and collection results.
+
+    In order to collect results. Once we have executed all the necessary run for a specific experiment, then we need to go to specific files and get the figures and results used in the paper.
+  
+    Performance
+      - gp_statistics.py will provide the performance results for HBC vs non-HBC.
+      - afpo_results.py will get results provided in the Appendix.
+      - gp_fit_study.py will provide results about offspring rates wrt parents.
+      - semantics_results.py will provide results about SSC and SAC in all forms.
+  
+    Introns
+      1) gp_plotting.py will combine the data and produce the 3x8 plot with population intron ratio, average tree size and diversity over time.
+      2) Then, we need to run bloat_results_2.py in order to merge that data, get some results used in the tables and prepare for plotting.
+      3) The intron 5 subplot Figure with intron ratios and average tree sizes will be obtained after following the previous steps and executing bloat_results_3.py
+
 
 For reference, all the experiments are shown below. $ARGS$ Indicate where we need to specify different hyperparameters as they have been explored in the paper.
   
@@ -118,21 +133,5 @@ time python src/gp_introns.py --benchmark nguyen5 --generations 150 --pop_size 3
 time python src/gp_introns.py --benchmark nguyen6 --generations 150 --pop_size 300 --mutation_rate 0.0005 --inbred_threshold "$ARG2" --exp_num_runs 15 --max_depth 10 --initial_depth 3 --intron_fraction 1.0 --mutation_type random
 time python src/gp_introns.py --benchmark nguyen7 --generations 150 --pop_size 300 --mutation_rate 0.0005 --inbred_threshold "$ARG2" --exp_num_runs 15 --max_depth 10 --initial_depth 3 --intron_fraction 1.0 --mutation_type random
 time python src/gp_introns.py --benchmark nguyen8 --generations 150 --pop_size 300 --mutation_rate 0.0005 --inbred_threshold "$ARG2" --exp_num_runs 15 --max_depth 10 --initial_depth 3 --intron_fraction 1.0 --mutation_type random
-
-
-Plots and collection results.
-
-  In order to collect results. Once we have executed all the necessary run for a specific experiment, then we need to go to specific files and get the figures and results used in the paper.
-
-  Performance
-    - gp_statistics.py will provide the performance results for HBC vs non-HBC.
-    - afpo_results.py will get results provided in the Appendix.
-    - gp_fit_study.py will provide results about offspring rates wrt parents.
-    - semantics_results.py will provide results about SSC and SAC in all forms.
-
-  Introns
-    1) gp_plotting.py will combine the data and produce the 3x8 plot with population intron ratio, average tree size and diversity over time.
-    2) Then, we need to run bloat_results_2.py in order to merge that data, get some results used in the tables and prepare for plotting.
-    3) The intron 5 subplot Figure with intron ratios and average tree sizes will be obtained after following the previous steps and executing bloat_results_3.py
 
   
