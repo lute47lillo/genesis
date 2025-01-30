@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 import seaborn as sns
 import matplotlib
-import json
+from matplotlib.ticker import FormatStrFormatter
 from collections import defaultdict
 
 matplotlib.rcParams['pdf.fonttype'] = 42
@@ -141,7 +141,7 @@ def compute_success(results_inbreeding, temp_runs=15, attribute_1="avg_tree_size
     final_average = np.mean(np.mean(np.array(attr_div), axis=0))
 
     suc_div_thresh = f"{count} ({final_average})" # TODO: Doing it with the final average to use averages for all.
-    return suc_div_thresh
+    return suc_div_thresh, avg_gen
     
 # Define the new plotting function
 def plot_combined_corr_heatmaps(dfs, thresholds, attributes, config_plot):
@@ -286,7 +286,13 @@ def plot_all_sr_in_columns(sr_dfs, sr_fns, attributes, config_plot, global_max_l
     # Adjust the height and width per subplot as needed (e.g., 3 inches per subplot)
     fig_height = 7 * num_sr_problems
     fig_width = 8 * num_attributes  # 7 inches per attribute column
-    fig, axes = plt.subplots(nrows=num_sr_problems, ncols=num_attributes, figsize=(fig_width, fig_height), sharex=True)
+    fig, axes = plt.subplots(nrows=num_sr_problems, ncols=num_attributes,
+                             figsize=(fig_width, fig_height), sharex=True, 
+                             gridspec_kw={
+                                #  "height_ratios": [1, 1],
+                            "hspace": 0.02,  # Reduced from default
+                            "wspace": 0.1   # Reduced from default  # Reduce height of the second row
+                            })
     
     # If there's only one SR problem, axes is a 1D array. Make it a 2D array for consistency.
     if num_sr_problems == 1:
@@ -339,8 +345,7 @@ def plot_all_sr_in_columns(sr_dfs, sr_fns, attributes, config_plot, global_max_l
 
     for sub_dict in limits.values():
         for attr, (min_val, max_val) in sub_dict.items():
-            result[attr][0] = min(result[attr][0], min_val)
-            result[attr][1] = max(result[attr][1], max_val)
+           result[attr][1] = max(result[attr][1], max_val)
 
     # Convert to regular dict with tuples
     limits = {attr: tuple(vals) for attr, vals in result.items()}
@@ -349,29 +354,32 @@ def plot_all_sr_in_columns(sr_dfs, sr_fns, attributes, config_plot, global_max_l
     for sr_idx, _ in enumerate(sr_fns):
         for attr_idx, attr in enumerate(attributes):
             # axes[sr_idx, attr_idx].set_ylim([limits[attr][0], limits[attr][1]])
-            axes[sr_idx, attr_idx].tick_params(axis='both', which='major', labelsize=15) 
+            axes[sr_idx, attr_idx].tick_params(axis='both', which='major', labelsize=20) 
+            # Set major tick formatter to 1 decimal place
+            axes[sr_idx, attr_idx].xaxis.set_major_formatter(FormatStrFormatter('%.1f'))
+            axes[sr_idx, attr_idx].yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
     
     # Set the X-axis label for the bottom subplots
     for ax in axes[-1, :]:
-        ax.set_xlabel('Generation', fontsize=15)
+        ax.set_xlabel('Generation', fontsize=19)
         
     # Set y-labels as titles
     for idx, attribute in enumerate(attributes):
         if attributes[idx] == "pop_intron_ratio":
-            axes[0, idx].set_title("Intron Ratio", fontsize=15)
+            axes[0, idx].set_title("Intron Ratio", fontsize=22)
         elif attributes[idx] == "diversity":
-            axes[0, idx].set_title("Diversity", fontsize=15)
+            axes[0, idx].set_title("Diversity", fontsize=22)
         else:
-            axes[0, idx].set_title("Avg. Tree Size", fontsize=15)
+            axes[0, idx].set_title("Avg. Tree Size", fontsize=22)
         
     # Set SR names as y-labels
     for idx, attribute in enumerate(sr_fns):
-        axes[idx, 0].set_ylabel(f'{sr_fns[idx]}', fontsize=15)
+        axes[idx, 0].set_ylabel(f'{sr_fns[idx]}', fontsize=20)
     
     # # Set X-axis ticks based on global_max_length
     xticks_step = max(1, int(global_max_length / 10))  # Ensure step is at least 1
     for ax in axes[-1, :]:
-        ax.set_xticks(np.arange(0, global_max_length + xticks_step, step=xticks_step))
+        ax.set_xticks(np.arange(0, global_max_length + xticks_step, step=xticks_step*2))
     
     # Create a centralized, enlarged legend
     # Remove duplicate labels by using a dictionary
@@ -410,14 +418,14 @@ if __name__ == "__main__":
     
     # Iterate over all functions to get values, file with other attributes and plot.
     # types = ["random_mut", "intron_mutation", "half_mut", "intron_plus", "random_plus"]
-    types = ["half_mut"]
+    types = ["half_mut"]#, "intron_mutation"]
     
     for type_run in types:
         
         # Trackers for plot and intron attribute files
         sr_dfs = {}
         output_data = []
-        
+        gen_succ = {}
         # Temporary list for success diversity dictionary
         threshold_temp = [[] for _ in range(len(bloat_thresholds))]
         for sr_idx, sr in enumerate(sr_fns):
@@ -425,7 +433,7 @@ if __name__ == "__main__":
             print(f"\nSymbolic Regression Function: {sr}")
             dict_results = []
             dfs = []
-            
+            gen_succ = {sr:[]}
             sr_temp = []
             for thres in bloat_thresholds:
                 
@@ -438,7 +446,7 @@ if __name__ == "__main__":
                     file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/{sr}/bloat/{type_run}_PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:10_InitD:3_inbreeding.npy"
                 else:
                     file_path_name = f"{os.getcwd()}/saved_data/genetic_programming/{sr}/bloat/{type_run}_PopSize:300_InThres:{thres}_Mrates:0.0005_Gens:150_TourSize:15_MaxD:10_InitD:3_no_inbreeding.npy"
-                
+
                 if type_run == "introns":
                     type_run = "random_mut"
                     
@@ -453,7 +461,8 @@ if __name__ == "__main__":
                 dfs.append(df_no_inbreeding)
                 
                 # Compute success values
-                succ_div_thres = compute_success(results_inbreeding, temp_runs=15)
+                succ_div_thres, avg_gen = compute_success(results_inbreeding, temp_runs=15)
+                gen_succ[sr].append(avg_gen)
                 sr_temp.append(succ_div_thres)
     
             # # Mutate order from SR-index to Threshold-index. Invert
@@ -465,7 +474,7 @@ if __name__ == "__main__":
                 succ_div_dict[thres] = threshold_temp[idx]
                 
             # Write to a file the success - diversity dictionary - Specify file paths
-            dict_file_path = f"{os.getcwd()}/saved_data/introns_study/{type_run}_succ_div_dict_DIV_AVG.json"
+            # dict_file_path = f"{os.getcwd()}/saved_data/introns_study/{type_run}_succ_div_dict_DIV_AVG.json"
 
             # Write the dictionary to a file
             # with open(dict_file_path, 'w') as f:
@@ -475,25 +484,31 @@ if __name__ == "__main__":
             sr_dfs[sr] = {
                 'pop_intron_ratio': collect_plot_values(dict_results, 'Inbred Threshold', bloat_thresholds, 'pop_intron_ratio', n_runs=15), 
                 'diversity': collect_plot_values(dict_results, 'Inbred Threshold', bloat_thresholds, 'diversity', n_runs=15),
-                'avg_tree_size': collect_plot_values(dict_results, 'Inbred Threshold', bloat_thresholds, 'avg_tree_size', n_runs=15),
-            }
+                'avg_tree_size': collect_plot_values(dict_results, 'Inbred Threshold', bloat_thresholds, 'avg_tree_size', n_runs=15)
+                }
             
-            for idx, thres in enumerate(bloat_thresholds):
+            # for idx, thres in enumerate(bloat_thresholds):
 
-                # Extract final values
-                intron_ratio = sr_dfs[sr]['pop_intron_ratio'][1][idx][0][-1]
-                avg_tree_size = sr_dfs[sr]['avg_tree_size'][1][idx][0][-1]
-                diversity = sr_dfs[sr]['diversity'][1][idx][0][-1]
+            #     # Extract final values
+            #     intron_ratio = sr_dfs[sr]['pop_intron_ratio'][1][idx][0][-1]
+            #     avg_tree_size = sr_dfs[sr]['avg_tree_size'][1][idx][0][-1]
+            #     diversity = sr_dfs[sr]['diversity'][1][idx][0][-1]
+            #     mean_gen_success = gen_succ[sr][idx]
                 
-                # Extract mean values
-                mean_intron_ratio = np.mean(sr_dfs[sr]['pop_intron_ratio'][1][idx][0])
-                mean_avg_tree_size = np.mean(sr_dfs[sr]['avg_tree_size'][1][idx][0])
-                mean_diversity = np.mean(sr_dfs[sr]['diversity'][1][idx][0])
+            #     # Extract mean values
+            #     mean_intron_ratio = np.mean(sr_dfs[sr]['pop_intron_ratio'][1][idx][0])
+            #     mean_avg_tree_size = np.mean(sr_dfs[sr]['avg_tree_size'][1][idx][0])
+            #     mean_diversity = np.mean(sr_dfs[sr]['diversity'][1][idx][0])
                 
-                print(f"Threshold: {thres}. Total nº success: {succ_div_dict[thres][sr_idx][:2]}. Average diversity: {mean_diversity:.3f}. Average intron ratio: {mean_intron_ratio:.3f}. Average tree size: {mean_avg_tree_size:.3f}.")
+            #     print(f"Threshold: {thres}. \
+            #           Total nº success: {succ_div_dict[thres][sr_idx][:2]}. \
+            #           Average gen success: {mean_gen_success:.3f}.\
+            #           Average diversity: {mean_diversity:.3f}. \
+            #           Average intron ratio: {mean_intron_ratio:.3f}. \
+            #           Average tree size: {mean_avg_tree_size:.3f}.\n")
                 
                 # Append to the output data
-                output_data.append((sr, thres, intron_ratio, avg_tree_size, diversity, mean_intron_ratio, mean_avg_tree_size, mean_diversity))
+                # output_data.append((sr, thres, intron_ratio, avg_tree_size, diversity, mean_intron_ratio, mean_avg_tree_size, mean_diversity))
 
 
         # Save the data to a CSV file. Legend -> ... _ALL means that mean values have been included
@@ -504,7 +519,7 @@ if __name__ == "__main__":
         
         # Plot 
         attributes =["diversity", "pop_intron_ratio", "avg_tree_size"]
-        plot_all_sr_in_columns(sr_dfs, sr_fns, attributes, config_plot=f"genetic_programming/bloat/{type_run}/Structure_div_intrRatio_treeSize", global_max_length=150)
+        plot_all_sr_in_columns(sr_dfs, sr_fns, attributes, config_plot=f"genetic_programming/bloat/{type_run}/TESTS2Structure_div_intrRatio_treeSize", global_max_length=150)
         
         # Plot all heatmaps in a 2x2 grid
         # plot_combined_corr_heatmaps(dfs, bloat_thresholds, attributes, config_plot=f"{sr}_")

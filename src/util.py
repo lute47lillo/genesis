@@ -58,7 +58,10 @@ def set_args():
     argparser.add_argument('--semantics_type', type=str, help='Choose the type of semantic crossover used. (SAC, SSC, or None)', default='SAC')    
     argparser.add_argument('--low_sensitivity', type=float, help='Lower Bound sensitivity for similarity. Used in SAC and SSC', default=0.02)
     argparser.add_argument('--high_sensitivity', type=float, help='Higher Bound sensitivity for similarity. Used in SSC', default=8)
- 
+    
+    # non-HBC experiments
+    argparser.add_argument('--random_injection', type=float, help='Population percentage of random individuals to inject in population. AFPO-style', default=0.3)
+
 
     
     # Parse all arguments
